@@ -1,3 +1,10 @@
+export enum NamidaMessageAction {
+    SnipPage,
+    CaptureFullScreen,
+    RecognizeImage,
+}
+
 export interface NamidaMessage {
-    action: string
+    action: NamidaMessageAction,
+    data: any
 }

@@ -27,6 +27,13 @@ module.exports = {
         new CopyPlugin({
             patterns: [
                 { from: 'src/manifest.json', to: 'manifest.json' },
+                // https://github.com/naptha/tesseract.js/blob/master/docs/local-installation.md#local-installation
+                { from: 'node_modules/tesseract.js-core/tesseract-core.wasm.js', to: 'libs/tesseract-core/tesseract-core.wasm.js' },
+                { from: 'node_modules/tesseract.js-core/tesseract-core-simd.wasm.js', to: 'libs/tesseract-core/tesseract-core-simd.wasm.js' },
+                { from: 'node_modules/tesseract.js-core/tesseract-core-lstm.wasm.js', to: 'libs/tesseract-core/tesseract-core-lstm.wasm.js' },
+                { from: 'node_modules/tesseract.js-core/tesseract-core-simd-lstm.wasm.js', to: 'libs/tesseract-core/tesseract-core-simd-lstm.wasm.js' },
+                { from: 'node_modules/tesseract.js/dist/worker.min.js', to: 'libs/tesseract-worker/worker.min.js' },
+                { from: 'lang/', to: 'libs/tesseract-lang/' },
             ],
         }),
     ],

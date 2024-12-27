@@ -39,5 +39,24 @@
         "gecko": {
             "id": "namida@tecktonikmuffin.com"
         }
-    }
+    },
+    "content_security_policy": {
+        "extension_pages": "script-src 'self' 'wasm-unsafe-eval'"
+    },
+    "web_accessible_resources": [
+        {
+            "resources": [
+                "/libs/tesseract-worker/worker.min.js",
+                "/libs/tesseract-core/tesseract-core-lstm.wasm.js",
+                "/libs/tesseract-core/tesseract-core-simd-lstm.wasm.js",
+                "/libs/tesseract-core/tesseract-core-simd.wasm.js",
+                "/libs/tesseract-core/tesseract-core.wasm.js",
+                "/libs/tesseract-lang/eng.traineddata.gz",
+                "/libs/tesseract-lang/jpn.traineddata.gz"
+            ],
+            "matches": [
+                "<all_urls>"
+            ]
+        }
+    ]
 }
