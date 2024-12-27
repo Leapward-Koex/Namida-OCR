@@ -1,0 +1,43 @@
+{
+    "manifest_version": 3,
+    "name": "Namida",
+    "version": "1.0",
+    "description": "An OCR and translation tool",
+    "permissions": [
+        "tabs",
+        "activeTab",
+        "storage"
+    ],
+    "background": {
+        "scripts": [
+            "background/index.js"
+        ]
+    },
+    "commands": {
+        "toggle-feature": {
+            "suggested_key": {
+                "default": "Alt+Q",
+                "mac": "Alt+Q"
+            },
+            "description": "Toggle the feature on the page"
+        }
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "<all_urls>"
+            ],
+            "js": [
+                "content/index.js"
+            ]
+        }
+    ],
+    "action": {
+        "default_popup": "popup.html"
+    },
+    "browser_specific_settings": {
+        "gecko": {
+            "id": "namida@tecktonikmuffin.com"
+        }
+    }
+}
