@@ -1,18 +1,21 @@
 import { createWorker, OEM, PSM, Worker } from 'tesseract.js';
 import { runtime } from 'webextension-polyfill';
 import { NamidaMessageAction } from '../interfaces/message';
+import { Settings } from '../interfaces/Storage';
 
 export class TesseractOcrHandler {
   private static worker: Worker | null = null;
   private static initializing: boolean = false;
   private static initialized: boolean = false;
 
-  public static async initWorker(languages = ['jpn_vert']): Promise<void> {
+  public static async initWorker(): Promise<void> {
     if (TesseractOcrHandler.initialized || TesseractOcrHandler.initializing) {
       // Already initialized or in the process of initializing, so just return.
       return;
     }
     TesseractOcrHandler.initializing = true;
+
+    const languages = ['jpn_vert'];
 
     console.debug("Creating OCR worker");
     try {
@@ -52,10 +55,11 @@ export class TesseractOcrHandler {
     }
 
     try {
-      // Reuse the same worker instance
+      const pageSegregationMode = await Settings.getPageSegMode();
       await TesseractOcrHandler.worker.setParameters({
-        tessedit_pageseg_mode: PSM.SINGLE_BLOCK_VERT_TEXT,
+        tessedit_pageseg_mode: pageSegregationMode,
       });
+      console.debug("Trying to recognize text using pagesegmode:", pageSegregationMode);
       const { data: { text } } = await TesseractOcrHandler.worker.recognize(dataUrl);
       console.debug("Recognized text:", text);
       return text;

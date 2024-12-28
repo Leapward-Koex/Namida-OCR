@@ -4,6 +4,7 @@ import { SelectionRect, SnipOverlay } from "./SnippingOverlay";
 import { SaveHandler } from "./SaveHandler";
 import { TesseractOcrHandler } from "../background/TesseractOcrHandler";
 import { ScreenshotHandler } from "./ScreenshotHandler";
+import { Settings } from "../interfaces/Storage";
 
 console.debug('Content script loaded');
 
@@ -50,13 +51,16 @@ class SnippingTool {
         const screenshotHandler = new ScreenshotHandler(selection);
         try {
             console.debug("Capturing screen");
-            const croppedDataURL = await screenshotHandler.captureAndCrop();
+            const upscalingMethod = await Settings.getUpscalingMode();
+            const croppedDataURL = await screenshotHandler.captureAndCrop(upscalingMethod);
             console.debug("Got data: " + croppedDataURL);
             await this.ocr.recognizeFromContent(croppedDataURL);
-            // this.saveHandler.downloadImage(croppedDataURL, 'snippet.png');
+            if (await Settings.getSaveOcrCrop()) {
+                console.debug("Saving Image");
+                this.saveHandler.downloadImage(croppedDataURL, 'snippet.png');
+            }
         } catch (error) {
             console.error('Failed when creating selection and performing OCR', error);
-            // Handle error appropriately
         }
     }
 }

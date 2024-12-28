@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>Settings</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+  <div class="settings-container">
+    <h1>Settings</h1>
+
+    <!-- General Section -->
+    <div class="section">
+      <h2>General</h2>
+      <label for="upscaling-mode">Upscaling Mode</label>
+      <select id="upscaling-mode">
+        <option value="none">None</option>
+        <option value="canvas" selected>Canvas</option>
+        <option value="tensorflow">Tensorflow</option>
+      </select>
+    </div>
+
+    <!-- Advanced OCR Section (Collapsible) -->
+    <div class="collapsible-section">
+      <button class="collapsible">Advanced OCR</button>
+      <div class="content">
+        <label for="page-seg-mode">Page Segregation Mode</label>
+        <select id="page-seg-mode">
+          <option value="single-block-vertical" selected>Single Block Vertical</option>
+          <option value="single-block">Single Block</option>
+          <option value="auto">Auto</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Debugging Section (Collapsible) -->
+    <div class="collapsible-section">
+      <button class="collapsible">Debugging</button>
+      <div class="content">
+        <label for="save-ocr-crop">Save OCR Crop</label>
+        <input id="save-ocr-crop" type="checkbox" />
+      </div>
+    </div>
+  </div>
+
+  <!-- Your compiled JS (transpiled from TypeScript) -->
+  <script src="index.js"></script>
+</body>
+
+</html>
