@@ -21,6 +21,11 @@
     "webpack-cli": "^6.0.1"
   },
   "dependencies": {
-    "tesseract.js": "^5.1.1"
+    "@paddlejs-models/ocr": "^1.2.4",
+    "@tensorflow/tfjs": "^4.11.0",
+    "@upscalerjs/default-model": "^1.0.0-beta.17",
+    "@upscalerjs/esrgan-thick": "^1.0.0-beta.16",
+    "tesseract.js": "^5.1.1",
+    "upscaler": "^1.0.0-beta.19"
   }
 }

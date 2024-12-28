@@ -14,9 +14,9 @@ console.log('Background script loaded');
 
 commands.onCommand.addListener(async (command) => {
     if (command === "toggle-feature") {
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        const [tab] = await tabs.query({ active: true, currentWindow: true });
         if (tab.id) {
-            chrome.tabs.sendMessage(tab.id, { action: NamidaMessageAction.SnipPage });
+            tabs.sendMessage(tab.id, { action: NamidaMessageAction.SnipPage });
         }
     }
 });

@@ -1,29 +1,27 @@
 import { runtime } from "webextension-polyfill";
 import { NamidaMessageAction } from "../interfaces/message";
 import { SelectionRect } from "./SnippingOverlay";
+import { Upscaler } from "../background/Upscaler";
 
 export class ScreenshotHandler {
     constructor(private selection: SelectionRect) { }
 
     public async captureAndCrop(): Promise<string> {
         try {
-            // 1) Request screenshot from background script
             const base64Image: string = await runtime.sendMessage({ action: NamidaMessageAction.CaptureFullScreen }) as string;
             if (!base64Image) {
                 throw new Error("Failed to get screenshot of current tab")
             }
-            // 2) Convert base64 to Image
             const screenshotImg = await this.loadImage(base64Image);
 
-            // 3) Draw Image on Canvas
             const fullCanvas = this.drawImageOnCanvas(screenshotImg);
 
-            // 4) Crop the Canvas
             const croppedCanvas = this.cropCanvas(fullCanvas, this.selection);
+            const upscaledCanvas = Upscaler.upscaleCanvas(croppedCanvas, 3);
 
-            // 5) Get Data URL
-            const dataURL = croppedCanvas.toDataURL('image/png');
+            const dataURL = upscaledCanvas.toDataURL('image/png');
 
+            // const upscaleddataURL = await Upscaler.upscaleImageWithAI(dataURL);
             return dataURL;
         } catch (error) {
             console.error('Snipping failed:', error);
