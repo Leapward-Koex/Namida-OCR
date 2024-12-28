@@ -6,6 +6,7 @@ import { TesseractOcrHandler } from "../background/TesseractOcrHandler";
 import { ScreenshotHandler } from "./ScreenshotHandler";
 import { Settings } from "../interfaces/Storage";
 import { ClipboardHandler } from "./ClipboardHandler";
+import { FloatingWindow } from "./FloatingWindowHandler";
 
 console.debug('Content script loaded');
 
@@ -57,6 +58,7 @@ class SnippingTool {
             console.debug("Got data: " + croppedDataURL);
             const recognizedText = await this.ocr.recognizeFromContent(croppedDataURL);
             ClipboardHandler.copyText(recognizedText);
+            new FloatingWindow(recognizedText);
             if (await Settings.getSaveOcrCrop()) {
                 console.debug("Saving Image");
                 this.saveHandler.downloadImage(croppedDataURL, 'snippet.png');
