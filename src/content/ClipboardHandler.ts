@@ -1,13 +1,14 @@
 // src/content/ClipboardHandler.ts
 
 export class ClipboardHandler {
+    private static logTag = `[${ClipboardHandler.name}]`;
     public static async copyText(text: string): Promise<void> {
         try {
-            console.debug("Trying to copy", text, "to the users clipboard");
+            console.debug(ClipboardHandler.logTag, "Trying to copy", text, "to the users clipboard");
             await navigator.clipboard.writeText(text);
-            console.debug("Text copied to clipboard:", text);
+            console.debug(ClipboardHandler.logTag, "Text copied to clipboard:", text);
         } catch (error) {
-            console.error("Failed to copy text to clipboard", error);
+            console.error(ClipboardHandler.logTag, "Failed to copy text to clipboard", error);
         }
     }
 }

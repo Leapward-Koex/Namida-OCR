@@ -3,21 +3,22 @@ import { runtime } from 'webextension-polyfill';
 import { NamidaMessageAction } from '../interfaces/message';
 
 export class Upscaler {
-    upscaler: any;
+    private static logTag = `[${Upscaler.name}]`;
+    private static upscaler = new UpscalerJS({
+        model: {
+            scale: 2,
+            path: runtime.getURL('libs/tensorflow/x2/model.json')
+        }
+    });
+
     constructor() {
     }
 
     public static async upscaleImageWithAIFromBackground(base64Input: string) {
-        console.debug("Creating upscaler");
-        const upscaler = new UpscalerJS({
-            model: {
-                scale: 2,
-                path: runtime.getURL('libs/tensorflow/x2/model.json')
-            }
-        });
-        console.debug("Created upscaler");
-        const upscaledImage = await upscaler.upscale(base64Input)
-        console.debug("Upscaled image");
+        console.debug(Upscaler.logTag, "Creating upscaler");
+        console.debug(Upscaler.logTag, "Created upscaler");
+        const upscaledImage = await Upscaler.upscaler.upscale(base64Input)
+        console.debug(Upscaler.logTag, "Upscaled image");
         return upscaledImage;
     }
 

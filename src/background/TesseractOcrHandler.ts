@@ -4,6 +4,7 @@ import { NamidaMessageAction } from '../interfaces/message';
 import { Settings } from '../interfaces/Storage';
 
 export class TesseractOcrHandler {
+  private static logTag = `[${TesseractOcrHandler.name}]`;
   private static worker: Worker | null = null;
   private static initializing: boolean = false;
   private static initialized: boolean = false;
@@ -17,7 +18,7 @@ export class TesseractOcrHandler {
 
     const languages = ['jpn_vert'];
 
-    console.debug("Creating OCR worker");
+    console.debug(TesseractOcrHandler.logTag, "Creating OCR worker");
     try {
       TesseractOcrHandler.worker = await createWorker(
         languages,
@@ -31,10 +32,10 @@ export class TesseractOcrHandler {
         }
       );
 
-      console.debug("Created OCR worker");
+      console.debug(TesseractOcrHandler.logTag, "Created OCR worker");
       TesseractOcrHandler.initialized = true;
     } catch (error) {
-      console.error("Error initializing OCR worker", error);
+      console.error(TesseractOcrHandler.logTag, "Error initializing OCR worker", error);
       TesseractOcrHandler.worker = null;
     } finally {
       TesseractOcrHandler.initializing = false;
@@ -44,13 +45,13 @@ export class TesseractOcrHandler {
   /// This is the only function that must be called from the content
   public async recognizeFromContent(dataUrl: string): Promise<string> {
     const text = await runtime.sendMessage({ action: NamidaMessageAction.RecognizeImage, data: dataUrl }) as string;
-    console.debug("Recognized text: " + text);
+    console.debug(TesseractOcrHandler.logTag, "Recognized text: " + text);
     return text;
   }
 
   public static async recognizeFromBackground(dataUrl: string): Promise<string | undefined> {
     if (!TesseractOcrHandler.initialized || !TesseractOcrHandler.worker) {
-      console.error('OCR worker not ready. Did you call initWorker()?');
+      console.error(TesseractOcrHandler.logTag, 'OCR worker not ready. Did you call initWorker()?');
       return undefined;
     }
 
@@ -59,12 +60,12 @@ export class TesseractOcrHandler {
       await TesseractOcrHandler.worker.setParameters({
         tessedit_pageseg_mode: pageSegregationMode,
       });
-      console.debug("Trying to recognize text using pagesegmode:", pageSegregationMode);
+      console.debug(TesseractOcrHandler.logTag, "Trying to recognize text using pagesegmode:", pageSegregationMode);
       const { data: { text } } = await TesseractOcrHandler.worker.recognize(dataUrl);
-      console.debug("Recognized text:", text);
+      console.debug(TesseractOcrHandler.logTag, "Recognized text:", text);
       return text;
     } catch (ex) {
-      console.error("Error recognizing text", ex);
+      console.error(TesseractOcrHandler.logTag, "Error recognizing text", ex);
     }
     return undefined;
   }

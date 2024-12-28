@@ -43,7 +43,7 @@ export class ScreenshotHandler {
                 return dataUrl
             }
         } catch (error) {
-            console.error('Snipping failed:', error);
+            console.error(ScreenshotHandler.logTag, 'Snipping failed:', error);
             throw error;
         }
     }

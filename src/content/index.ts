@@ -7,18 +7,13 @@ import { ScreenshotHandler } from "./ScreenshotHandler";
 import { Settings } from "../interfaces/Storage";
 import { ClipboardHandler } from "./ClipboardHandler";
 import { FloatingWindow } from "./FloatingWindowHandler";
+import { TextProcessorHandler } from "./TextProcessorHandler";
 
 console.debug('Content script loaded');
 
-interface ScreenshotResponse {
-    action: string;
-    dataUrl: string;
-}
-
-// ScreenshotHandler Class
-
 // SnippingTool Class
 class SnippingTool {
+    private static logTag = `[${SnippingTool.name}]`;
     private overlay: SnipOverlay;
     private saveHandler: SaveHandler;
     private isSnipping: boolean = false;
@@ -52,19 +47,20 @@ class SnippingTool {
     private async onSelectionComplete(selection: SelectionRect) {
         const screenshotHandler = new ScreenshotHandler(selection);
         try {
-            console.debug("Capturing screen");
+            console.debug(SnippingTool.logTag, "Capturing screen");
             const upscalingMethod = await Settings.getUpscalingMode();
             const croppedDataURL = await screenshotHandler.captureAndCrop(upscalingMethod);
-            console.debug("Got data: " + croppedDataURL);
+            console.debug(SnippingTool.logTag, "Got data: " + croppedDataURL);
             const recognizedText = await this.ocr.recognizeFromContent(croppedDataURL);
-            ClipboardHandler.copyText(recognizedText);
-            new FloatingWindow(recognizedText);
+            const spacesRemovedText = TextProcessorHandler.removeSpaces(recognizedText);
+            ClipboardHandler.copyText(spacesRemovedText);
+            new FloatingWindow(spacesRemovedText);
             if (await Settings.getSaveOcrCrop()) {
-                console.debug("Saving Image");
+                console.debug(SnippingTool.logTag, "Saving Image");
                 this.saveHandler.downloadImage(croppedDataURL, 'snippet.png');
             }
         } catch (error) {
-            console.error('Failed when creating selection and performing OCR', error);
+            console.error(SnippingTool.logTag, 'Failed when creating selection and performing OCR', error);
         }
     }
 }
