@@ -1,0 +1,12 @@
+{
+    "background": {
+        "scripts": [
+            "background/index.js"
+        ]
+    },
+    "browser_specific_settings": {
+        "gecko": {
+            "id": "namida@tecktonikmuffin.com"
+        }
+    }
+}

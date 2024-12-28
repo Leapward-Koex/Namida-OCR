@@ -4,8 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build": "webpack",
-    "watch": "webpack --watch"
+    "build:chrome": "webpack --env browser=chrome --mode production",
+    "build:firefox": "webpack --env browser=firefox --mode production",
+    "watch:firefox": "webpack --env browser=firefox --watch"
   },
   "keywords": [],
   "author": "",

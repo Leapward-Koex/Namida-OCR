@@ -8,11 +8,6 @@
         "activeTab",
         "storage"
     ],
-    "background": {
-        "scripts": [
-            "background/index.js"
-        ]
-    },
     "commands": {
         "toggle-feature": {
             "suggested_key": {
@@ -34,11 +29,6 @@
     ],
     "action": {
         "default_popup": "ui/popup.html"
-    },
-    "browser_specific_settings": {
-        "gecko": {
-            "id": "namida@tecktonikmuffin.com"
-        }
     },
     "content_security_policy": {
         "extension_pages": "script-src 'self' 'wasm-unsafe-eval'"

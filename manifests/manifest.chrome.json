@@ -1,0 +1,6 @@
+{
+    "backgroundConfig": {
+        "service_worker": "background/index.js",
+        "type": "module"
+    }
+}
