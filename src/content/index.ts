@@ -55,6 +55,7 @@ class SnippingTool {
             await this.ocr.recognizeFromContent(croppedDataURL);
             // this.saveHandler.downloadImage(croppedDataURL, 'snippet.png');
         } catch (error) {
+            console.error('Failed when creating selection and performing OCR', error);
             // Handle error appropriately
         }
     }

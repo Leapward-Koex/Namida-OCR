@@ -1,6 +1,7 @@
 import { commands, runtime, tabs } from "webextension-polyfill";
 import { NamidaMessage, NamidaMessageAction } from "../interfaces/message";
 import { TesseractOcrHandler } from "./TesseractOcrHandler";
+import { Upscaler } from "./Upscaler";
 
 console.log('Background script loaded');
 
@@ -27,6 +28,10 @@ runtime.onMessage.addListener(async (message, sender) => {
     switch (namidaMessage.action) {
         case NamidaMessageAction.CaptureFullScreen: {
             return await tabs.captureVisibleTab(undefined, { format: 'png' });
+        }
+
+        case NamidaMessageAction.UpscaleImage: {
+            return await Upscaler.upscaleImageWithAIFromBackground(namidaMessage.data);
         }
 
         case NamidaMessageAction.RecognizeImage: {

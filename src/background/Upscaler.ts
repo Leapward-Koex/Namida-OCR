@@ -1,27 +1,34 @@
 import UpscalerJS from 'upscaler';
-import x2 from '@upscalerjs/esrgan-thick'
 import { runtime } from 'webextension-polyfill';
+import { NamidaMessageAction } from '../interfaces/message';
 
 export class Upscaler {
     upscaler: any;
     constructor() {
     }
 
-    public static async upscaleImageWithAI(base64Input: string) {
+    public static async upscaleImageWithAIFromBackground(base64Input: string) {
+        console.debug("Creating upscaler");
         const upscaler = new UpscalerJS({
             model: {
                 scale: 2,
-                path: runtime.getURL('libs/tensorflow/model.json')
+                path: runtime.getURL('libs/tensorflow/x2/model.json')
             }
         });
+        console.debug("Created upscaler");
         const upscaledImage = await upscaler.upscale(base64Input)
+        console.debug("Upscaled image");
         return upscaledImage;
+    }
+
+    public static async upscaleImageWithAIFromContent(dataURL: string) {
+        return await runtime.sendMessage({ action: NamidaMessageAction.UpscaleImage, data: dataURL }) as string;
     }
 
     public static upscaleCanvas(
         sourceCanvas: HTMLCanvasElement,
         scaleFactor: number
-    ): HTMLCanvasElement {
+    ): string {
         // 1) Create a new canvas with scaled dimensions
         const upscaledCanvas = document.createElement('canvas');
         upscaledCanvas.width = sourceCanvas.width * scaleFactor;
@@ -43,6 +50,6 @@ export class Upscaler {
             0, 0, upscaledCanvas.width, upscaledCanvas.height
         );
 
-        return upscaledCanvas;
+        return upscaledCanvas.toDataURL('image/png')
     }
 }

@@ -1,6 +1,7 @@
 export enum NamidaMessageAction {
     SnipPage,
     CaptureFullScreen,
+    UpscaleImage,
     RecognizeImage,
 }
 
