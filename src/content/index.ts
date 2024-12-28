@@ -5,6 +5,7 @@ import { SaveHandler } from "./SaveHandler";
 import { TesseractOcrHandler } from "../background/TesseractOcrHandler";
 import { ScreenshotHandler } from "./ScreenshotHandler";
 import { Settings } from "../interfaces/Storage";
+import { ClipboardHandler } from "./ClipboardHandler";
 
 console.debug('Content script loaded');
 
@@ -54,7 +55,8 @@ class SnippingTool {
             const upscalingMethod = await Settings.getUpscalingMode();
             const croppedDataURL = await screenshotHandler.captureAndCrop(upscalingMethod);
             console.debug("Got data: " + croppedDataURL);
-            await this.ocr.recognizeFromContent(croppedDataURL);
+            const recognizedText = await this.ocr.recognizeFromContent(croppedDataURL);
+            ClipboardHandler.copyText(recognizedText);
             if (await Settings.getSaveOcrCrop()) {
                 console.debug("Saving Image");
                 this.saveHandler.downloadImage(croppedDataURL, 'snippet.png');
