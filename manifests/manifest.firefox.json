@@ -4,6 +4,11 @@
             "background/index.js"
         ]
     },
+    "permissions": [
+        "tabs",
+        "activeTab",
+        "storage"
+    ],
     "browser_specific_settings": {
         "gecko": {
             "id": "namidaOCR@leadwardkoex.com"

@@ -6,21 +6,19 @@ import { Settings } from '../interfaces/Storage';
 export class TesseractOcrHandler {
   private static logTag = `[${TesseractOcrHandler.name}]`;
   private static worker: Worker | null = null;
-  private static initializing: boolean = false;
-  private static initialized: boolean = false;
+  private static workerPromise: Promise<Worker> | null;
 
   public static async initWorker(): Promise<void> {
-    if (TesseractOcrHandler.initialized || TesseractOcrHandler.initializing) {
+    if (TesseractOcrHandler.workerPromise) {
       // Already initialized or in the process of initializing, so just return.
       return;
     }
-    TesseractOcrHandler.initializing = true;
 
     const languages = ['jpn_vert'];
 
     console.debug(TesseractOcrHandler.logTag, "Creating OCR worker");
     try {
-      TesseractOcrHandler.worker = await createWorker(
+      TesseractOcrHandler.workerPromise = createWorker(
         languages,
         OEM.LSTM_ONLY,
         {
@@ -32,13 +30,14 @@ export class TesseractOcrHandler {
         }
       );
 
+      TesseractOcrHandler.worker = await TesseractOcrHandler.workerPromise;
+
       console.debug(TesseractOcrHandler.logTag, "Created OCR worker");
-      TesseractOcrHandler.initialized = true;
     } catch (error) {
       console.error(TesseractOcrHandler.logTag, "Error initializing OCR worker", error);
+      TesseractOcrHandler.workerPromise = null;
       TesseractOcrHandler.worker = null;
     } finally {
-      TesseractOcrHandler.initializing = false;
     }
   }
 
@@ -49,19 +48,19 @@ export class TesseractOcrHandler {
     return text;
   }
 
-  public static async recognizeFromBackground(dataUrl: string): Promise<string | undefined> {
-    if (!TesseractOcrHandler.initialized || !TesseractOcrHandler.worker) {
+  public static async recognizeFromOffscreen(dataUrl: string, pageSegMode: PSM): Promise<string | undefined> {
+    if (!TesseractOcrHandler.workerPromise) {
       console.error(TesseractOcrHandler.logTag, 'OCR worker not ready. Did you call initWorker()?');
       return undefined;
     }
 
     try {
-      const pageSegregationMode = await Settings.getPageSegMode();
-      await TesseractOcrHandler.worker.setParameters({
-        tessedit_pageseg_mode: pageSegregationMode,
+      await TesseractOcrHandler.workerPromise;
+      await TesseractOcrHandler.worker!.setParameters({
+        tessedit_pageseg_mode: pageSegMode,
       });
-      console.debug(TesseractOcrHandler.logTag, "Trying to recognize text using pagesegmode:", pageSegregationMode);
-      const { data: { text } } = await TesseractOcrHandler.worker.recognize(dataUrl);
+      console.debug(TesseractOcrHandler.logTag, "Trying to recognize text using pagesegmode:", pageSegMode);
+      const { data: { text } } = await TesseractOcrHandler.worker!.recognize(dataUrl);
       console.debug(TesseractOcrHandler.logTag, "Recognized text:", text);
       return text;
     } catch (ex) {
@@ -74,7 +73,7 @@ export class TesseractOcrHandler {
     if (TesseractOcrHandler.worker) {
       await TesseractOcrHandler.worker.terminate();
       TesseractOcrHandler.worker = null;
-      TesseractOcrHandler.initialized = false;
+      TesseractOcrHandler.workerPromise = null;
     }
   }
 }
