@@ -3,5 +3,10 @@
         "scripts": [
             "background/index.js"
         ]
+    },
+    "browser_specific_settings": {
+        "gecko": {
+            "id": "namidaOCR@leadwardkoex.com"
+        }
     }
 }
