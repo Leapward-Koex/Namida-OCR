@@ -40,7 +40,8 @@ jobs:
 
       - name: Package Firefox
         run: |
-          zip -r namida-ff.xpi dist
+          cd dist
+          zip -r ../namida-ff.xpi ./*
           rm -rf dist
 
       - name: Upload Firefox Artifact
@@ -56,7 +57,9 @@ jobs:
 
       - name: Package Chrome
         run: |
-          zip -r namida-chrome.crx dist
+          cd dist
+          zip -r ../namida-chrome.crx ./*
+          cd ..
           rm -rf dist
 
       - name: Upload Chrome Artifact
