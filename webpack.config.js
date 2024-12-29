@@ -55,6 +55,13 @@ module.exports = (env) => {
                     { from: 'node_modules/tesseract.js/dist/worker.min.js', to: 'libs/tesseract-worker/worker.min.js' },
                     { from: 'lang/', to: 'libs/tesseract-lang/' },
                     { from: 'node_modules/@upscalerjs/esrgan-medium/models/', to: 'libs/tensorflow/' },
+                    {
+                        from: 'assets/', to: 'assets/', globOptions: {
+                            ignore: [
+                                '**/*.pdn'
+                            ]
+                        }
+                    },
 
                 ],
             }),
