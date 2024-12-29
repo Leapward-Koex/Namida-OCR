@@ -25,7 +25,6 @@ module.exports = (env) => {
         );
     };
     return {
-        mode: 'development',
         entry: {
             background: './src/background/index.ts',
             content: './src/content/index.ts',
@@ -80,6 +79,5 @@ module.exports = (env) => {
                 },
             },
         ],
-        devtool: 'source-map',
     };
 }
