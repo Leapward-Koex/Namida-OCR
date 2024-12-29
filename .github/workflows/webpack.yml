@@ -43,6 +43,12 @@ jobs:
           zip -r namida-ff.xpi dist
           rm -rf dist
 
+      - name: Upload Firefox Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: firefox-plugin
+          path: namida-ff.xpi
+
       - name: Build Chrome Plugin
         run: |
           npm run build:chrome -- --env build_number=1.0.${{ github.run_number }}
@@ -52,3 +58,9 @@ jobs:
         run: |
           zip -r namida-chrome.crx dist
           rm -rf dist
+
+      - name: Upload Chrome Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: chrome-plugin
+          path: namida-chrome.crx
