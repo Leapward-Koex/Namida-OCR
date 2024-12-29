@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="UTF-8" />
-  <title>Settings</title>
+  <title>Namida Settings</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 
@@ -23,24 +23,22 @@
     </div>
 
     <!-- Advanced OCR Section (Collapsible) -->
-    <div class="collapsible-section">
-      <button class="collapsible">Advanced OCR</button>
-      <div class="content">
-        <label for="page-seg-mode">Page Segregation Mode</label>
-        <select id="page-seg-mode">
-          <option value="single-block-vertical" selected>Single Block Vertical</option>
-          <option value="single-block">Single Block</option>
-          <option value="auto">Auto</option>
-        </select>
-      </div>
+    <div class="section">
+      <h2>Advanced OCR</h2>
+      <label for="page-seg-mode">Page Segregation Mode</label>
+      <select id="page-seg-mode">
+        <option value="single-block-vertical" selected>Single Block Vertical</option>
+        <option value="single-block">Single Block</option>
+        <option value="auto">Auto</option>
+      </select>
     </div>
 
     <!-- Debugging Section (Collapsible) -->
-    <div class="collapsible-section">
-      <button class="collapsible">Debugging</button>
-      <div class="content">
-        <label for="save-ocr-crop">Save OCR Crop</label>
+    <div class="section">
+      <h2>Debugging</h2>
+      <div class="inline-setting">
         <input id="save-ocr-crop" type="checkbox" />
+        <label for="save-ocr-crop">Save OCR Crop</label>
       </div>
     </div>
   </div>

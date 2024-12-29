@@ -12,8 +12,7 @@ body {
 
 /* Container */
 .settings-container {
-    width: 500px;
-    margin: 40px auto;
+    width: 300px;
     padding: 20px;
     background: #ffffff;
     border-radius: 8px;
@@ -98,4 +97,15 @@ input[type="checkbox"] {
 
 .content label {
     margin-top: 1em;
+}
+
+.inline-setting {
+    display: flex;
+    flex-direction: row;
+    margin-bottom: 0.5em;
+}
+
+.inline-setting label {
+    margin-right: 8px;
+    margin-bottom: 0;
 }
