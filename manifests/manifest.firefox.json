@@ -3,10 +3,5 @@
         "scripts": [
             "background/index.js"
         ]
-    },
-    "browser_specific_settings": {
-        "gecko": {
-            "id": "namida.leapward-koex.com"
-        }
     }
 }

@@ -109,3 +109,35 @@ input[type="checkbox"] {
     margin-right: 8px;
     margin-bottom: 0;
 }
+
+ol {
+    margin-left: 1em;
+}
+
+.tooltip {
+    position: relative;
+    display: inline-block;
+}
+
+/* Tooltip text */
+.tooltiptext {
+    visibility: hidden;
+    width: 120px;
+    background-color: black;
+    color: #fff;
+    text-align: center;
+    padding: 5px 0;
+    border-radius: 6px;
+
+    position: absolute;
+    z-index: 1;
+}
+
+.tooltip:hover .tooltiptext {
+    visibility: visible;
+}
+
+.tooltip-right {
+    top: -5px;
+    left: 105%;
+}
