@@ -2,7 +2,7 @@
     "manifest_version": 3,
     "name": "Namida",
     "version": "1.0",
-    "description": "An OCR and translation tool",
+    "description": "An OCR tool designed for Japanese text",
     "permissions": [
         "tabs",
         "activeTab",
@@ -14,7 +14,7 @@
                 "default": "Alt+Q",
                 "mac": "Alt+Q"
             },
-            "description": "Toggle the feature on the page"
+            "description": "Snip text"
         }
     },
     "content_scripts": [
@@ -45,8 +45,6 @@
                 "/libs/tesseract-worker/worker.min.js",
                 "/libs/tesseract-core/tesseract-core-lstm.wasm.js",
                 "/libs/tesseract-core/tesseract-core-simd-lstm.wasm.js",
-                "/libs/tesseract-core/tesseract-core-simd.wasm.js",
-                "/libs/tesseract-core/tesseract-core.wasm.js",
                 "/libs/tesseract-lang/eng.traineddata.gz",
                 "/libs/tesseract-lang/jpn.traineddata.gz",
                 "/libs/tesseract-lang/jpn_vert.traineddata.gz",
