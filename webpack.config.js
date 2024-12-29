@@ -4,6 +4,7 @@ const CopyPlugin = require('copy-webpack-plugin');
 
 module.exports = (env) => {
     const browser = env.browser || 'firefox';
+    const buildNumber = env.build_number || "1.0.0";
 
     const createManifest = () => {
         const broswerSpecificManifest = JSON.parse(
@@ -16,7 +17,11 @@ module.exports = (env) => {
 
         fs.writeFileSync(
             path.resolve(__dirname, 'dist/manifest.json'),
-            JSON.stringify(merged = { ...baseManifest, ...broswerSpecificManifest }, null, 2)
+            JSON.stringify(merged = {
+                ...baseManifest,
+                ...broswerSpecificManifest,
+                version: buildNumber
+            }, null, 2)
         );
     };
     return {
