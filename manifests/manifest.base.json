@@ -1,6 +1,6 @@
 {
     "manifest_version": 3,
-    "name": "Namida",
+    "name": "Namida OCR",
     "version": "1.0",
     "description": "An OCR tool designed for Japanese text",
     "permissions": [
