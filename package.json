@@ -6,7 +6,8 @@
   "scripts": {
     "build:chrome": "webpack --env browser=chrome --mode production",
     "build:firefox": "webpack --env browser=firefox --mode production",
-    "watch:firefox": "webpack --env browser=firefox --watch --mode development --devtool source-map"
+    "watch:firefox": "webpack --env browser=firefox --watch --mode development --devtool source-map",
+    "watch:chrome": "webpack --env browser=chrome --watch --mode development --devtool source-map"
   },
   "keywords": [],
   "author": "",

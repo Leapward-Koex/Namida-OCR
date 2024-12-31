@@ -29,6 +29,7 @@ module.exports = (env) => {
             background: './src/background/index.ts',
             content: './src/content/index.ts',
             ui: './src/ui/index.ts',
+            offscreen: './src/offscreen/index.ts',
         },
         output: {
             path: path.resolve(__dirname, 'dist'),
@@ -50,6 +51,7 @@ module.exports = (env) => {
             new CopyPlugin({
                 patterns: [
                     { from: 'src/ui/popup.html', to: 'ui/popup.html' },
+                    { from: 'src/offscreen/offscreen.html', to: 'offscreen/offscreen.html' },
                     { from: 'src/ui/styles.css', to: 'ui/styles.css' },
                     // https://github.com/naptha/tesseract.js/blob/master/docs/local-installation.md#local-installation
                     // { from: 'node_modules/tesseract.js-core/tesseract-core.wasm.js', to: 'libs/tesseract-core/tesseract-core.wasm.js' }, // These exceed firefox 4MB js file limit

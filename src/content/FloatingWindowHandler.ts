@@ -3,7 +3,7 @@ export class FloatingWindow {
     private floatingMessageTimer: number | null = null;
     private windowFadeTimeout = 10000;
 
-    constructor(text: string) {
+    constructor(text: string | undefined) {
         // Remove existing message if it's still visible
         if (FloatingWindow.floatingMessageEl) {
             FloatingWindow.floatingMessageEl.remove();

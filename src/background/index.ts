@@ -1,44 +1,71 @@
 import { commands, runtime, tabs } from "webextension-polyfill";
-import { NamidaMessage, NamidaMessageAction } from "../interfaces/message";
+import { NamidaMessage, NamidaMessageAction, NamidaOcrFromOffscreenData } from "../interfaces/message";
 import { TesseractOcrHandler } from "./TesseractOcrHandler";
 import { Upscaler } from "./Upscaler";
+import { Settings } from "../interfaces/Storage";
 
 console.log('Background script loaded');
 
-/**
- * 1. Initialize the OCR worker once on script startup.
- *    This way, the worker is ready whenever a recognize request comes in.
- */
-(async () => {
-    await TesseractOcrHandler.initWorker();
-})().catch(console.error);
+if (globalThis.Worker) {
+    // Workers are available in the service worker, e.g. Firefox
+    (async () => {
+        await TesseractOcrHandler.initWorker();
+    })().catch(console.error);
+}
+async function ensureOffscreenDocument() {
+    const offscreenUrl = runtime.getURL('offscreen/offscreen.html');
+    // Check if offscreen is already created
+    const existingDocs = await chrome.offscreen.hasDocument?.();
+    if (!existingDocs) {
+        await chrome.offscreen.createDocument({
+            url: offscreenUrl,
+            reasons: [chrome.offscreen.Reason.WORKERS],
+            justification: 'Perform background OCR using Tesseract.js'
+        });
+    }
+}
 
-commands.onCommand.addListener(async (command) => {
+commands.onCommand.addListener((command) => {
     if (command === "toggle-feature") {
-        const [tab] = await tabs.query({ active: true, currentWindow: true });
-        if (tab.id) {
-            tabs.sendMessage(tab.id, { action: NamidaMessageAction.SnipPage });
-        }
+        console.debug("Going to snip page for OCR")
+        tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
+            if (tab.id) {
+                tabs.sendMessage(tab.id, { action: NamidaMessageAction.SnipPage });
+            }
+        });
     }
 });
 
-runtime.onMessage.addListener(async (message, sender) => {
+runtime.onMessage.addListener((message, sender) => {
     const namidaMessage = message as NamidaMessage;
 
     switch (namidaMessage.action) {
         case NamidaMessageAction.CaptureFullScreen: {
-            return await tabs.captureVisibleTab(undefined, { format: 'png' });
+            return tabs.captureVisibleTab(undefined, { format: 'png' });
         }
 
         case NamidaMessageAction.UpscaleImage: {
-            return await Upscaler.upscaleImageWithAIFromBackground(namidaMessage.data);
+            return Upscaler.upscaleImageWithAIFromBackground(namidaMessage.data);
         }
 
         case NamidaMessageAction.RecognizeImage: {
-            return await TesseractOcrHandler.recognizeFromBackground(namidaMessage.data);
+            return Settings.getPageSegMode().then((pageSegMode) => {
+                if (globalThis.Worker) {
+                    return TesseractOcrHandler.recognizeFromOffscreen(namidaMessage.data, pageSegMode);
+                }
+                else {
+                    return ensureOffscreenDocument().then(() => {
+                        return runtime.sendMessage(
+                            {
+                                action: NamidaMessageAction.RecognizeImageOffscreen,
+                                data: {
+                                    imageData: namidaMessage.data,
+                                    pageSegMode: pageSegMode
+                                } as NamidaOcrFromOffscreenData
+                            });
+                    });
+                }
+            });
         }
-
-        default:
-            break;
     }
 });

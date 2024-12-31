@@ -26,22 +26,12 @@ class SnippingTool {
     }
 
     public setupMessageListener() {
-        runtime.onMessage.addListener((message, sender, sendResponse) => {
+        runtime.onMessage.addListener((message) => {
             if ((message as NamidaMessage).action === NamidaMessageAction.SnipPage) {
-                this.toggleSnipOverlay();
+                this.overlay.show();
             }
-            return true;
+            return undefined;
         });
-    }
-
-    private toggleSnipOverlay() {
-        if (this.isSnipping) {
-            this.overlay.hide();
-            this.isSnipping = false;
-        } else {
-            this.overlay.show();
-            this.isSnipping = true;
-        }
     }
 
     private async onSelectionComplete(selection: SelectionRect) {
