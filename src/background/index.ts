@@ -25,56 +25,47 @@ async function ensureOffscreenDocument() {
     }
 }
 
-commands.onCommand.addListener(async (command) => {
+commands.onCommand.addListener((command) => {
     if (command === "toggle-feature") {
-        const [tab] = await tabs.query({ active: true, currentWindow: true });
-        if (tab.id) {
-            tabs.sendMessage(tab.id, { action: NamidaMessageAction.SnipPage });
-        }
+        console.debug("Going to snip page for OCR")
+        tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
+            if (tab.id) {
+                tabs.sendMessage(tab.id, { action: NamidaMessageAction.SnipPage });
+            }
+        });
     }
 });
 
-runtime.onMessage.addListener(async (message, sender) => {
+runtime.onMessage.addListener((message, sender) => {
     const namidaMessage = message as NamidaMessage;
 
     switch (namidaMessage.action) {
         case NamidaMessageAction.CaptureFullScreen: {
-            return await tabs.captureVisibleTab(undefined, { format: 'png' });
+            return tabs.captureVisibleTab(undefined, { format: 'png' });
         }
 
         case NamidaMessageAction.UpscaleImage: {
-            return await Upscaler.upscaleImageWithAIFromBackground(namidaMessage.data);
+            return Upscaler.upscaleImageWithAIFromBackground(namidaMessage.data);
         }
 
         case NamidaMessageAction.RecognizeImage: {
-            const pageSegMode = await Settings.getPageSegMode();
-            if (globalThis.Worker) {
-                return await TesseractOcrHandler.recognizeFromOffscreen(namidaMessage.data, pageSegMode);
-            }
-            else {
-                await ensureOffscreenDocument();
-                return new Promise(async (resolve, reject) => {
-                    chrome.runtime.sendMessage(
-                        {
-                            action: NamidaMessageAction.RecognizeImageOffscreen,
-                            data: {
-                                imageData: namidaMessage.data,
-                                pageSegMode: pageSegMode
-                            } as NamidaOcrFromOffscreenData
-                        },
-                        (response) => {
-                            if (chrome.runtime.lastError) {
-                                return reject(chrome.runtime.lastError);
-                            }
-                            resolve(response);
-                        }
-                    );
-                });
-            }
-
+            return Settings.getPageSegMode().then((pageSegMode) => {
+                if (globalThis.Worker) {
+                    return TesseractOcrHandler.recognizeFromOffscreen(namidaMessage.data, pageSegMode);
+                }
+                else {
+                    return ensureOffscreenDocument().then(() => {
+                        return runtime.sendMessage(
+                            {
+                                action: NamidaMessageAction.RecognizeImageOffscreen,
+                                data: {
+                                    imageData: namidaMessage.data,
+                                    pageSegMode: pageSegMode
+                                } as NamidaOcrFromOffscreenData
+                            });
+                    });
+                }
+            });
         }
-
-        default:
-            break;
     }
 });

@@ -12,7 +12,7 @@ console.debug("Loading offscreen document");
     await TesseractOcrHandler.initWorker();
 })().catch(console.error);
 
-runtime.onMessage.addListener(async (message, sender, sendResponse) => {
+runtime.onMessage.addListener((message) => {
     const namidaMessage = message as NamidaOcrFromOffscreenMessage;
     if (namidaMessage.action === NamidaMessageAction.RecognizeImageOffscreen) {
         return TesseractOcrHandler.recognizeFromOffscreen(namidaMessage.data.imageData, namidaMessage.data.pageSegMode);
