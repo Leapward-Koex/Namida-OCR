@@ -1,9 +1,10 @@
+import { Settings } from "../interfaces/Storage";
 import { SpeechSynthesisHandler } from "./SpeechHandler";
 
 export class FloatingWindow {
     private static floatingMessageEl: HTMLDivElement | null = null;
     private floatingMessageTimer: number | null = null;
-    private windowFadeTimeout = 1000000;
+    private windowFadeTimeout = 10000;
     private speechHandler = new SpeechSynthesisHandler("ja-JP");
 
     constructor(text: string | undefined) {
@@ -55,29 +56,31 @@ export class FloatingWindow {
             this.speechHandler.speak(text!);
         });
 
-        if (text && !!this.speechHandler.voiceForLanguage()) {
-            // Append button to the floating div
-            floatingDiv.appendChild(speakButton);
-        }
-
-        // Add it to the DOM
-        document.body.appendChild(floatingDiv);
-        FloatingWindow.floatingMessageEl = floatingDiv;
-
-        // Set up event handlers to pause timer if hovered
-        floatingDiv.addEventListener('mouseenter', () => {
-            if (this.floatingMessageTimer) {
-                window.clearTimeout(this.floatingMessageTimer);
-                this.floatingMessageTimer = null;
+        Settings.getShowSpeakButton().then((showSpeakButton) => {
+            if (showSpeakButton && text && !!this.speechHandler.voiceForLanguage()) {
+                // Append button to the floating div
+                floatingDiv.appendChild(speakButton);
             }
-        });
 
-        floatingDiv.addEventListener('mouseleave', () => {
+            // Add it to the DOM
+            document.body.appendChild(floatingDiv);
+            FloatingWindow.floatingMessageEl = floatingDiv;
+
+            // Set up event handlers to pause timer if hovered
+            floatingDiv.addEventListener('mouseenter', () => {
+                if (this.floatingMessageTimer) {
+                    window.clearTimeout(this.floatingMessageTimer);
+                    this.floatingMessageTimer = null;
+                }
+            });
+
+            floatingDiv.addEventListener('mouseleave', () => {
+                this.startFadeTimer();
+            });
+
+            // Start the fade timer
             this.startFadeTimer();
         });
-
-        // Start the fade timer
-        this.startFadeTimer();
     }
 
     private startFadeTimer() {
