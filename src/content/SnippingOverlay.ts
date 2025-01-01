@@ -100,10 +100,10 @@ export class SnipOverlay {
 
         const rect = this.selectionBox.getBoundingClientRect();
         const selection: SelectionRect = {
-            left: rect.left,
-            top: rect.top,
-            width: rect.width,
-            height: rect.height
+            left: rect.left * window.devicePixelRatio,
+            top: rect.top * window.devicePixelRatio,
+            width: rect.width * window.devicePixelRatio,
+            height: rect.height * window.devicePixelRatio
         };
 
         this.onSelectionComplete(selection);
