@@ -60,9 +60,9 @@ export class TesseractOcrHandler {
         tessedit_pageseg_mode: pageSegMode,
       });
       console.debug(TesseractOcrHandler.logTag, "Trying to recognize text using pagesegmode:", pageSegMode);
-      const { data: { text } } = await TesseractOcrHandler.worker!.recognize(dataUrl);
-      console.debug(TesseractOcrHandler.logTag, "Recognized text:", text);
-      return text;
+      const recognizeResult = await TesseractOcrHandler.worker!.recognize(dataUrl);
+      console.debug(TesseractOcrHandler.logTag, "Recognize result:", recognizeResult.data);
+      return recognizeResult.data.text;
     } catch (ex) {
       console.error(TesseractOcrHandler.logTag, "Error recognizing text", ex);
     }

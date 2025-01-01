@@ -56,8 +56,8 @@ export class FloatingWindow {
             this.speechHandler.speak(text!);
         });
 
-        Settings.getShowSpeakButton().then((showSpeakButton) => {
-            if (showSpeakButton && text && !!this.speechHandler.voiceForLanguage()) {
+        Settings.getShowSpeakButton().then(async (showSpeakButton) => {
+            if (showSpeakButton && text && !!await this.speechHandler.voiceForLanguage()) {
                 // Append button to the floating div
                 floatingDiv.appendChild(speakButton);
             }
