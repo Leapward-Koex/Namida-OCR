@@ -1,7 +1,10 @@
+import { SpeechSynthesisHandler } from "./SpeechHandler";
+
 export class FloatingWindow {
     private static floatingMessageEl: HTMLDivElement | null = null;
     private floatingMessageTimer: number | null = null;
-    private windowFadeTimeout = 10000;
+    private windowFadeTimeout = 1000000;
+    private speechHandler = new SpeechSynthesisHandler("ja-JP");
 
     constructor(text: string | undefined) {
         // Remove existing message if it's still visible
@@ -34,6 +37,28 @@ export class FloatingWindow {
         floatingDiv.style.fontSize = '24px';
         floatingDiv.style.opacity = '1';
         floatingDiv.style.transition = 'opacity 0.4s ease';
+
+
+        // Create the speech button
+        const speakButton = document.createElement('button');
+        speakButton.innerText = 'Speak';
+        speakButton.style.marginLeft = '10px';
+        speakButton.style.background = '#4CAF50';
+        speakButton.style.color = '#fff';
+        speakButton.style.border = 'none';
+        speakButton.style.borderRadius = '4px';
+        speakButton.style.padding = '5px 10px';
+        speakButton.style.cursor = 'pointer';
+
+        // When the user clicks, speak the text
+        speakButton.addEventListener('click', () => {
+            this.speechHandler.speak(text!);
+        });
+
+        if (text && !!this.speechHandler.voiceForLanguage()) {
+            // Append button to the floating div
+            floatingDiv.appendChild(speakButton);
+        }
 
         // Add it to the DOM
         document.body.appendChild(floatingDiv);
