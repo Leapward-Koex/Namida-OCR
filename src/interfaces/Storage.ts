@@ -5,7 +5,8 @@ import { storage } from "webextension-polyfill";
 export enum StorageKey {
     UpscalingMode = "UpscalingMode",
     PageSegMode = "PageSegMode",
-    SaveOcrCrop = "SaveOcrCrop"
+    SaveOcrCrop = "SaveOcrCrop",
+    ShowSpeakButton = "ShowSpeakButton"
 }
 
 export enum UpscalingModeString {
@@ -60,5 +61,10 @@ export class Settings {
     public static async getSaveOcrCrop() {
         const values = await storage.sync.get(StorageKey.SaveOcrCrop);
         return (values[StorageKey.SaveOcrCrop] as boolean | undefined) ?? false;
+    }
+
+    public static async getShowSpeakButton() {
+        const values = await storage.sync.get(StorageKey.ShowSpeakButton);
+        return (values[StorageKey.ShowSpeakButton] as boolean | undefined) ?? false;
     }
 }
