@@ -14,7 +14,7 @@ export class SpeechSynthesisHandler {
 
         if (matchingVoice) {
             console.debug(SpeechSynthesisHandler.logTag, `Using voice: ${matchingVoice.id}`);
-            TTSWrapper.speak(text, matchingVoice);
+            await TTSWrapper.speak(text, matchingVoice);
 
         } else {
             console.warn(SpeechSynthesisHandler.logTag, "No matching voice found, cannot speak.");

@@ -1,37 +1,32 @@
 import { Settings } from "../interfaces/Storage";
 import { SpeechSynthesisHandler } from "./SpeechHandler";
+import { TTSWrapper } from "./TTSWrapper";
 
 export class FloatingWindow {
     private static floatingMessageEl: HTMLDivElement | null = null;
-    private floatingMessageTimer: number | null = null;
     private windowFadeTimeout = 10000;
     private speechHandler = new SpeechSynthesisHandler("ja-JP");
+    static floatingMessageTimer: number | undefined;
 
     constructor(text: string | undefined) {
         // Remove existing message if it's still visible
         if (FloatingWindow.floatingMessageEl) {
             FloatingWindow.floatingMessageEl.remove();
             FloatingWindow.floatingMessageEl = null;
-            if (this.floatingMessageTimer) {
-                window.clearTimeout(this.floatingMessageTimer);
-                this.floatingMessageTimer = null;
+            if (FloatingWindow.floatingMessageTimer) {
+                window.clearTimeout(FloatingWindow.floatingMessageTimer);
+                FloatingWindow.floatingMessageTimer = undefined;
             }
         }
 
-        // Create a new floating div
+        // Create the main floating container
         const floatingDiv = document.createElement('div');
-        if (text) {
-            floatingDiv.innerText = `Copied: ${text}`;
-        }
-        else {
-            floatingDiv.innerText = `Failed to recognize text, please try again.`;
-        }
         floatingDiv.style.position = 'fixed';
         floatingDiv.style.right = '20px';
         floatingDiv.style.bottom = '20px';
         floatingDiv.style.background = 'rgba(0, 0, 0, 0.85)';
         floatingDiv.style.color = '#fff';
-        floatingDiv.style.padding = '10px 15px';
+        floatingDiv.style.padding = '12px 16px';
         floatingDiv.style.borderRadius = '8px';
         floatingDiv.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.3)';
         floatingDiv.style.zIndex = '999999';
@@ -39,38 +34,118 @@ export class FloatingWindow {
         floatingDiv.style.opacity = '1';
         floatingDiv.style.transition = 'opacity 0.4s ease';
 
+        // --- Header row (title + dismiss button) ---
+        const headerRow = document.createElement('div');
+        headerRow.style.display = 'flex';
+        headerRow.style.justifyContent = 'space-between';
+        headerRow.style.alignItems = 'center';
 
-        // Create the speech button
+        // Title
+        const titleEl = document.createElement('span');
+        titleEl.style.fontWeight = 'bold';
+        if (text) {
+            titleEl.innerText = "Recognized text:";
+        } else {
+            titleEl.innerText = "Failed to recognize text, please try again.";
+        }
+
+        // Dismiss button (X)
+        const dismissButton = document.createElement('button');
+        dismissButton.innerText = '×';
+        dismissButton.style.background = 'transparent';
+        dismissButton.style.color = '#fff';
+        dismissButton.style.border = 'none';
+        dismissButton.style.cursor = 'pointer';
+        dismissButton.style.fontSize = '22px';
+        dismissButton.style.fontWeight = 'bold';
+        dismissButton.style.marginLeft = '10px';
+        dismissButton.addEventListener('click', () => {
+            // Instantly remove the window (no fade needed)
+            if (FloatingWindow.floatingMessageEl) {
+                FloatingWindow.floatingMessageEl.remove();
+                FloatingWindow.floatingMessageEl = null;
+            }
+        });
+
+        // Assemble header row
+        headerRow.appendChild(titleEl);
+        headerRow.appendChild(dismissButton);
+
+        // --- Recognized text container ---
+        const textContainer = document.createElement('div');
+        textContainer.style.background = '#333';
+        textContainer.style.borderRadius = '6px';
+        textContainer.style.padding = '10px';
+        textContainer.style.marginTop = '8px';
+        textContainer.style.fontSize = '20px';
+        textContainer.style.lineHeight = '1.4';
+
+        if (text) {
+            textContainer.innerText = text;
+        } else {
+            textContainer.innerText = "";
+        }
+
+        // --- Button row (Speak, etc.) ---
+        const buttonRow = document.createElement('div');
+        buttonRow.style.display = 'flex';
+        buttonRow.style.marginTop = '10px';
+
+        // Speak button
         const speakButton = document.createElement('button');
         speakButton.innerText = 'Speak';
-        speakButton.style.marginLeft = '10px';
-        speakButton.style.background = '#4CAF50';
+        speakButton.style.background = '#1976d2';
         speakButton.style.color = '#fff';
         speakButton.style.border = 'none';
         speakButton.style.borderRadius = '4px';
-        speakButton.style.padding = '5px 10px';
+        speakButton.style.padding = '6px 12px';
         speakButton.style.cursor = 'pointer';
+        speakButton.style.fontSize = '20px';
+        speakButton.style.marginRight = '6px';
 
-        // When the user clicks, speak the text
         speakButton.addEventListener('click', () => {
-            this.speechHandler.speak(text!);
+            // Only speak if text is defined
+            if (text) {
+                if (TTSWrapper.isSpeaking()) {
+                    TTSWrapper.cancel();
+                    speakButton.innerText = 'Speak';
+                }
+                else {
+                    this.speechHandler.speak(text).finally(() => {
+                        speakButton.innerText = 'Speak';
+                    });
+                    speakButton.textContent = 'Speaking...'
+                }
+            }
         });
 
+        // Append speak button (we'll conditionally attach it later)
+        buttonRow.appendChild(speakButton);
+
+        // Add all elements to the main container
+        floatingDiv.appendChild(headerRow);
+        // Only show the text container if we have recognized text or want to show something
+        if (text) {
+            floatingDiv.appendChild(textContainer);
+        }
+        // We'll conditionally add the button row only if the speak button is shown
+
         Settings.getShowSpeakButton().then(async (showSpeakButton) => {
-            if (showSpeakButton && text && !!await this.speechHandler.voiceForLanguage()) {
-                // Append button to the floating div
-                floatingDiv.appendChild(speakButton);
+            const voice = await this.speechHandler.voiceForLanguage();
+            const canSpeak = Boolean(text) && Boolean(voice);
+            if (showSpeakButton && canSpeak) {
+                floatingDiv.appendChild(buttonRow);
             }
 
-            // Add it to the DOM
+            // Add floatingDiv to the DOM
             document.body.appendChild(floatingDiv);
             FloatingWindow.floatingMessageEl = floatingDiv;
 
-            // Set up event handlers to pause timer if hovered
+            // Hover events to pause the fade timer
             floatingDiv.addEventListener('mouseenter', () => {
-                if (this.floatingMessageTimer) {
-                    window.clearTimeout(this.floatingMessageTimer);
-                    this.floatingMessageTimer = null;
+                if (FloatingWindow.floatingMessageTimer) {
+                    window.clearTimeout(FloatingWindow.floatingMessageTimer);
+                    FloatingWindow.floatingMessageTimer = undefined;
                 }
             });
 
@@ -78,18 +153,18 @@ export class FloatingWindow {
                 this.startFadeTimer();
             });
 
-            // Start the fade timer
+            // Start fade timer
             this.startFadeTimer();
         });
     }
 
     private startFadeTimer() {
         // Clear any existing timer
-        if (this.floatingMessageTimer) {
-            window.clearTimeout(this.floatingMessageTimer);
+        if (FloatingWindow.floatingMessageTimer) {
+            window.clearTimeout(FloatingWindow.floatingMessageTimer);
         }
 
-        this.floatingMessageTimer = window.setTimeout(() => {
+        FloatingWindow.floatingMessageTimer = window.setTimeout(() => {
             this.fadeOutMessage();
         }, this.windowFadeTimeout);
     }

@@ -18,26 +18,38 @@ export class TTSWrapper {
     }
 
     public static speak(text: string, namidaVoice: NamidaVoice) {
-        console.debug(TTSWrapper.logTag, "Speaking", text, "with window.speechSynthesis and", namidaVoice.name)
-        window.speechSynthesis.cancel();
-        const message = new SpeechSynthesisUtterance(text);
-        const preferredVoice = this.voices.find((voice) => voice.voiceURI === namidaVoice.id);
-        if (preferredVoice) {
-            message.voice = preferredVoice;
-        }
-        else {
-            const defaultVoiceForLanguage = this.voices.find((voice) => voice.lang === namidaVoice.language);
-            if (defaultVoiceForLanguage) {
-                message.voice = defaultVoiceForLanguage;
+        return new Promise<void>((resolve) => {
+            console.debug(TTSWrapper.logTag, "Speaking", text, "with window.speechSynthesis and", namidaVoice.name)
+            window.speechSynthesis.cancel();
+            const message = new SpeechSynthesisUtterance(text);
+            message.addEventListener("end", () => resolve());
+            const preferredVoice = this.voices.find((voice) => voice.voiceURI === namidaVoice.id);
+            if (preferredVoice) {
+                message.voice = preferredVoice;
             }
-        }
+            else {
+                const defaultVoiceForLanguage = this.voices.find((voice) => voice.lang === namidaVoice.language);
+                if (defaultVoiceForLanguage) {
+                    message.voice = defaultVoiceForLanguage;
+                }
+            }
 
-        if (message.voice) {
-            window.speechSynthesis.speak(message);
-        }
-        else {
-            console.warn(TTSWrapper.logTag, "Did not find voice to speak with");
-        }
+            if (message.voice) {
+                window.speechSynthesis.speak(message);
+            }
+            else {
+                console.warn(TTSWrapper.logTag, "Did not find voice to speak with");
+            }
+        });
+    }
+
+    public static cancel() {
+        console.debug(TTSWrapper.logTag, "Cancelling current speech");
+        window.speechSynthesis.cancel();
+    }
+
+    public static isSpeaking() {
+        return window.speechSynthesis.speaking;
     }
 }
 
