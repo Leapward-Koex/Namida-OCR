@@ -1,5 +1,5 @@
 import { commands, runtime, tabs } from "webextension-polyfill";
-import { NamidaMessage, NamidaMessageAction, NamidaOcrFromOffscreenData } from "../interfaces/message";
+import { NamidaMessage, NamidaMessageAction, NamidaOcrFromOffscreenData, NamidaTensorflowUpscaleData } from "../interfaces/message";
 import { TesseractOcrHandler } from "./TesseractOcrHandler";
 import { Upscaler } from "./Upscaler";
 import { Settings } from "../interfaces/Storage";
@@ -48,7 +48,7 @@ runtime.onMessage.addListener((message, sender) => {
         }
 
         case NamidaMessageAction.UpscaleImage: {
-            return Upscaler.upscaleImageWithAIFromBackground(namidaMessage.data);
+            return Upscaler.upscaleImageWithAIFromBackground(namidaMessage.data as NamidaTensorflowUpscaleData);
         }
 
         case NamidaMessageAction.RecognizeImage: {

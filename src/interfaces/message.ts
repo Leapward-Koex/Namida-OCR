@@ -22,3 +22,14 @@ export interface NamidaOcrFromOffscreenMessage {
     action: NamidaMessageAction,
     data: NamidaOcrFromOffscreenData
 }
+
+export interface NamidaTensorflowUpscaleData {
+    imageData: number[]
+    shape: [number, number, number]
+    dataUrl?: string,
+}
+
+export interface NamidaTensorflowUpscaleMessage {
+    action: NamidaMessageAction,
+    data: NamidaTensorflowUpscaleData
+}

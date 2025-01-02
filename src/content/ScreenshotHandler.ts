@@ -38,7 +38,7 @@ export class ScreenshotHandler {
             }
             else {
                 console.debug(ScreenshotHandler.logTag, 'Upscaling using tensorflow')
-                const dataUrl = await Upscaler.upscaleImageWithAIFromContent(croppedCanvas.toDataURL('image/png'));
+                const dataUrl = await Upscaler.upscaleImageWithAIFromContent(croppedCanvas);
                 console.debug(ScreenshotHandler.logTag, 'Upscaled using tensorflow')
                 return dataUrl
             }
