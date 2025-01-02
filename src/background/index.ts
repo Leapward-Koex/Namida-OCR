@@ -28,7 +28,7 @@ async function ensureOffscreenDocument() {
 commands.onCommand.addListener((command) => {
     if (command === "toggle-feature") {
         console.debug("Going to snip page for OCR")
-        tabs.query({ active: true }).then(([tab]) => {
+        tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
             if (tab?.id) {
                 tabs.sendMessage(tab.id, { action: NamidaMessageAction.SnipPage });
             }
