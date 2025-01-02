@@ -6,7 +6,8 @@ export enum StorageKey {
     UpscalingMode = "UpscalingMode",
     PageSegMode = "PageSegMode",
     SaveOcrCrop = "SaveOcrCrop",
-    ShowSpeakButton = "ShowSpeakButton"
+    ShowSpeakButton = "ShowSpeakButton",
+    PreferredVoices = "PreferredVoices"
 }
 
 export enum UpscalingModeString {
@@ -65,6 +66,17 @@ export class Settings {
 
     public static async getShowSpeakButton() {
         const values = await storage.sync.get(StorageKey.ShowSpeakButton);
-        return (values[StorageKey.ShowSpeakButton] as boolean | undefined) ?? false;
+        return (values[StorageKey.ShowSpeakButton] as boolean | undefined) ?? true;
+    }
+
+    public static async getPreferredVoiceId(language = "ja-JP") {
+        const preferredVoices = await Settings.getPreferredVoicesUri();
+        return preferredVoices[language.toLowerCase()];
+    }
+
+    public static async getPreferredVoicesUri() {
+        const values = await storage.sync.get(StorageKey.PreferredVoices);
+        // language code -> voiceURI
+        return (values[StorageKey.PreferredVoices] as { [language: string]: string } | undefined) ?? {};
     }
 }

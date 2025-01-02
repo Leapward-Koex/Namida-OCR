@@ -2,5 +2,11 @@
     "background": {
         "service_worker": "background/index.js",
         "type": "module"
-    }
+    },
+    "permissions": [
+        "tabs",
+        "activeTab",
+        "storage",
+        "offscreen"
+    ]
 }

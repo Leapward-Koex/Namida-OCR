@@ -3,12 +3,6 @@
     "name": "Namida OCR",
     "version": "1.0",
     "description": "An OCR tool designed for Japanese text",
-    "permissions": [
-        "tabs",
-        "activeTab",
-        "storage",
-        "offscreen"
-    ],
     "commands": {
         "toggle-feature": {
             "suggested_key": {

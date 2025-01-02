@@ -1,0 +1,33 @@
+Firefox:
+    Summary:
+        Namida OCR is a local OCR extension that snips any Japanese (vertical) text on-screen, copies it to your clipboard, and can speak it aloud via installed TTS voices. All processing happens in your browser—no external servers required.
+    Description:
+        Namida OCR is a local browser extension for fast, offline text recognition powered by Tesseract.js.
+        Snip & Recognize: Quickly snip any on-screen region containing Japanese vertical text (or horizontal text), and let Namida OCR handle the rest—no internet connection needed.
+        Clipboard Copy: Once recognized, text is automatically copied to your clipboard for easy use with dictionaries or other translation tools (like Yomitan).
+        Optional Voice Synthesis: Have the recognized text spoken aloud using your system’s installed Japanese TTS voices (requires a Japanese language pack on Firefox/Windows).
+        Privacy-Friendly & Offline: All processing, including optional upscaling (ESRGAN or linear), happens entirely in your browser. No external servers or cloud services.
+        Usage: Simply press Alt + Q to activate snipping mode, drag to select a region, and watch as Namida OCR extracts and optionally speaks the text.
+        Ideal for manga, visual novels, or any scenario where you want to quickly extract and optionally listen to Japanese text. Namida OCR keeps everything in-browser and offline, giving you full control over your data.
+
+Chrome:
+    Summary:
+        Namida OCR snips any Japanese text on your screen, copies it to your clipboard, and can speak it aloud using Chrome’s high-quality Japanese voices—all entirely in your browser.
+    Description:
+        Namida OCR is a local Chrome extension that delivers fast, offline text recognition with Tesseract.js, plus an optional TTS feature for Japanese text.
+        Snip & OCR: Press Alt + Q to snip any region of the page containing Japanese text (vertical or horizontal).
+        Clipboard & TTS: The recognized text is automatically copied to your clipboard and can also be spoken aloud using Chrome’s built-in voices, including high-quality remote Japanese voices.
+        Privacy-Focused: No external servers are used. All OCR and (optional) upscaling happen locally in your browser.
+        ESRGAN Upscaling: Select ESRGAN for sharper text in challenging images, or opt for faster linear upscaling.
+        Ideal for manga, visual novels, or any scenario where you want to quickly extract and optionally listen to Japanese text. Namida OCR keeps everything in-browser and offline, giving you full control over your data.
+
+Edge:
+    Summary:
+        Namida OCR is a fully local OCR extension for Microsoft Edge, snipping Japanese text on-screen, copying it to your clipboard, and optionally speaking it with Windows TTS voices (including “Natural” voices if installed).
+    Description:
+        Namida OCR is a local OCR extension that harnesses Tesseract.js for fast, offline recognition of Japanese text (vertical or horizontal) in Microsoft Edge.
+        Snip & Copy: Use Alt + Q to capture any region of your screen. The recognized text is copied to your clipboard automatically for easy lookups or translations.
+        Speak Aloud: Namida OCR can speak the extracted text using Edge’s installed Windows voices—when you have a Japanese language pack or “natura” TTS voices installed.
+        Offline ESRGAN Upscaling: Improve text clarity with ESRGAN or switch to basic linear upscaling for speed.
+        No External Servers: All processing takes place locally in your browser. Your data never leaves your device.
+        Ideal for manga, visual novels, or any scenario where you want to quickly extract and optionally listen to Japanese text. Namida OCR keeps everything in-browser and offline, giving you full control over your data.
