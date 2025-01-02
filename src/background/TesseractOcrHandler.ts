@@ -26,6 +26,7 @@ export class TesseractOcrHandler {
           corePath: '/libs/tesseract-core',
           workerPath: '/libs/tesseract-worker/worker.min.js',
           langPath: '/libs/tesseract-lang',
+          gzip: false, // Edge extension validation does not allow files that end with .gz https://github.com/microsoft/MicrosoftEdge-Extensions/discussions/135
           logger: (m) => console.log(m)
         }
       );

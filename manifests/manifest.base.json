@@ -2,7 +2,7 @@
     "manifest_version": 3,
     "name": "Namida OCR",
     "version": "1.0",
-    "description": "An OCR tool designed for Japanese text",
+    "description": "An OCR tool designed for Japanese text, automatically copies recognized text to the clipboard and offers the ability to pronounce the text",
     "commands": {
         "toggle-feature": {
             "suggested_key": {
