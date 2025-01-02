@@ -35,7 +35,7 @@ jobs:
 
       - name: Build Firefox Plugin
         run: |
-          npm run build:firefox -- --env build_number=1.0.${{ github.run_number }}
+          npm run build:firefox -- --env build_number=1.1.${{ github.run_number }}
         shell: bash
 
       - name: Package Firefox
@@ -52,7 +52,7 @@ jobs:
 
       - name: Build Chrome Plugin
         run: |
-          npm run build:chrome -- --env build_number=1.0.${{ github.run_number }}
+          npm run build:chrome -- --env build_number=1.1.${{ github.run_number }}
         shell: bash
 
       - name: Package Chrome
