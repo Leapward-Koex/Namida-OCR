@@ -59,12 +59,14 @@ module.exports = (env) => {
                     { from: 'node_modules/tesseract.js-core/tesseract-core-lstm.wasm.js', to: 'libs/tesseract-core/tesseract-core-lstm.wasm.js' },
                     { from: 'node_modules/tesseract.js-core/tesseract-core-simd-lstm.wasm.js', to: 'libs/tesseract-core/tesseract-core-simd-lstm.wasm.js' },
                     { from: 'node_modules/tesseract.js/dist/worker.min.js', to: 'libs/tesseract-worker/worker.min.js' },
-                    { from: 'lang/', to: 'libs/tesseract-lang/' },
-                    { from: 'node_modules/@upscalerjs/esrgan-medium/models/', to: 'libs/tensorflow/' },
+                    { from: 'lang/jpn_vert.traineddata.gz', to: 'libs/tesseract-lang/jpn_vert.traineddata.gz' },
+                    { from: 'node_modules/@upscalerjs/esrgan-medium/models/x2', to: 'libs/tensorflow/x2' },
                     {
                         from: 'assets/', to: 'assets/', globOptions: {
                             ignore: [
-                                '**/*.pdn'
+                                '**/*.pdn',
+                                '**/*.txt',
+                                '**/Demo picture.png'
                             ]
                         }
                     },
