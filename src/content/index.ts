@@ -16,7 +16,6 @@ class SnippingTool {
     private static logTag = `[${SnippingTool.name}]`;
     private overlay: SnipOverlay;
     private saveHandler: SaveHandler;
-    private isSnipping: boolean = false;
     private ocr: TesseractOcrHandler;
 
     constructor() {
@@ -28,6 +27,7 @@ class SnippingTool {
     public setupMessageListener() {
         runtime.onMessage.addListener((message) => {
             if ((message as NamidaMessage).action === NamidaMessageAction.SnipPage) {
+                console.debug(SnippingTool.logTag, "Going to show overlay over content")
                 this.overlay.show();
             }
             return undefined;
