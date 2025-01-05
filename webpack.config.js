@@ -82,7 +82,8 @@ module.exports = (env) => {
                             ignore: [
                                 '**/*.pdn',
                                 '**/*.txt',
-                                '**/Demo picture.png'
+                                '**/Demo picture.png',
+                                '**/CWS DemoPicture.png'
                             ]
                         }
                     },
