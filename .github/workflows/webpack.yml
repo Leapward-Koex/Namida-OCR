@@ -16,6 +16,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: 'true'
 
       - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
@@ -35,7 +37,7 @@ jobs:
 
       - name: Build Firefox Plugin
         run: |
-          npm run build:firefox -- --env build_number=1.1.${{ github.run_number }}
+          npm run build:firefox -- --env build_number=1.2.${{ github.run_number }}
         shell: bash
 
       - name: Package Firefox
@@ -45,14 +47,14 @@ jobs:
           rm -rf dist
 
       - name: Upload Firefox Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: firefox-plugin
           path: namida-ff.xpi
 
       - name: Build Chrome Plugin
         run: |
-          npm run build:chrome -- --env build_number=1.1.${{ github.run_number }}
+          npm run build:chrome -- --env build_number=1.2.${{ github.run_number }}
         shell: bash
 
       - name: Package Chrome
@@ -63,7 +65,7 @@ jobs:
           rm -rf dist
 
       - name: Upload Chrome Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: chrome-plugin
           path: namida-chrome.crx
