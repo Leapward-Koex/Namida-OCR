@@ -8,6 +8,7 @@ import { Settings } from "../interfaces/Storage";
 import { ClipboardHandler } from "./ClipboardHandler";
 import { FloatingWindow } from "./FloatingWindowHandler";
 import { TextProcessorHandler } from "./TextProcessorHandler";
+import { TranslationHandler } from "../background/TranslationHandler";
 
 console.debug('Content script loaded');
 
@@ -44,10 +45,20 @@ class SnippingTool {
             const recognizedText = await this.ocr.recognizeFromContent(croppedDataURL);
             const spacesRemovedText = TextProcessorHandler.removeSpaces(recognizedText);
             ClipboardHandler.copyText(spacesRemovedText);
-            new FloatingWindow(spacesRemovedText);
+            const floatingWindow = new FloatingWindow(spacesRemovedText);
             if (await Settings.getSaveOcrCrop()) {
                 console.debug(SnippingTool.logTag, "Saving Image");
                 this.saveHandler.downloadImage(croppedDataURL, 'snippet.png');
+            }
+            if (spacesRemovedText) {
+                try {
+                    const translatedText = await TranslationHandler.translateTextFromContent(spacesRemovedText);
+                    floatingWindow.fillInTranslation(translatedText);
+                }
+                catch {
+                    floatingWindow.fillInTranslation("");
+                }
+
             }
         } catch (error) {
             console.error(SnippingTool.logTag, 'Failed when creating selection and performing OCR', error);

@@ -1,6 +1,7 @@
 import { runtime } from "webextension-polyfill";
 import { NamidaMessage, NamidaMessageAction, NamidaOcrFromOffscreenMessage } from "../interfaces/message";
 import { TesseractOcrHandler } from "../background/TesseractOcrHandler";
+import { TranslationHandler } from "../background/TranslationHandler";
 
 console.debug("Loading offscreen document");
 
@@ -12,9 +13,17 @@ console.debug("Loading offscreen document");
     await TesseractOcrHandler.initWorker();
 })().catch(console.error);
 
+(async () => {
+    await TranslationHandler.initWorker();
+})().catch(console.error);
+
 runtime.onMessage.addListener((message) => {
-    const namidaMessage = message as NamidaOcrFromOffscreenMessage;
+    const namidaMessage = message as NamidaMessage;
     if (namidaMessage.action === NamidaMessageAction.RecognizeImageOffscreen) {
-        return TesseractOcrHandler.recognizeFromOffscreen(namidaMessage.data.imageData, namidaMessage.data.pageSegMode);
+        const namidaOffscreenOcrMessage = message as NamidaOcrFromOffscreenMessage;
+        return TesseractOcrHandler.recognizeFromOffscreen(namidaOffscreenOcrMessage.data.imageData, namidaOffscreenOcrMessage.data.pageSegMode);
+    }
+    else if (namidaMessage.action === NamidaMessageAction.TranslateTextOffscreen) {
+        return TranslationHandler.translateText(namidaMessage.data);
     }
 });
