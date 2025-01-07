@@ -9,7 +9,9 @@
 <a href="https://addons.mozilla.org/firefox/addon/namida-ocr/"><img style="height: 100px" src="https://github.com/user-attachments/assets/e1c41eb3-5563-431b-9461-c8a839df92b4" alt="Get Namida ORC for Firefox"></a>
 <a href="https://microsoftedge.microsoft.com/addons/detail/namida-ocr/idbijkhnllhjdnjmkkfjeicnalemfhnk"><img style="height: 100px" src="https://github.com/user-attachments/assets/4ee20820-86e1-432c-9cd4-47784ffa2cea" alt="Get Namida ORC for Microsoft Edge"></a>
 </p>
+
 ***
+
 ## Features
 
 - **Local OCR**  
