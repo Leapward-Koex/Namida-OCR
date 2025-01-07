@@ -2,13 +2,21 @@
 
 **Namida OCR** is a completely local OCR browser extension for both **Chrome**, **Firefox**, and **Edge**. It enables you to take a “snip” (screenshot) of any part of your current tab, upscale it (either via basic linear upscaling or ESRGAN), and then perform OCR on the snipped region using Tesseract.js. The OCR supports Japanese vertical text at the moment and automatically copies the recognized text to your clipboard, making it easy to use with online dictionaries like [Yomitan](https://github.com/yomidevs/yomitan) or manual translation tools. Additionally, Namida OCR includes the option to speak the recognized text aloud using your browser’s text-to-speech capabilities.
 
+
+***
+<p align="center">
+<a href="https://chromewebstore.google.com/detail/namida-ocr/fdcjeigdfljhiinbagbmlhekkbgcdnfc"><img src="" alt="Get Namida ORC for Chrome"></a>
+<a href="https://addons.mozilla.org/firefox/addon/namida-ocr/"><img src="" alt="Get Namida ORC for Firefox"></a>
+<a href="https://microsoftedge.microsoft.com/addons/detail/namida-ocr/idbijkhnllhjdnjmkkfjeicnalemfhnk"><img src="" alt="Get Namida ORC for Microsoft Edge"></a>
+</p>
+***
 ## Features
 
 - **Local OCR**  
   All OCR processing is done locally in your browser using [Tesseract.js](https://github.com/naptha/tesseract.js). No external servers are involved.
 
 - **Snip & Upscale**  
-  Press **Alt + Q** to activate the snipping mode. The selected image region is then upscaled:
+  By default, **Alt + Q** on windows and **Option + Q** on mac activates the snipping mode. The selected image region is then upscaled:
   - **Linear Upscaling** (fast, basic)  
   - **ESRGAN** (higher-quality AI-based upscaling)
 
@@ -30,7 +38,7 @@
 ## Usage
 
 1. **Activate Snip Mode**  
-   Press **Alt + Q** on any web page. A snipping overlay will appear.
+   Press **Alt + Q** on windows or **Option + Q** on mac on any web page. A snipping overlay will appear.
 
 2. **Select the Region**  
    Click and drag to highlight the area you want to OCR.
@@ -61,7 +69,7 @@
   - Choose which TTS voice to use when speaking recognized text. The available options depend on your browser and system configuration:
     - **Chrome**: Includes high-quality remote Japanese voices.  
     - **Firefox & Edge**: Requires a Japanese language pack with TTS support installed.  
-    - **Edge (Windows)**: Can use advanced **"natura"** voices from the Windows language pack.
+    - **Edge (Windows)**: Can use advanced **"natural"** voices from the Windows language pack.
 
 ## Notes
 
