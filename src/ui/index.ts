@@ -1,4 +1,4 @@
-import { storage } from "webextension-polyfill";
+import { commands, runtime, storage, tabs } from "webextension-polyfill";
 import { Settings, StorageKey, UpscalingModeString } from "../interfaces/Storage";
 import { SpeechSynthesisHandler } from "../content/SpeechHandler";
 import { NamidaVoice, TTSWrapper } from "../content/TTSWrapper";
@@ -10,6 +10,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const saveOcrCropCheckbox = document.getElementById("save-ocr-crop") as HTMLInputElement;
     const showSpeakButtonCheckbox = document.getElementById("show-speak-button") as HTMLInputElement;
     const speechStatus = document.getElementById("speech-status") as HTMLElement | null;
+    const speakeDemoButton = document.getElementById("voice-demo-button") as HTMLButtonElement;
+    const changeShortcut = document.getElementById("change-shortcut") as HTMLButtonElement;
 
     loadSettings(upscalingSelect, pageSegSelect, saveOcrCropCheckbox, showSpeakButtonCheckbox);
 
@@ -44,6 +46,44 @@ document.addEventListener('DOMContentLoaded', () => {
         const record: Record<string, unknown> = {};
         record[StorageKey.ShowSpeakButton] = showSpeakButtonCheckbox.checked;
         storage.sync.set(record);
+    });
+
+    speakeDemoButton.addEventListener("click", async () => {
+        const speechHandler = new SpeechSynthesisHandler();
+        speechHandler.speak("こんにちは、NAMIDA OCRです。");
+    });
+
+    runtime.getBrowserInfo().then((browserInfo) => {
+        const isFirefox = browserInfo.name.toLowerCase() == 'firefox';
+        const isChrome = browserInfo.name.toLowerCase() == 'chrome';
+        const isEdge = browserInfo.name.toLowerCase() == 'edge';
+
+        changeShortcut.addEventListener("click", async () => {
+            if (isChrome) {
+                tabs.create({ url: 'chrome://extensions/shortcuts' });
+            }
+            else if (isEdge) {
+                tabs.create({ url: 'edge://extensions/shortcuts' });
+            }
+        });
+
+        if (isFirefox) {
+            changeShortcut.hidden = true;
+            const firefoxExplanation = document.createElement('p');
+            firefoxExplanation.innerText = "To change the shortcut key combination, go to url 'about:addons' → click 'Extensions' → click the cog icon → click 'Manage Extension Shortcuts'.";
+            changeShortcut.parentElement?.insertBefore(firefoxExplanation, changeShortcut.nextElementSibling);
+        }
+
+    });
+
+    commands.getAll().then((installedCommands) => {
+        const snipCommand = installedCommands.find((installedCommand) => installedCommand.name == "toggle-feature");
+        if (snipCommand && snipCommand.shortcut) {
+            document.querySelector<HTMLSpanElement>('#shortcut-key')!.innerText = snipCommand.shortcut
+        }
+        else {
+            document.querySelector<HTMLSpanElement>('#shortcut-key')!.innerText = "<no shortcut setup>"
+        }
     });
 
     // Check for Japanese speech synthesis voice
