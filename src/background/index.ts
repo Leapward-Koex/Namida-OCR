@@ -4,6 +4,7 @@ import { TesseractOcrHandler } from "./TesseractOcrHandler";
 import { Upscaler } from "./Upscaler";
 import { Settings } from "../interfaces/Storage";
 import { TranslationHandler } from "./TranslationHandler";
+import { BrowserType, getCurrentBrowser } from "../interfaces/browserInfo";
 
 console.log('Background script loaded');
 if (globalThis.Worker) {
@@ -13,23 +14,12 @@ if (globalThis.Worker) {
     })().catch(console.error);
 }
 
-let isBrowserFirefox = false;
-
-const checkIsFireFox = async () => {
-    const browserInfo = await runtime.getBrowserInfo()
-    isBrowserFirefox = browserInfo.name.toLowerCase() === "firefox";
-    return isBrowserFirefox;
+if (getCurrentBrowser() === BrowserType.Firefox) {
+    (async () => {
+        // Firefox uses background scripts instead of a service worker and due to extension file size limits must use remote models.
+        await TranslationHandler.initWorker(false);
+    })().catch(console.error);
 }
-
-
-checkIsFireFox().then(() => {
-    if (isBrowserFirefox) {
-        (async () => {
-            // Firefox uses background scripts instead of a service worker and due to extension file size limits must use remote models.
-            await TranslationHandler.initWorker(false);
-        })().catch(console.error);
-    }
-})
 
 async function ensureOffscreenDocument() {
     const offscreenUrl = runtime.getURL('offscreen/offscreen.html');
@@ -111,7 +101,7 @@ runtime.onMessage.addListener((message, sender) => {
         }
 
         case NamidaMessageAction.TranslateText: {
-            if (isBrowserFirefox) {
+            if (getCurrentBrowser() === BrowserType.Firefox) {
                 return TranslationHandler.translateText(namidaMessage.data);
             }
             else {
