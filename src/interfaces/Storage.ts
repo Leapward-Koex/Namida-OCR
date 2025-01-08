@@ -7,7 +7,8 @@ export enum StorageKey {
     PageSegMode = "PageSegMode",
     SaveOcrCrop = "SaveOcrCrop",
     ShowSpeakButton = "ShowSpeakButton",
-    PreferredVoices = "PreferredVoices"
+    PreferredVoices = "PreferredVoices",
+    WindowTimeout = "WindowTimeout"
 }
 
 export enum UpscalingModeString {
@@ -47,6 +48,12 @@ export class Settings {
             return PSM.AUTO;
         }
         return PSM.AUTO;
+    }
+
+    public static async getWindowTimeout() {
+        const values = await storage.sync.get(StorageKey.WindowTimeout);
+        const value = values[StorageKey.WindowTimeout] as string | undefined;
+        return Number(value ?? "30000");
     }
 
     public static async getUpscalingMode() {

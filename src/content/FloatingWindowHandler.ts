@@ -4,7 +4,6 @@ import { TTSWrapper } from "./TTSWrapper";
 
 export class FloatingWindow {
     private static floatingMessageEl: HTMLDivElement | null = null;
-    private windowFadeTimeout = 10000;
     private speechHandler = new SpeechSynthesisHandler("ja-JP");
     static floatingMessageTimer: number | undefined;
 
@@ -160,13 +159,17 @@ export class FloatingWindow {
 
     private startFadeTimer() {
         // Clear any existing timer
-        if (FloatingWindow.floatingMessageTimer) {
-            window.clearTimeout(FloatingWindow.floatingMessageTimer);
-        }
+        Settings.getWindowTimeout().then((windowTimeout) => {
+            if (FloatingWindow.floatingMessageTimer) {
+                window.clearTimeout(FloatingWindow.floatingMessageTimer);
+            }
 
-        FloatingWindow.floatingMessageTimer = window.setTimeout(() => {
-            this.fadeOutMessage();
-        }, this.windowFadeTimeout);
+            if (windowTimeout != -1) {
+                FloatingWindow.floatingMessageTimer = window.setTimeout(() => {
+                    this.fadeOutMessage();
+                }, windowTimeout);
+            }
+        })
     }
 
     private fadeOutMessage() {

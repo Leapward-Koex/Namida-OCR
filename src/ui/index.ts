@@ -5,6 +5,7 @@ import { NamidaVoice, TTSWrapper } from "../content/TTSWrapper";
 import { BrowserType, getCurrentBrowser, isWindows } from "../interfaces/browserInfo";
 
 document.addEventListener('DOMContentLoaded', () => {
+    const windowTimeoutSelect = document.getElementById("window-timeout") as HTMLSelectElement;
     const upscalingSelect = document.getElementById("upscaling-mode") as HTMLSelectElement;
     const pageSegSelect = document.getElementById("page-seg-mode") as HTMLSelectElement;
     const voiceSelect = document.getElementById("voice-selection") as HTMLSelectElement;
@@ -14,9 +15,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const speakeDemoButton = document.getElementById("voice-demo-button") as HTMLButtonElement;
     const changeShortcut = document.getElementById("change-shortcut") as HTMLButtonElement;
 
-    loadSettings(upscalingSelect, pageSegSelect, saveOcrCropCheckbox, showSpeakButtonCheckbox);
+    loadSettings(windowTimeoutSelect, upscalingSelect, pageSegSelect, saveOcrCropCheckbox, showSpeakButtonCheckbox);
 
     // Attach listeners to save new values
+    windowTimeoutSelect.addEventListener("change", () => {
+        const record: Record<string, unknown> = {};
+        record[StorageKey.WindowTimeout] = windowTimeoutSelect.value;
+        storage.sync.set(record);
+    });
+
     upscalingSelect.addEventListener("change", () => {
         const record: Record<string, unknown> = {};
         record[StorageKey.UpscalingMode] = upscalingSelect.value;
@@ -99,6 +106,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 async function loadSettings(
+    windowTimeoutSelect: HTMLSelectElement,
     upscalingSelect: HTMLSelectElement,
     pageSegSelect: HTMLSelectElement,
     saveOcrCropCheckbox: HTMLInputElement,
@@ -106,6 +114,8 @@ async function loadSettings(
 ) {
     const values = await storage.sync.get(null);
 
+    windowTimeoutSelect.value =
+        (values[StorageKey.WindowTimeout] as string | undefined) || "30000";
     upscalingSelect.value =
         (values[StorageKey.UpscalingMode] as string | undefined) || UpscalingModeString.Canvas;
     pageSegSelect.value =
