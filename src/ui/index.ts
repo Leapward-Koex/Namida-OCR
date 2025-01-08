@@ -1,7 +1,8 @@
-import { storage } from "webextension-polyfill";
+import { commands, runtime, storage, tabs } from "webextension-polyfill";
 import { Settings, StorageKey, UpscalingModeString } from "../interfaces/Storage";
 import { SpeechSynthesisHandler } from "../content/SpeechHandler";
 import { NamidaVoice, TTSWrapper } from "../content/TTSWrapper";
+import { BrowserType, getCurrentBrowser, isWindows } from "../interfaces/browserInfo";
 
 document.addEventListener('DOMContentLoaded', () => {
     const upscalingSelect = document.getElementById("upscaling-mode") as HTMLSelectElement;
@@ -9,7 +10,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const voiceSelect = document.getElementById("voice-selection") as HTMLSelectElement;
     const saveOcrCropCheckbox = document.getElementById("save-ocr-crop") as HTMLInputElement;
     const showSpeakButtonCheckbox = document.getElementById("show-speak-button") as HTMLInputElement;
-    const speechStatus = document.getElementById("speech-status") as HTMLElement | null;
+    const speechStatus = document.getElementById("speech-status") as HTMLSpanElement;
+    const speakeDemoButton = document.getElementById("voice-demo-button") as HTMLButtonElement;
+    const changeShortcut = document.getElementById("change-shortcut") as HTMLButtonElement;
 
     loadSettings(upscalingSelect, pageSegSelect, saveOcrCropCheckbox, showSpeakButtonCheckbox);
 
@@ -46,24 +49,53 @@ document.addEventListener('DOMContentLoaded', () => {
         storage.sync.set(record);
     });
 
+    speakeDemoButton.addEventListener("click", async () => {
+        const speechHandler = new SpeechSynthesisHandler();
+        speechHandler.speak("こんにちは、NAMIDA OCRです。");
+    });
+
+    const browserType = getCurrentBrowser();
+    changeShortcut.addEventListener("click", async () => {
+        if (browserType == BrowserType.Chrome) {
+            tabs.create({ url: 'chrome://extensions/shortcuts' });
+        }
+        else if (browserType == BrowserType.Edge) {
+            tabs.create({ url: 'edge://extensions/shortcuts' });
+        }
+    });
+
+    if (browserType == BrowserType.Firefox) {
+        changeShortcut.hidden = true;
+        const firefoxExplanation = document.createElement('p');
+        firefoxExplanation.innerText = "To change the shortcut key combination, go to url 'about:addons' → click 'Extensions' → click the cog icon → click 'Manage Extension Shortcuts'.";
+        changeShortcut.parentElement?.insertBefore(firefoxExplanation, changeShortcut.nextElementSibling);
+    }
+
+    commands.getAll().then((installedCommands) => {
+        const snipCommand = installedCommands.find((installedCommand) => installedCommand.name == "toggle-feature");
+        if (snipCommand && snipCommand.shortcut) {
+            document.querySelector<HTMLSpanElement>('#shortcut-key')!.innerText = snipCommand.shortcut
+        }
+        else {
+            document.querySelector<HTMLSpanElement>('#shortcut-key')!.innerText = "<no shortcut setup>"
+        }
+    });
+
     // Check for Japanese speech synthesis voice
-    if (speechStatus) {
-        // The voices may not be loaded immediately, so also listen for updates.
-        speechSynthesis.addEventListener("voiceschanged", () => {
-            checkJapaneseVoice(speechStatus);
-            // Also repopulate it when the voices change
-            Settings.getPreferredVoiceId().then(async (preferredVoiceUri) => {
-                const voices = await TTSWrapper.getVoices();
-                populateVoiceSelection(voiceSelect, preferredVoiceUri, voices);
-            });
-        });
+    // The voices may not be loaded immediately, so also listen for updates.
+    speechSynthesis.addEventListener("voiceschanged", () => {
         checkJapaneseVoice(speechStatus);
+        // Also repopulate it when the voices change
         Settings.getPreferredVoiceId().then(async (preferredVoiceUri) => {
             const voices = await TTSWrapper.getVoices();
             populateVoiceSelection(voiceSelect, preferredVoiceUri, voices);
         });
-
-    }
+    });
+    checkJapaneseVoice(speechStatus);
+    Settings.getPreferredVoiceId().then(async (preferredVoiceUri) => {
+        const voices = await TTSWrapper.getVoices();
+        populateVoiceSelection(voiceSelect, preferredVoiceUri, voices);
+    });
 });
 
 async function loadSettings(
@@ -95,9 +127,16 @@ async function checkJapaneseVoice(speechStatus: HTMLElement) {
     if (japaneseVoice) {
         speechStatus.textContent = "A Japanese speech synthesis voice is available!";
     } else {
-        speechStatus.textContent =
+        speechStatus.innerHTML =
             "No Japanese voice is available. Please install a Japanese language pack to your system" +
             "and restart your browser.";
+
+        if (isWindows()) {
+            speechStatus.innerHTML += " Click <a id=\"learn-install-pack\" href=\"https://support.microsoft.com/en-us/windows/language-packs-for-windows-a5094319-a92d-18de-5b53-1cfc697cfca8\">here</a> to learn how to install a language pack";
+            speechStatus.querySelector('#learn-install-pack')?.addEventListener('click', () => {
+                tabs.create({ url: "https://support.microsoft.com/en-us/windows/language-packs-for-windows-a5094319-a92d-18de-5b53-1cfc697cfca8" });
+            });
+        }
         document.querySelector<HTMLDivElement>('.voice-selection-container')!.hidden = true;
 
     }

@@ -13,24 +13,14 @@
 
     <div class="section">
       <h2>Instructions</h2>
-      <ol>
-        <li>Press Alt + q to show the snipping tool</li>
+      <ol style="margin-bottom: 10px;">
+        <li>Press <span id="shortcut-key">...</span> to show the snipping tool</li>
         <li>Drag the curson to make a selection around a block of text</li>
         <li>View the recognized text in the bottom right of the page. Text is also automatically copied to the
           clipboard.
         </li>
       </ol>
-    </div>
-
-    <!-- General Section -->
-    <div class="section">
-      <h2>General</h2>
-      <label for="upscaling-mode">Upscaling Mode</label>
-      <select id="upscaling-mode">
-        <option value="none">None</option>
-        <option value="canvas" selected>Canvas</option>
-        <option value="tensorflow">Tensorflow</option>
-      </select>
+      <Button id="change-shortcut">Change shortcut key</Button>
     </div>
 
     <div class="section">
@@ -42,14 +32,19 @@
       <p id="speech-status">Checking if Japanese voices are available...</p>
       <div class="voice-selection-container">
         <label for="voice-selection">Voice</label>
-        <select id="voice-selection">
+        <select id="voice-selection"></select>
       </div>
-      </select>
+      <Button id="voice-demo-button">Demo</Button>
     </div>
 
-    <!-- Advanced OCR Section (Collapsible) -->
     <div class="section">
-      <h2>Advanced OCR</h2>
+      <h2>Advanced</h2>
+      <label for="upscaling-mode">Upscaling Mode</label>
+      <select id="upscaling-mode">
+        <option value="none">None</option>
+        <option value="canvas" selected>Canvas</option>
+        <option value="tensorflow">Tensorflow</option>
+      </select>
       <label for="page-seg-mode">Page Segregation Mode</label>
       <select id="page-seg-mode">
         <option value="single-block-vertical" selected>Single Block Vertical</option>
@@ -58,7 +53,6 @@
       </select>
     </div>
 
-    <!-- Debugging Section (Collapsible) -->
     <div class="section">
       <h2>Debugging</h2>
       <div class="inline-setting">
