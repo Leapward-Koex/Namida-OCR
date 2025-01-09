@@ -24,6 +24,17 @@ module.exports = (env) => {
             }, null, 2)
         );
     };
+
+    const copyXenovaModels = () => {
+        if (browser !== 'firefox') {
+            fs.mkdirSync(path.resolve(__dirname, 'dist/xenovaModels/onnx-community/opus-mt-ja-en/onnx/'), { recursive: true });
+            fs.copyFileSync(path.resolve(__dirname, 'xenovaModels/onnx-community/opus-mt-ja-en/config.json'), path.resolve(__dirname, 'dist/xenovaModels/onnx-community/opus-mt-ja-en/config.json'));
+            fs.copyFileSync(path.resolve(__dirname, 'xenovaModels/onnx-community/opus-mt-ja-en/tokenizer.json'), path.resolve(__dirname, 'dist/xenovaModels/onnx-community/opus-mt-ja-en/tokenizer.json'));
+            fs.copyFileSync(path.resolve(__dirname, 'xenovaModels/onnx-community/opus-mt-ja-en/tokenizer_config.json'), path.resolve(__dirname, 'dist/xenovaModels/onnx-community/opus-mt-ja-en/tokenizer_config.json'));
+            fs.copyFileSync(path.resolve(__dirname, 'xenovaModels/onnx-community/opus-mt-ja-en/onnx/encoder_model_int8.onnx'), path.resolve(__dirname, 'dist/xenovaModels/onnx-community/opus-mt-ja-en/onnx/encoder_model_int8.onnx'));
+            fs.copyFileSync(path.resolve(__dirname, 'xenovaModels/onnx-community/opus-mt-ja-en/onnx/decoder_model_merged_int8.onnx'), path.resolve(__dirname, 'dist/xenovaModels/onnx-community/opus-mt-ja-en/onnx/decoder_model_merged_int8.onnx'));
+        }
+    };
     return {
         entry: {
             background: './src/background/index.ts',
@@ -34,9 +45,14 @@ module.exports = (env) => {
         output: {
             path: path.resolve(__dirname, 'dist'),
             filename: '[name]/index.js',
+            // Otherwise we get `Uncaught ReferenceError: document is not defined`
+            chunkLoading: false,
         },
         resolve: {
             extensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
+            alias: {
+                '@huggingface/transformers': path.resolve(__dirname, 'node_modules/@huggingface/transformers') // https://github.com/huggingface/transformers.js/issues/911#issuecomment-2372655914
+            }
         },
         module: {
             rules: [
@@ -45,7 +61,7 @@ module.exports = (env) => {
                     use: 'ts-loader',
                     exclude: /node_modules/,
                 },
-            ],
+            ]
         },
         plugins: [
             new CopyPlugin({
@@ -66,7 +82,8 @@ module.exports = (env) => {
                             ignore: [
                                 '**/*.pdn',
                                 '**/*.txt',
-                                '**/Demo picture.png'
+                                '**/Demo picture.png',
+                                '**/CWS DemoPicture.png'
                             ]
                         }
                     },
@@ -79,6 +96,18 @@ module.exports = (env) => {
                         compilation.fileDependencies.add(path.resolve(__dirname, 'manifests/manifest.base.json'));
                         compilation.fileDependencies.add(path.resolve(__dirname, `manifests/manifest.${browser}.json`));
                         createManifest();
+                    });
+                },
+            },
+            {
+                apply: (compiler) => {
+                    compiler.hooks.afterEmit.tap('CopyXenovaModels', (compilation) => {
+                        compilation.fileDependencies.add(path.resolve(__dirname, 'xenovaModels/onnx-community/opus-mt-ja-en/config.json'));
+                        compilation.fileDependencies.add(path.resolve(__dirname, 'xenovaModels/onnx-community/opus-mt-ja-en/tokenizer.json'));
+                        compilation.fileDependencies.add(path.resolve(__dirname, 'xenovaModels/onnx-community/opus-mt-ja-en/tokenizer_config.json'));
+                        compilation.fileDependencies.add(path.resolve(__dirname, 'xenovaModels/onnx-community/opus-mt-ja-en/onnx/encoder_model_int8.onnx'));
+                        compilation.fileDependencies.add(path.resolve(__dirname, 'xenovaModels/onnx-community/opus-mt-ja-en/onnx/decoder_model_merged_int8.onnx'));
+                        copyXenovaModels();
                     });
                 },
             },

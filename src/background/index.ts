@@ -3,15 +3,24 @@ import { NamidaMessage, NamidaMessageAction, NamidaOcrFromOffscreenData, NamidaT
 import { TesseractOcrHandler } from "./TesseractOcrHandler";
 import { Upscaler } from "./Upscaler";
 import { Settings } from "../interfaces/Storage";
+import { TranslationHandler } from "./TranslationHandler";
+import { BrowserType, getCurrentBrowser } from "../interfaces/browserInfo";
 
 console.log('Background script loaded');
-
 if (globalThis.Worker) {
     // Workers are available in the service worker, e.g. Firefox
     (async () => {
         await TesseractOcrHandler.initWorker();
     })().catch(console.error);
 }
+
+if (getCurrentBrowser() === BrowserType.Firefox) {
+    (async () => {
+        // Firefox uses background scripts instead of a service worker and due to extension file size limits must use remote models.
+        await TranslationHandler.initWorker(false);
+    })().catch(console.error);
+}
+
 async function ensureOffscreenDocument() {
     const offscreenUrl = runtime.getURL('offscreen/offscreen.html');
     // Check if offscreen is already created
@@ -20,7 +29,7 @@ async function ensureOffscreenDocument() {
         await chrome.offscreen.createDocument({
             url: offscreenUrl,
             reasons: [chrome.offscreen.Reason.WORKERS],
-            justification: 'Perform background OCR using Tesseract.js'
+            justification: 'Perform background OCR using Tesseract.js and translations using ONNX transformers'
         });
     }
 }
@@ -69,6 +78,41 @@ runtime.onMessage.addListener((message, sender) => {
                     });
                 }
             });
+        }
+
+        case NamidaMessageAction.TranslateTextOffscreen: {
+            return Settings.getPageSegMode().then((pageSegMode) => {
+                if (globalThis.Worker) {
+                    return TesseractOcrHandler.recognizeFromOffscreen(namidaMessage.data, pageSegMode);
+                }
+                else {
+                    return ensureOffscreenDocument().then(() => {
+                        return runtime.sendMessage(
+                            {
+                                action: NamidaMessageAction.RecognizeImageOffscreen,
+                                data: {
+                                    imageData: namidaMessage.data,
+                                    pageSegMode: pageSegMode
+                                } as NamidaOcrFromOffscreenData
+                            });
+                    });
+                }
+            });
+        }
+
+        case NamidaMessageAction.TranslateText: {
+            if (getCurrentBrowser() === BrowserType.Firefox) {
+                return TranslationHandler.translateText(namidaMessage.data);
+            }
+            else {
+                return ensureOffscreenDocument().then(() => {
+                    return runtime.sendMessage(
+                        {
+                            action: NamidaMessageAction.TranslateTextOffscreen,
+                            data: namidaMessage.data
+                        });
+                });
+            }
         }
     }
 });

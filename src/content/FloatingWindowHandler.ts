@@ -6,12 +6,15 @@ export class FloatingWindow {
     private static floatingMessageEl: HTMLDivElement | null = null;
     private speechHandler = new SpeechSynthesisHandler("ja-JP");
     static floatingMessageTimer: number | undefined;
+    private static currentWindowId: number | undefined;
+    private windowId: number | undefined;
 
     constructor(text: string | undefined) {
         // Remove existing message if it's still visible
         if (FloatingWindow.floatingMessageEl) {
             FloatingWindow.floatingMessageEl.remove();
             FloatingWindow.floatingMessageEl = null;
+            FloatingWindow.currentWindowId = undefined;
             if (FloatingWindow.floatingMessageTimer) {
                 window.clearTimeout(FloatingWindow.floatingMessageTimer);
                 FloatingWindow.floatingMessageTimer = undefined;
@@ -63,6 +66,7 @@ export class FloatingWindow {
             if (FloatingWindow.floatingMessageEl) {
                 FloatingWindow.floatingMessageEl.remove();
                 FloatingWindow.floatingMessageEl = null;
+                FloatingWindow.currentWindowId = undefined;
             }
         });
 
@@ -78,6 +82,16 @@ export class FloatingWindow {
         textContainer.style.marginTop = '8px';
         textContainer.style.fontSize = '20px';
         textContainer.style.lineHeight = '1.4';
+
+        const translationContainer = document.createElement('div');
+        translationContainer.classList.add('translation-container');
+        translationContainer.style.background = '#333';
+        translationContainer.style.borderRadius = '6px';
+        translationContainer.style.padding = '10px';
+        translationContainer.style.marginTop = '8px';
+        translationContainer.style.fontSize = '20px';
+        translationContainer.style.lineHeight = '1.4';
+        translationContainer.innerText = "Loading translation..."
 
         if (text) {
             textContainer.innerText = text;
@@ -118,16 +132,13 @@ export class FloatingWindow {
             }
         });
 
-        // Append speak button (we'll conditionally attach it later)
         buttonRow.appendChild(speakButton);
 
-        // Add all elements to the main container
         floatingDiv.appendChild(headerRow);
-        // Only show the text container if we have recognized text or want to show something
         if (text) {
             floatingDiv.appendChild(textContainer);
+            floatingDiv.appendChild(translationContainer);
         }
-        // We'll conditionally add the button row only if the speak button is shown
 
         Settings.getShowSpeakButton().then(async (showSpeakButton) => {
             const voice = await this.speechHandler.voiceForLanguage();
@@ -153,6 +164,8 @@ export class FloatingWindow {
             });
 
             // Start fade timer
+            this.windowId = Math.random();
+            FloatingWindow.currentWindowId = this.windowId;
             this.startFadeTimer();
         });
     }
@@ -183,7 +196,19 @@ export class FloatingWindow {
             if (FloatingWindow.floatingMessageEl) {
                 FloatingWindow.floatingMessageEl.remove();
                 FloatingWindow.floatingMessageEl = null;
+                FloatingWindow.currentWindowId = undefined;
             }
         }, 400);
+    }
+
+    public fillInTranslation(text: string) {
+        if (this.windowId === FloatingWindow.currentWindowId && FloatingWindow.floatingMessageEl) {
+            if (text) {
+                FloatingWindow.floatingMessageEl.querySelector<HTMLDivElement>('.translation-container')!.innerText = text;
+            }
+            else {
+                FloatingWindow.floatingMessageEl.querySelector<HTMLDivElement>('.translation-container')!.innerText = "Failed to load translation";
+            }
+        }
     }
 }

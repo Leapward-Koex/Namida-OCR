@@ -6,6 +6,8 @@ export enum NamidaMessageAction {
     UpscaleImage,
     RecognizeImage,
     RecognizeImageOffscreen,
+    TranslateText,
+    TranslateTextOffscreen,
 }
 
 export interface NamidaMessage {

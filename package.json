@@ -1,6 +1,6 @@
 {
-  "name": "namida ocr",
-  "version": "1.1.1",
+  "name": "namida_ocr",
+  "version": "1.2.0",
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -23,6 +23,7 @@
     "webpack-cli": "^6.0.1"
   },
   "dependencies": {
+    "@huggingface/transformers": "^3.2.4",
     "@tensorflow/tfjs": "^4.11.0",
     "@upscalerjs/default-model": "^1.0.0-beta.17",
     "@upscalerjs/esrgan-medium": "^1.0.0-beta.13",

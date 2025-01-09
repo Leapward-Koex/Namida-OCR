@@ -1,0 +1,3 @@
+[submodule "xenovaModels/onnx-community/opus-mt-ja-en"]
+	path = xenovaModels/onnx-community/opus-mt-ja-en
+	url = https://huggingface.co/onnx-community/opus-mt-ja-en
