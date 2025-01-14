@@ -1,11 +1,13 @@
 import { commands, runtime, storage, tabs } from "webextension-polyfill";
-import { Settings, StorageKey, UpscalingModeString } from "../interfaces/Storage";
+import { FuriganaTypeString, Settings, StorageKey, UpscalingModeString } from "../interfaces/Storage";
 import { SpeechSynthesisHandler } from "../content/SpeechHandler";
 import { NamidaVoice, TTSWrapper } from "../content/TTSWrapper";
 import { BrowserType, getCurrentBrowser, isWindows } from "../interfaces/browserInfo";
+import { FuriganaType } from "../background/FuriganaHandler";
 
 document.addEventListener('DOMContentLoaded', () => {
     const windowTimeoutSelect = document.getElementById("window-timeout") as HTMLSelectElement;
+    const furiganaTypeSelect = document.getElementById("furigana-type") as HTMLSelectElement;
     const upscalingSelect = document.getElementById("upscaling-mode") as HTMLSelectElement;
     const pageSegSelect = document.getElementById("page-seg-mode") as HTMLSelectElement;
     const voiceSelect = document.getElementById("voice-selection") as HTMLSelectElement;
@@ -15,9 +17,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const speakeDemoButton = document.getElementById("voice-demo-button") as HTMLButtonElement;
     const changeShortcut = document.getElementById("change-shortcut") as HTMLButtonElement;
 
-    loadSettings(windowTimeoutSelect, upscalingSelect, pageSegSelect, saveOcrCropCheckbox, showSpeakButtonCheckbox);
+    loadSettings(windowTimeoutSelect, furiganaTypeSelect, upscalingSelect, pageSegSelect, saveOcrCropCheckbox, showSpeakButtonCheckbox);
 
     // Attach listeners to save new values
+    furiganaTypeSelect.addEventListener("change", () => {
+        const record: Record<string, unknown> = {};
+        record[StorageKey.FuriganaType] = furiganaTypeSelect.value;
+        updateFuriganaExample(furiganaTypeSelect.value as FuriganaTypeString)
+        storage.sync.set(record);
+    });
+
     windowTimeoutSelect.addEventListener("change", () => {
         const record: Record<string, unknown> = {};
         record[StorageKey.WindowTimeout] = windowTimeoutSelect.value;
@@ -107,6 +116,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function loadSettings(
     windowTimeoutSelect: HTMLSelectElement,
+    furiganaTypeSelect: HTMLSelectElement,
     upscalingSelect: HTMLSelectElement,
     pageSegSelect: HTMLSelectElement,
     saveOcrCropCheckbox: HTMLInputElement,
@@ -114,6 +124,9 @@ async function loadSettings(
 ) {
     const values = await storage.sync.get(null);
 
+    furiganaTypeSelect.value =
+        (values[StorageKey.FuriganaType] as string | undefined) || FuriganaTypeString.Hiragana;
+    updateFuriganaExample(furiganaTypeSelect.value as FuriganaTypeString)
     windowTimeoutSelect.value =
         (values[StorageKey.WindowTimeout] as string | undefined) || "30000";
     upscalingSelect.value =
@@ -183,5 +196,20 @@ function populateVoiceSelection(
     } else if (voicesForLanguage.length > 0) {
         // If no preferred voice is set, select the first available voice
         voiceSelect.selectedIndex = 0;
+    }
+}
+
+function updateFuriganaExample(furiganaType: FuriganaTypeString) {
+    const furiganaExample = document.getElementById("furigana-example") as HTMLSpanElement;
+    switch (furiganaType) {
+        case FuriganaTypeString.None:
+            furiganaExample.innerHTML = "<ruby>日本語</ruby>";
+            break;
+        case FuriganaTypeString.Hiragana:
+            furiganaExample.innerHTML = "<ruby>日<rt>に</rt></ruby><ruby>本<rt>ほん</rt></ruby><ruby>語<rt>ご</rt></ruby></ruby>";
+            break;
+        case FuriganaTypeString.Katakana:
+            furiganaExample.innerHTML = "<ruby>日<rt>ニ</rt></ruby><ruby>本<rt>ホン</rt></ruby><ruby>語<rt>ゴ</rt></ruby></ruby>";
+            break;
     }
 }

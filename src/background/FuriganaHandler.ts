@@ -3,6 +3,13 @@
 import * as kuromoji from 'kuromoji';
 import { NamidaMessageAction } from '../interfaces/message';
 import { runtime } from 'webextension-polyfill';
+import { Settings } from '../interfaces/Storage';
+
+export enum FuriganaType {
+    None,
+    Hiragana,
+    Katakana,
+}
 
 export class FuriganaHandler {
     private static logTag = `[${FuriganaHandler.name}]`;
@@ -49,8 +56,8 @@ export class FuriganaHandler {
             action: NamidaMessageAction.GenerateFurigana, data: input
         }) as kuromoji.IpadicFeatures[];
         console.log(this.logTag, `Generated furigana: ${output} from ${input}`)
-
-        return FuriganaHandler.convertToHtml(output);
+        const furiganaType = await Settings.getFuriganaType();
+        return FuriganaHandler.convertToHtml(output, furiganaType);
     }
 
     public static toKatakana(hiragana: string) {
@@ -59,11 +66,17 @@ export class FuriganaHandler {
         );
     }
 
+    public static toHiragana(katakana: string): string {
+        return katakana.replace(/[\u30A1-\u30F6]/g, ch =>
+            String.fromCharCode(ch.charCodeAt(0) - 0x60)
+        );
+    }
+
     public static isAllKana(str: string) {
         return /^[\u3040-\u309F\u30A0-\u30FF]+$/.test(str);
     }
 
-    public static convertToHtml(data: kuromoji.IpadicFeatures[]) {
+    public static convertToHtml(data: kuromoji.IpadicFeatures[], furiganaType: FuriganaType) {
         let html = "";
 
         for (const token of data) {
@@ -72,7 +85,7 @@ export class FuriganaHandler {
                 continue;
             }
 
-            if (!token.reading || token.reading === "*") {
+            if (!token.reading || token.reading === "*" || furiganaType == FuriganaType.None) {
                 html += token.surface_form;
                 continue;
             }
@@ -86,7 +99,12 @@ export class FuriganaHandler {
                 }
             }
 
-            html += `<ruby>${token.surface_form}<rt>${token.reading}</rt></ruby>`;
+            let tokenReading = token.reading;
+            if (furiganaType == FuriganaType.Hiragana) {
+                tokenReading = this.toHiragana(tokenReading);
+            }
+
+            html += `<ruby>${token.surface_form}<rt>${tokenReading}</rt></ruby>`;
         }
 
         return html;
