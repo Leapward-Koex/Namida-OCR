@@ -37,6 +37,9 @@ module.exports = (env) => {
         },
         resolve: {
             extensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
+            fallback: {
+                "path": require.resolve("path-browserify")
+            }
         },
         module: {
             rules: [
@@ -61,6 +64,7 @@ module.exports = (env) => {
                     { from: 'node_modules/tesseract.js/dist/worker.min.js', to: 'libs/tesseract-worker/worker.min.js' },
                     { from: 'lang/jpn_vert.traineddata', to: 'libs/tesseract-lang/jpn_vert.traineddata' },
                     { from: 'node_modules/@upscalerjs/esrgan-medium/models/x2', to: 'libs/tensorflow/x2' },
+                    { from: 'node_modules/kuromoji/dict', to: 'libs/kuromoji' },
                     {
                         from: 'assets/', to: 'assets/', globOptions: {
                             ignore: [
