@@ -3,6 +3,7 @@ import { NamidaMessage, NamidaMessageAction, NamidaOcrFromOffscreenData, NamidaT
 import { TesseractOcrHandler } from "./TesseractOcrHandler";
 import { Upscaler } from "./Upscaler";
 import { Settings } from "../interfaces/Storage";
+import { FuriganaHandler } from "./FuriganaHandler";
 
 console.log('Background script loaded');
 
@@ -49,6 +50,21 @@ runtime.onMessage.addListener((message, sender) => {
 
         case NamidaMessageAction.UpscaleImage: {
             return Upscaler.upscaleImageWithAIFromBackground(namidaMessage.data as NamidaTensorflowUpscaleData);
+        }
+
+        case NamidaMessageAction.GenerateFurigana: {
+            if (globalThis.XMLHttpRequest) {
+                return FuriganaHandler.generateFurigana(namidaMessage.data);
+            }
+            else {
+                return ensureOffscreenDocument().then(() => {
+                    return runtime.sendMessage(
+                        {
+                            action: NamidaMessageAction.GenerateFuriganaOffscreen,
+                            data: namidaMessage.data
+                        });
+                });
+            }
         }
 
         case NamidaMessageAction.RecognizeImage: {

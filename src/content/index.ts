@@ -8,6 +8,7 @@ import { Settings } from "../interfaces/Storage";
 import { ClipboardHandler } from "./ClipboardHandler";
 import { FloatingWindow } from "./FloatingWindowHandler";
 import { TextProcessorHandler } from "./TextProcessorHandler";
+import { FuriganaHandler } from "../background/FuriganaHandler";
 
 console.debug('Content script loaded');
 
@@ -43,8 +44,9 @@ class SnippingTool {
             console.debug(SnippingTool.logTag, "Got data: " + croppedDataURL);
             const recognizedText = await this.ocr.recognizeFromContent(croppedDataURL);
             const spacesRemovedText = TextProcessorHandler.removeSpaces(recognizedText);
+            const furigana = await FuriganaHandler.generateFuriganaFromContent(spacesRemovedText ?? "");
             ClipboardHandler.copyText(spacesRemovedText);
-            new FloatingWindow(spacesRemovedText);
+            new FloatingWindow({ text: spacesRemovedText, html: furigana });
             if (await Settings.getSaveOcrCrop()) {
                 console.debug(SnippingTool.logTag, "Saving Image");
                 this.saveHandler.downloadImage(croppedDataURL, 'snippet.png');

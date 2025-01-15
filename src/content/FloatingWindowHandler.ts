@@ -7,7 +7,7 @@ export class FloatingWindow {
     private speechHandler = new SpeechSynthesisHandler("ja-JP");
     static floatingMessageTimer: number | undefined;
 
-    constructor(text: string | undefined) {
+    constructor(config: { text: string | undefined, html: string | undefined }) {
         // Remove existing message if it's still visible
         if (FloatingWindow.floatingMessageEl) {
             FloatingWindow.floatingMessageEl.remove();
@@ -42,7 +42,7 @@ export class FloatingWindow {
         // Title
         const titleEl = document.createElement('span');
         titleEl.style.fontWeight = 'bold';
-        if (text) {
+        if (config.text || config.html) {
             titleEl.innerText = "Recognized text:";
         } else {
             titleEl.innerText = "Failed to recognize text, please try again.";
@@ -74,14 +74,18 @@ export class FloatingWindow {
         const textContainer = document.createElement('div');
         textContainer.style.background = '#333';
         textContainer.style.borderRadius = '6px';
-        textContainer.style.padding = '10px';
+        textContainer.style.padding = config.html ? '20px' : '10px';
         textContainer.style.marginTop = '8px';
-        textContainer.style.fontSize = '20px';
+        textContainer.style.fontSize = '28px';
         textContainer.style.lineHeight = '1.4';
 
-        if (text) {
-            textContainer.innerText = text;
-        } else {
+        if (config.html) {
+            textContainer.innerHTML = config.html;
+        }
+        else if (config.text) {
+            textContainer.innerText = config.text;
+        }
+        else {
             textContainer.innerText = "";
         }
 
@@ -104,13 +108,13 @@ export class FloatingWindow {
 
         speakButton.addEventListener('click', () => {
             // Only speak if text is defined
-            if (text) {
+            if (config.text) {
                 if (TTSWrapper.isSpeaking()) {
                     TTSWrapper.cancel();
                     speakButton.innerText = 'Speak';
                 }
                 else {
-                    this.speechHandler.speak(text).finally(() => {
+                    this.speechHandler.speak(config.text).finally(() => {
                         speakButton.innerText = 'Speak';
                     });
                     speakButton.textContent = 'Speaking...'
@@ -124,14 +128,14 @@ export class FloatingWindow {
         // Add all elements to the main container
         floatingDiv.appendChild(headerRow);
         // Only show the text container if we have recognized text or want to show something
-        if (text) {
+        if (config.text || config.html) {
             floatingDiv.appendChild(textContainer);
         }
         // We'll conditionally add the button row only if the speak button is shown
 
         Settings.getShowSpeakButton().then(async (showSpeakButton) => {
             const voice = await this.speechHandler.voiceForLanguage();
-            const canSpeak = Boolean(text) && Boolean(voice);
+            const canSpeak = Boolean(config.text) && Boolean(voice);
             if (showSpeakButton && canSpeak) {
                 floatingDiv.appendChild(buttonRow);
             }

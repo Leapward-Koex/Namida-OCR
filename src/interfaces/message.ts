@@ -6,6 +6,8 @@ export enum NamidaMessageAction {
     UpscaleImage,
     RecognizeImage,
     RecognizeImageOffscreen,
+    GenerateFurigana,
+    GenerateFuriganaOffscreen
 }
 
 export interface NamidaMessage {

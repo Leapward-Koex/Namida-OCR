@@ -147,6 +147,27 @@ button {
     border: none;
     border-radius: 4px;
     padding: 6px 12px;
-    font-size: 20px;
+    font-size: 16px;
     cursor: pointer;
+    transition: background-color 0.3s, transform 0.1s, box-shadow 0.3s;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+button:hover {
+    background-color: #1565c0;
+    /* Darker shade on hover */
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+button:active {
+    background-color: #0d47a1;
+    /* Even darker on click */
+    transform: scale(0.98);
+    /* Slightly shrink to indicate click */
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+#furigana-example {
+    font-size: 30px;
+    margin: 0 auto;
 }

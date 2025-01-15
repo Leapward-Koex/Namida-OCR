@@ -1,6 +1,7 @@
 import { PSM } from "tesseract.js";
 import { UpscaleMethod } from "../content/ScreenshotHandler";
 import { storage } from "webextension-polyfill";
+import { FuriganaType } from "../background/FuriganaHandler";
 
 export enum StorageKey {
     UpscalingMode = "UpscalingMode",
@@ -8,7 +9,14 @@ export enum StorageKey {
     SaveOcrCrop = "SaveOcrCrop",
     ShowSpeakButton = "ShowSpeakButton",
     PreferredVoices = "PreferredVoices",
-    WindowTimeout = "WindowTimeout"
+    WindowTimeout = "WindowTimeout",
+    FuriganaType = "FuriganaType"
+}
+
+export enum FuriganaTypeString {
+    None = 'none',
+    Hiragana = 'hiragana',
+    Katakana = 'katakana'
 }
 
 export enum UpscalingModeString {
@@ -24,6 +32,19 @@ export enum PageSegModeString {
 }
 
 export class Settings {
+    private static getFuriganaTypeString(settingString: string | undefined) {
+        if (settingString === FuriganaTypeString.None) {
+            return FuriganaType.None;
+        }
+        else if (settingString === FuriganaTypeString.Hiragana) {
+            return FuriganaType.Hiragana;
+        }
+        if (settingString === FuriganaTypeString.Katakana) {
+            return FuriganaType.Katakana;
+        }
+        return FuriganaType.Hiragana;
+    }
+
     private static getUpscalingModeFromString(settingString: string | undefined) {
         if (settingString === UpscalingModeString.None) {
             return UpscaleMethod.None;
@@ -54,6 +75,11 @@ export class Settings {
         const values = await storage.sync.get(StorageKey.WindowTimeout);
         const value = values[StorageKey.WindowTimeout] as string | undefined;
         return Number(value ?? "30000");
+    }
+
+    public static async getFuriganaType() {
+        const values = await storage.sync.get(StorageKey.FuriganaType);
+        return this.getFuriganaTypeString((values[StorageKey.FuriganaType] as string | undefined));
     }
 
     public static async getUpscalingMode() {
