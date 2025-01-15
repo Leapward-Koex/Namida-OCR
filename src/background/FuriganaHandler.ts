@@ -1,6 +1,6 @@
 
 
-import * as kuromoji from 'kuromoji';
+import * as kuromoji from '@leapward-koex/kuromoji';
 import { NamidaMessageAction } from '../interfaces/message';
 import { runtime } from 'webextension-polyfill';
 import { Settings } from '../interfaces/Storage';
@@ -22,7 +22,22 @@ export class FuriganaHandler {
         if (!this.tokenizerBuilderPromise) {
             this.tokenizerBuilderPromise = new Promise<kuromoji.Tokenizer<kuromoji.IpadicFeatures>>((resolve, reject) => {
                 try {
-                    const builder = kuromoji.builder({ dicPath: "../libs/kuromoji" });
+                    const builder = kuromoji.builder({
+                        dicPath: "../libs/kuromoji", fileNameOptions: {
+                            base: "base.dat.zg",
+                            check: "check.dat.zg",
+                            tid: "tid.dat.zg",
+                            tidPos: "tid_pos.dat.zg",
+                            tidMap: "tid_map.dat.zg",
+                            cc: "cc.dat.zg",
+                            unk: "unk.dat.zg",
+                            unkPos: "unk_pos.dat.zg",
+                            unkMap: "unk_map.dat.zg",
+                            unkChar: "unk_char.dat.zg",
+                            unkCompat: "unk_compat.dat.zg",
+                            unkInvoke: "unk_invoke.dat.zg"
+                        }
+                    });
                     builder.build((err, tokenizer) => {
                         if (err) {
                             this.tokenizerBuilderPromise = undefined;

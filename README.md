@@ -28,6 +28,9 @@
 - **Clipboard Copy**  
   Upon successful OCR, the recognized text is automatically copied to your clipboard so you can quickly paste it into a dictionary or translation tool.
 
+- **Furigana**  
+  Choose from either Hiragana or Katakana phonetic prnounciation of Kanji
+
 - **Text-to-Speech (TTS)**  
   Namida OCR includes the option to speak the recognized text aloud using your browser’s TTS engine.  
   - **Chrome**: High-quality remote Japanese voices are included by default.  
@@ -56,6 +59,11 @@
    If enabled in settings, you can speak the recognized text aloud using your browser’s TTS capabilities. Simply click the "Speak" button in the recognition window.
 
 ## Settings
+
+- **Furigana display**  
+  - **None** – Display no additional kana above kanji
+  - **Hiragana** – Displays hiragana above kanji
+  - **Katakana** – Displays katakana above kanji
 
 - **Upscaling Mode**  
   - **Linear** – Uses basic canvas scaling (faster but lower quality).  
