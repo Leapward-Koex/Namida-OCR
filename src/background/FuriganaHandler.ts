@@ -95,7 +95,7 @@ export class FuriganaHandler {
         let html = "";
 
         for (const token of data) {
-            if (token.surface_form === "\\n") {
+            if (token.surface_form === "\n") {
                 html += "<br>";
                 continue;
             }
