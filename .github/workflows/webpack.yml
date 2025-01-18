@@ -38,32 +38,23 @@ jobs:
           npm run build:firefox -- --env build_number=1.2.${{ github.run_number }}
         shell: bash
 
-      - name: Package Firefox
-        run: |
-          cd dist
-          zip -r ../namida-ff.xpi ./*
-          rm -rf dist
-
       - name: Upload Firefox Artifact
         uses: actions/upload-artifact@v3
         with:
-          name: firefox-plugin
-          path: namida-ff.xpi
+          name: namida-ocr-ff
+          path: dist
+
+      - name: Clean dist
+        run: |
+          rm -rf dist
 
       - name: Build Chrome Plugin
         run: |
           npm run build:chrome -- --env build_number=1.2.${{ github.run_number }}
         shell: bash
 
-      - name: Package Chrome
-        run: |
-          cd dist
-          zip -r ../namida-chrome.crx ./*
-          cd ..
-          rm -rf dist
-
       - name: Upload Chrome Artifact
         uses: actions/upload-artifact@v3
         with:
-          name: chrome-plugin
-          path: namida-chrome.crx
+          name: namida-ocr-chromium
+          path: dist
