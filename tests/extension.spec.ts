@@ -7,9 +7,10 @@ import { ocrCases } from './ocr-cases';
 import { scoreOcrCase, type OcrCaseResult } from './ocr-metrics';
 
 const SNIP_PAGE_ACTION = 0;
-const accuracyResults = new Map<string, OcrCaseResult>();
 
 test.describe('OCR accuracy dataset', () => {
+    test.describe.configure({ mode: 'parallel' });
+
     for (const ocrCase of ocrCases) {
         test(`recognizes ${ocrCase.name}`, async ({ page, serviceWorker }, testInfo) => {
             await seedExtensionSettings(
@@ -21,8 +22,8 @@ test.describe('OCR accuracy dataset', () => {
             const actualText = await runOcrCase(page, serviceWorker, ocrCase);
             const result = scoreOcrCase(ocrCase, actualText);
 
-            accuracyResults.set(ocrCase.name, result);
             await attachCaseResult(testInfo, result);
+            await persistCaseResult(result);
 
             if (ocrCase.minimumCharacterAccuracy !== undefined) {
                 expect(
@@ -38,42 +39,6 @@ test.describe('OCR accuracy dataset', () => {
             }
         });
     }
-
-    test.afterAll(async () => {
-        const cases = Array.from(accuracyResults.values());
-        if (cases.length === 0) {
-            return;
-        }
-
-        const totalCases = cases.length;
-        const exactMatches = cases.filter((result) => result.exactMatch).length;
-        const exactMatchRate = exactMatches / totalCases;
-        const averageCharacterAccuracy = cases.reduce((sum, result) => sum + result.characterAccuracy, 0) / totalCases;
-        const summary = {
-            totalCases,
-            exactMatches,
-            exactMatchRate,
-            averageCharacterAccuracy,
-            cases,
-        };
-
-        const summaryPath = path.resolve(process.cwd(), 'test-results', 'ocr-accuracy-summary.json');
-        await fs.mkdir(path.dirname(summaryPath), { recursive: true });
-        await fs.writeFile(summaryPath, JSON.stringify(summary, null, 2));
-
-        console.log('OCR accuracy summary');
-        console.table(cases.map((result) => ({
-            case: result.name,
-            image: result.image,
-            exactMatch: result.exactMatch ? 'yes' : 'no',
-            characterAccuracy: formatPercent(result.characterAccuracy),
-            expected: result.normalizedExpectedText,
-            actual: result.normalizedActualText,
-        })));
-        console.log(`Exact matches: ${exactMatches}/${totalCases} (${formatPercent(exactMatchRate)})`);
-        console.log(`Average character accuracy: ${formatPercent(averageCharacterAccuracy)}`);
-        console.log(`Saved summary: ${summaryPath}`);
-    });
 });
 
 async function runOcrCase(page: Page, serviceWorker: Worker, ocrCase: OcrCase) {
@@ -157,6 +122,14 @@ async function attachCaseResult(testInfo: TestInfo, result: OcrCaseResult) {
         body: JSON.stringify(result, null, 2),
         contentType: 'application/json',
     });
+}
+
+async function persistCaseResult(result: OcrCaseResult) {
+    const resultsDir = path.resolve(process.cwd(), 'test-results', 'ocr-case-results');
+    const resultPath = path.join(resultsDir, `${result.name}.json`);
+
+    await fs.mkdir(resultsDir, { recursive: true });
+    await fs.writeFile(resultPath, JSON.stringify(result, null, 2));
 }
 
 function buildFixtureUrl(ocrCase: OcrCase): string {

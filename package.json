@@ -6,8 +6,8 @@
   "scripts": {
     "build:chrome": "webpack --env browser=chrome --mode production",
     "build:firefox": "webpack --env browser=firefox --mode production",
-    "test:e2e": "npm run build:chrome && playwright test",
-    "test:e2e:headed": "npm run build:chrome && playwright test --headed",
+    "test:e2e": "npm run build:chrome && node ./tests/run-playwright-e2e.mjs",
+    "test:e2e:headed": "npm run build:chrome && node ./tests/run-playwright-e2e.mjs --headed",
     "watch:firefox": "webpack --env browser=firefox --watch --mode development --devtool source-map",
     "watch:chrome": "webpack --env browser=chrome --watch --mode development --devtool source-map"
   },

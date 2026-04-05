@@ -9,7 +9,7 @@ export default defineConfig({
     expect: {
         timeout: 20_000,
     },
-    fullyParallel: false,
+    fullyParallel: true,
     use: {
         baseURL: `http://127.0.0.1:${fixturePort}`,
         viewport: { width: 1280, height: 900 },
