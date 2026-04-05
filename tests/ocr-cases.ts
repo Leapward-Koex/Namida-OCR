@@ -16,6 +16,58 @@ export type OcrCase = {
 // Add new OCR samples here as the dataset grows.
 // Store image files in tests/fixtures/images using the ocr-case-###.png naming pattern.
 export const ocrCases: OcrCase[] = [
+    // The following cases are a handpicked selection of challenging manga text samples, which are expected to have lower OCR accuracy. They serve to identify specific weaknesses in the OCR engine and guide future improvements. These pass in the OCR engine "manga-ocr" https://github.com/kha-white/manga-ocr
+    {
+        name: 'case-001-sunao-ni-ayamaru-shika',
+        image: 'images/manga-ocr-case-01.jpg',
+        expectedText: '素直にあやまるしか',
+        pageSegMode: 'single-block-vertical',
+        upscalingMode: 'canvas',
+    },
+    {
+        name: 'case-002-tachikawa-de-mita-ana-no-shita-no-kyodaina-me-wa',
+        image: 'images/manga-ocr-case-02.jpg',
+        expectedText: '立川で見た〝穴〟の下の巨大な眼は...',
+        pageSegMode: 'single-block-vertical',
+        upscalingMode: 'canvas',
+    },
+    {
+        name: 'case-003-jissen-kenjutsu-mo-ichiryuu-desu',
+        image: 'images/manga-ocr-case-03.jpg',
+        expectedText: '実戦剣術も一流です',
+        pageSegMode: 'single-block-vertical',
+        upscalingMode: 'canvas',
+    },
+    {
+        name: 'case-004-gya',
+        image: 'images/manga-ocr-case-04.jpg',
+        expectedText: 'ぎゃっ',
+        pageSegMode: 'single-block-vertical',
+        upscalingMode: 'canvas',
+    },
+    {
+        name: 'case-005-pinpoon',
+        image: 'images/manga-ocr-case-05.jpg',
+        expectedText: 'ピンポーーン',
+        pageSegMode: 'single-block-vertical',
+        upscalingMode: 'canvas',
+    },
+    {
+        name: 'case-006-faia-panchi',
+        image: 'images/manga-ocr-case-06.jpg',
+        expectedText: 'ファイアパンチ',
+        pageSegMode: 'single-block-vertical',
+        upscalingMode: 'canvas',
+    },
+    {
+        name: 'case-007-keisatsu-nimo-sensei-nimo-machijuu-no-hitotachi-ni',
+        image: 'images/manga-ocr-case-07.jpg',
+        expectedText: '警察にも先生にも町中の人達に！！',
+        pageSegMode: 'single-block-vertical',
+        upscalingMode: 'canvas',
+    },
+
+    // Below are simpler cases using computer-rendered text, which serve as a baseline for OCR accuracy.
     {
         name: 'case-001-inuda-san',
         image: 'images/ocr-case-001.png',
