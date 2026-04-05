@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Namida OCR Fixture</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: "Segoe UI", sans-serif;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at top, #f4f0e6 0%, #ebe5d4 42%, #ddd5c0 100%);
+      color: #1b1711;
+    }
+
+    main {
+      display: grid;
+      place-items: center;
+      min-height: 100vh;
+      padding: 40px;
+    }
+
+    .fixture-card {
+      display: grid;
+      gap: 20px;
+      justify-items: center;
+      padding: 28px;
+      border: 2px solid rgba(27, 23, 17, 0.12);
+      background: rgba(255, 252, 245, 0.92);
+      box-shadow: 0 20px 60px rgba(50, 36, 16, 0.12);
+    }
+
+    .fixture-copy {
+      margin: 0;
+      max-width: 520px;
+      font-size: 18px;
+      line-height: 1.5;
+      text-align: center;
+    }
+
+    #ocr-sample {
+      display: block;
+      width: 320px;
+      height: 640px;
+      background: #fff;
+      image-rendering: auto;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="fixture-card">
+      <p class="fixture-copy" id="fixture-copy">
+        This local fixture keeps each OCR target isolated so the extension can snip a stable sample
+        during Playwright accuracy runs.
+      </p>
+      <img
+        id="ocr-sample"
+        src="/images/ocr-case-001.png"
+        alt="OCR sample image"
+        width="320"
+        height="640"
+      />
+    </section>
+  </main>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const imageName = params.get('image') ?? 'images/ocr-case-001.png';
+    const label = params.get('label') ?? imageName;
+    const displayWidth = Number(params.get('displayWidth'));
+    const displayHeight = Number(params.get('displayHeight'));
+    const image = document.getElementById('ocr-sample');
+    const copy = document.getElementById('fixture-copy');
+
+    document.title = `Namida OCR Fixture - ${label}`;
+    copy.textContent = 'OCR fixture for ' + label + '. Add more samples by dropping images into tests/fixtures/images using the ocr-case-###.png naming pattern and registering them in tests/ocr-cases.ts.';
+    image.src = `/${imageName}`;
+    image.alt = `OCR sample for ${label}`;
+
+    image.addEventListener('load', () => {
+      const width = Number.isFinite(displayWidth) && displayWidth > 0 ? displayWidth : image.naturalWidth;
+      const height = Number.isFinite(displayHeight) && displayHeight > 0 ? displayHeight : image.naturalHeight;
+
+      image.width = width;
+      image.height = height;
+      image.style.width = `${width}px`;
+      image.style.height = `${height}px`;
+    });
+  </script>
+</body>
+</html>

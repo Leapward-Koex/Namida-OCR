@@ -20,6 +20,7 @@ export class FloatingWindow {
 
         // Create the main floating container
         const floatingDiv = document.createElement('div');
+        floatingDiv.setAttribute('data-testid', 'namida-floating-window');
         floatingDiv.style.position = 'fixed';
         floatingDiv.style.right = '20px';
         floatingDiv.style.bottom = '20px';
@@ -72,6 +73,7 @@ export class FloatingWindow {
 
         // --- Recognized text container ---
         const textContainer = document.createElement('div');
+        textContainer.setAttribute('data-testid', 'namida-floating-window-text');
         textContainer.style.background = '#333';
         textContainer.style.borderRadius = '6px';
         textContainer.style.padding = config.html ? '20px' : '10px';

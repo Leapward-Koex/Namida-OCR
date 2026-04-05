@@ -6,6 +6,8 @@
   "scripts": {
     "build:chrome": "webpack --env browser=chrome --mode production",
     "build:firefox": "webpack --env browser=firefox --mode production",
+    "test:e2e": "npm run build:chrome && playwright test",
+    "test:e2e:headed": "npm run build:chrome && playwright test --headed",
     "watch:firefox": "webpack --env browser=firefox --watch --mode development --devtool source-map",
     "watch:chrome": "webpack --env browser=chrome --watch --mode development --devtool source-map"
   },
@@ -13,6 +15,7 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "@types/chrome": "^0.0.287",
     "@types/webextension-polyfill": "^0.12.1",
     "copy-webpack-plugin": "^12.0.2",

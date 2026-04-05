@@ -24,6 +24,7 @@ export class SnipOverlay {
 
     private createOverlay(): HTMLDivElement {
         const overlay = document.createElement('div');
+        overlay.setAttribute('data-testid', 'namida-snip-overlay');
         overlay.style.position = 'fixed';
         overlay.style.top = '0px';
         overlay.style.left = '0px';
@@ -37,6 +38,7 @@ export class SnipOverlay {
 
     private createSelectionBox(): HTMLDivElement {
         const box = document.createElement('div');
+        box.setAttribute('data-testid', 'namida-snip-selection-box');
         box.style.position = 'absolute';
         box.style.border = '2px dashed #fff';
         box.style.background = 'rgba(255, 255, 255, 0.3)';
