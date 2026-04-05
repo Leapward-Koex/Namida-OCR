@@ -1,5 +1,6 @@
 import { createWorker, OEM, PSM, Worker } from 'tesseract.js';
 import type { OcrBackend } from './OcrBackend';
+import { DEFAULT_OCR_MODEL } from '../interfaces/Storage';
 
 type WorkerBundle = {
     promise: Promise<Worker>;
@@ -35,15 +36,16 @@ export class TesseractOcrBackend implements OcrBackend {
     private static logTag = `[${TesseractOcrBackend.name}]`;
     private static workers = new Map<string, WorkerBundle>();
 
-    public async init(): Promise<void> {
-        await this.ensureWorker(['jpn_vert']);
+    public async init(model: string = DEFAULT_OCR_MODEL): Promise<void> {
+        await this.ensureWorker([this.normalizeModelName(model)]);
     }
 
-    public async recognize(dataUrl: string, pageSegMode: PSM): Promise<string | undefined> {
+    public async recognize(dataUrl: string, pageSegMode: PSM, model: string = DEFAULT_OCR_MODEL): Promise<string | undefined> {
+        const normalizedModel = this.normalizeModelName(model);
         const primaryCandidate = await this.executePlan(
             {
-                id: 'primary-vertical',
-                langs: ['jpn_vert'],
+                id: `primary-${normalizedModel}`,
+                langs: [normalizedModel],
                 pageSegMode,
             },
             dataUrl,
@@ -59,6 +61,16 @@ export class TesseractOcrBackend implements OcrBackend {
         }
 
         return undefined;
+    }
+
+    private normalizeModelName(model: string | undefined): string {
+        const trimmedModel = model?.trim();
+
+        if (trimmedModel && /^[A-Za-z0-9_-]+$/.test(trimmedModel)) {
+            return trimmedModel;
+        }
+
+        return DEFAULT_OCR_MODEL;
     }
 
     public async terminate(): Promise<void> {
@@ -186,7 +198,7 @@ export class TesseractOcrBackend implements OcrBackend {
                     corePath: '/libs/tesseract-core',
                     workerPath: '/libs/tesseract-worker/worker.min.js',
                     langPath: '/libs/tesseract-lang',
-                    gzip: false,
+                    gzip: true,
                     logger: (message) => console.debug(TesseractOcrBackend.logTag, key, message),
                 },
             ).then((worker) => {

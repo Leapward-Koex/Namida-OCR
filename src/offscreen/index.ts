@@ -17,7 +17,11 @@ runtime.onMessage.addListener((message) => {
     const namidaMessage = message as NamidaMessage;
     if (namidaMessage.action === NamidaMessageAction.RecognizeImageOffscreen) {
         const namidaOcrMessage = message as NamidaOcrFromOffscreenMessage;
-        return OcrService.recognize(namidaOcrMessage.data.imageData, namidaOcrMessage.data.pageSegMode);
+        return OcrService.recognize(
+            namidaOcrMessage.data.imageData,
+            namidaOcrMessage.data.pageSegMode,
+            namidaOcrMessage.data.ocrModel,
+        );
     }
     if (namidaMessage.action === NamidaMessageAction.GenerateFuriganaOffscreen) {
         return FuriganaHandler.generateFurigana(namidaMessage.data);

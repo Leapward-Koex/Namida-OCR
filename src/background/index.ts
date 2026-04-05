@@ -68,9 +68,9 @@ runtime.onMessage.addListener((message, sender) => {
         }
 
         case NamidaMessageAction.RecognizeImage: {
-            return Settings.getPageSegMode().then((pageSegMode) => {
+            return Promise.all([Settings.getPageSegMode(), Settings.getOcrModel()]).then(([pageSegMode, ocrModel]) => {
                 if (globalThis.Worker) {
-                    return OcrService.recognize(namidaMessage.data, pageSegMode);
+                    return OcrService.recognize(namidaMessage.data, pageSegMode, ocrModel);
                 }
                 else {
                     return ensureOffscreenDocument().then(() => {
@@ -79,7 +79,8 @@ runtime.onMessage.addListener((message, sender) => {
                                 action: NamidaMessageAction.RecognizeImageOffscreen,
                                 data: {
                                     imageData: namidaMessage.data,
-                                    pageSegMode: pageSegMode
+                                    pageSegMode: pageSegMode,
+                                    ocrModel: ocrModel
                                 } as NamidaOcrFromOffscreenData
                             });
                     });

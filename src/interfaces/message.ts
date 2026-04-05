@@ -18,7 +18,8 @@ export interface NamidaMessage {
 
 export interface NamidaOcrFromOffscreenData {
     imageData: string,
-    pageSegMode: PSM
+    pageSegMode: PSM,
+    ocrModel: string
 }
 export interface NamidaOcrFromOffscreenMessage {
     action: NamidaMessageAction,

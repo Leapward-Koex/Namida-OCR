@@ -13,12 +13,12 @@ export class OcrService {
         return this.backend;
     }
 
-    public static async init(): Promise<void> {
-        await this.getBackend().init();
+    public static async init(model?: string): Promise<void> {
+        await this.getBackend().init(model);
     }
 
-    public static async recognize(dataUrl: string, pageSegMode: PSM): Promise<string | undefined> {
-        return this.getBackend().recognize(dataUrl, pageSegMode);
+    public static async recognize(dataUrl: string, pageSegMode: PSM, model?: string): Promise<string | undefined> {
+        return this.getBackend().recognize(dataUrl, pageSegMode, model);
     }
 
     public static async terminate(): Promise<void> {

@@ -6,12 +6,16 @@ import { FuriganaType } from "../background/FuriganaHandler";
 export enum StorageKey {
     UpscalingMode = "UpscalingMode",
     PageSegMode = "PageSegMode",
+    OcrModel = "OcrModel",
     SaveOcrCrop = "SaveOcrCrop",
     ShowSpeakButton = "ShowSpeakButton",
     PreferredVoices = "PreferredVoices",
     WindowTimeout = "WindowTimeout",
     FuriganaType = "FuriganaType"
 }
+
+export const DEFAULT_OCR_MODEL = __NAMIDA_OCR_MODEL__;
+const OCR_MODEL_PATTERN = /^[A-Za-z0-9_-]+$/;
 
 export enum FuriganaTypeString {
     None = 'none',
@@ -32,6 +36,16 @@ export enum PageSegModeString {
 }
 
 export class Settings {
+    private static getOcrModelFromString(settingString: string | undefined) {
+        const trimmedSetting = settingString?.trim();
+
+        if (trimmedSetting && OCR_MODEL_PATTERN.test(trimmedSetting)) {
+            return trimmedSetting;
+        }
+
+        return DEFAULT_OCR_MODEL;
+    }
+
     private static getFuriganaTypeString(settingString: string | undefined) {
         if (settingString === FuriganaTypeString.None) {
             return FuriganaType.None;
@@ -90,6 +104,11 @@ export class Settings {
     public static async getPageSegMode() {
         const values = await storage.sync.get(StorageKey.PageSegMode);
         return this.getPageSegModeFromString((values[StorageKey.PageSegMode] as string | undefined));
+    }
+
+    public static async getOcrModel() {
+        const values = await storage.sync.get(StorageKey.OcrModel);
+        return this.getOcrModelFromString((values[StorageKey.OcrModel] as string | undefined));
     }
 
     public static async getSaveOcrCrop() {
