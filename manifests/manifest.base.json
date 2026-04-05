@@ -40,9 +40,7 @@
                 "/libs/tesseract-worker/worker.min.js",
                 "/libs/tesseract-core/tesseract-core-lstm.wasm.js",
                 "/libs/tesseract-core/tesseract-core-simd-lstm.wasm.js",
-                "/libs/tesseract-lang/eng.traineddata.gz",
-                "/libs/tesseract-lang/jpn.traineddata.gz",
-                "/libs/tesseract-lang/jpn_vert.traineddata.gz",
+                "/libs/tesseract-lang/jpn_vert.traineddata",
                 "/libs/tensorflow/x2/model.json",
                 "/libs/tensorflow/x2/group1-shard1of1.bin"
             ],

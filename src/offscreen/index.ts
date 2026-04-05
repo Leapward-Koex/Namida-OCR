@@ -1,7 +1,7 @@
 import { runtime } from "webextension-polyfill";
 import { NamidaMessage, NamidaMessageAction, NamidaOcrFromOffscreenMessage } from "../interfaces/message";
-import { TesseractOcrHandler } from "../background/TesseractOcrHandler";
 import { FuriganaHandler } from "../background/FuriganaHandler";
+import { OcrService } from "../background/OcrService";
 
 console.debug("Loading offscreen document");
 
@@ -10,14 +10,14 @@ console.debug("Loading offscreen document");
  *    This way, the offscreen worker is ready whenever a recognize request comes in.
  */
 (async () => {
-    await TesseractOcrHandler.initWorker();
+    await OcrService.init();
 })().catch(console.error);
 
 runtime.onMessage.addListener((message) => {
     const namidaMessage = message as NamidaMessage;
     if (namidaMessage.action === NamidaMessageAction.RecognizeImageOffscreen) {
         const namidaOcrMessage = message as NamidaOcrFromOffscreenMessage;
-        return TesseractOcrHandler.recognizeFromOffscreen(namidaOcrMessage.data.imageData, namidaOcrMessage.data.pageSegMode);
+        return OcrService.recognize(namidaOcrMessage.data.imageData, namidaOcrMessage.data.pageSegMode);
     }
     if (namidaMessage.action === NamidaMessageAction.GenerateFuriganaOffscreen) {
         return FuriganaHandler.generateFurigana(namidaMessage.data);

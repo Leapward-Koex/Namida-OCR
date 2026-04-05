@@ -1,16 +1,16 @@
 import { commands, runtime, tabs } from "webextension-polyfill";
 import { NamidaMessage, NamidaMessageAction, NamidaOcrFromOffscreenData, NamidaTensorflowUpscaleData } from "../interfaces/message";
-import { TesseractOcrHandler } from "./TesseractOcrHandler";
 import { Upscaler } from "./Upscaler";
 import { Settings } from "../interfaces/Storage";
 import { FuriganaHandler } from "./FuriganaHandler";
+import { OcrService } from "./OcrService";
 
 console.log('Background script loaded');
 
 if (globalThis.Worker) {
     // Workers are available in the service worker, e.g. Firefox
     (async () => {
-        await TesseractOcrHandler.initWorker();
+        await OcrService.init();
     })().catch(console.error);
 }
 async function ensureOffscreenDocument() {
@@ -70,7 +70,7 @@ runtime.onMessage.addListener((message, sender) => {
         case NamidaMessageAction.RecognizeImage: {
             return Settings.getPageSegMode().then((pageSegMode) => {
                 if (globalThis.Worker) {
-                    return TesseractOcrHandler.recognizeFromOffscreen(namidaMessage.data, pageSegMode);
+                    return OcrService.recognize(namidaMessage.data, pageSegMode);
                 }
                 else {
                     return ensureOffscreenDocument().then(() => {
