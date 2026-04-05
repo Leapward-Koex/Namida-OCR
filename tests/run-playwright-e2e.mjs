@@ -11,10 +11,12 @@ const workers = process.env.PLAYWRIGHT_WORKERS ?? (headed ? '1' : defaultHeadles
 const testResultsDir = path.resolve(process.cwd(), 'test-results');
 const caseResultsDir = path.join(testResultsDir, 'ocr-case-results');
 const summaryPath = path.join(testResultsDir, 'ocr-accuracy-summary.json');
+const combinedResultsPath = path.join(testResultsDir, 'ocr-case-results.json');
 const playwrightCli = path.resolve(process.cwd(), 'node_modules', '@playwright', 'test', 'cli.js');
 
 await fs.rm(caseResultsDir, { recursive: true, force: true });
 await fs.rm(summaryPath, { force: true });
+await fs.rm(combinedResultsPath, { force: true });
 
 const playwrightArgs = [playwrightCli, 'test', '--workers', workers];
 if (headed) {
@@ -36,3 +38,4 @@ function runCommand(command, commandArgs) {
         child.on('exit', (code) => resolve(code));
     });
 }
+

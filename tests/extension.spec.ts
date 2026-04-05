@@ -11,7 +11,7 @@ const SNIP_PAGE_ACTION = 0;
 test.describe('OCR accuracy dataset', () => {
     test.describe.configure({ mode: 'parallel' });
 
-    for (const ocrCase of ocrCases) {
+    for (const [caseIndex, ocrCase] of ocrCases.entries()) {
         test(`recognizes ${ocrCase.name}`, async ({ page, serviceWorker }, testInfo) => {
             await seedExtensionSettings(
                 serviceWorker,
@@ -20,7 +20,7 @@ test.describe('OCR accuracy dataset', () => {
             );
 
             const actualText = await runOcrCase(page, serviceWorker, ocrCase);
-            const result = scoreOcrCase(ocrCase, actualText);
+            const result = scoreOcrCase(ocrCase, actualText, caseIndex);
 
             await attachCaseResult(testInfo, result);
             await persistCaseResult(result);
@@ -152,3 +152,4 @@ function buildFixtureUrl(ocrCase: OcrCase): string {
 function formatPercent(value: number): string {
     return `${(value * 100).toFixed(1)}%`;
 }
+

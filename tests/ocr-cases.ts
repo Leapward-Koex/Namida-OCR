@@ -131,4 +131,32 @@ export const ocrCases: OcrCase[] = [
         pageSegMode: 'single-block-vertical',
         upscalingMode: 'canvas',
     },
+    {
+        name: 'case-010-daiji-na-no-wa-konten-tsu-daro',
+        image: 'images/ocr-case-010.png',
+        expectedText: '大事なのはコンテンツだろ?',
+        pageSegMode: 'single-block-vertical',
+        upscalingMode: 'canvas',
+    },
+    {
+        name: 'case-011-zundamon-senpai-tsumetai-kute-kimochi-ii',
+        image: 'images/ocr-case-011.png',
+        expectedText: 'ずんだもん先輩、冷たくて気持ちいい。',
+        pageSegMode: 'single-block-vertical',
+        upscalingMode: 'canvas',
+    },
+    {
+        name: 'case-012-obaachan',
+        image: 'images/ocr-case-012.png',
+        expectedText: 'どうする\nやばいよ\nこの おばーちゃん',
+        pageSegMode: 'single-block-vertical',
+        upscalingMode: 'canvas',
+    },
+    {
+        name: 'case-013',
+        image: 'images/ocr-case-013.png',
+        expectedText: 'こないだは\n世話になったな',
+        pageSegMode: 'single-block-vertical',
+        upscalingMode: 'canvas',
+    },
 ];

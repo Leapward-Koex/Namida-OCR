@@ -3,6 +3,7 @@ import path from 'node:path';
 
 const caseResultsDir = path.resolve(process.cwd(), 'test-results', 'ocr-case-results');
 const summaryPath = path.resolve(process.cwd(), 'test-results', 'ocr-accuracy-summary.json');
+const resultsPath = path.resolve(process.cwd(), 'test-results', 'ocr-case-results.json');
 
 const cases = await loadCaseResults(caseResultsDir);
 
@@ -26,6 +27,7 @@ const summary = {
 
 await fs.mkdir(path.dirname(summaryPath), { recursive: true });
 await fs.writeFile(summaryPath, JSON.stringify(summary, null, 2));
+await fs.writeFile(resultsPath, JSON.stringify(cases, null, 2));
 
 console.log('OCR accuracy summary');
 console.table(cases.map((result) => ({
@@ -39,6 +41,7 @@ console.table(cases.map((result) => ({
 console.log(`Exact matches: ${exactMatches}/${totalCases} (${formatPercent(exactMatchRate)})`);
 console.log(`Average character accuracy: ${formatPercent(averageCharacterAccuracy)}`);
 console.log(`Saved summary: ${summaryPath}`);
+console.log(`Saved results: ${resultsPath}`);
 
 async function loadCaseResults(resultsDir) {
     let entries = [];
@@ -57,7 +60,16 @@ async function loadCaseResults(resultsDir) {
             return JSON.parse(body);
         }));
 
-    return cases.sort((left, right) => left.name.localeCompare(right.name));
+    return cases.sort((left, right) => {
+        const leftIndex = Number.isInteger(left.caseIndex) ? left.caseIndex : Number.MAX_SAFE_INTEGER;
+        const rightIndex = Number.isInteger(right.caseIndex) ? right.caseIndex : Number.MAX_SAFE_INTEGER;
+
+        if (leftIndex !== rightIndex) {
+            return leftIndex - rightIndex;
+        }
+
+        return left.name.localeCompare(right.name);
+    });
 }
 
 function formatPercent(value) {

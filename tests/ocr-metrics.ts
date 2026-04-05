@@ -1,6 +1,7 @@
 import type { OcrCase } from './ocr-cases';
 
 export type OcrCaseResult = {
+    caseIndex: number;
     name: string;
     image: string;
     expectedText: string;
@@ -16,7 +17,11 @@ export function normalizeOcrText(text: string | null | undefined): string {
     return (text ?? '').replace(/\s+/g, '');
 }
 
-export function scoreOcrCase(ocrCase: OcrCase, actualText: string | null | undefined): OcrCaseResult {
+export function scoreOcrCase(
+    ocrCase: OcrCase,
+    actualText: string | null | undefined,
+    caseIndex: number,
+): OcrCaseResult {
     const normalizedExpectedText = normalizeOcrText(ocrCase.expectedText);
     const normalizedActualText = normalizeOcrText(actualText);
     const editDistance = levenshteinDistance(normalizedExpectedText, normalizedActualText);
@@ -28,6 +33,7 @@ export function scoreOcrCase(ocrCase: OcrCase, actualText: string | null | undef
     const characterAccuracy = 1 - (editDistance / lengthBase);
 
     return {
+        caseIndex,
         name: ocrCase.name,
         image: ocrCase.image,
         expectedText: ocrCase.expectedText,
@@ -67,3 +73,6 @@ function levenshteinDistance(left: string, right: string): number {
 
     return distances[rows - 1][cols - 1];
 }
+
+
+
