@@ -8,6 +8,8 @@ import { buildOcrRecognitionCandidate, serializeOcrCandidate, type OcrRecognitio
 type WorkingCanvas = OffscreenCanvas | HTMLCanvasElement;
 type DrawingContext = OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D;
 
+const PADDLE_ONNX_LOG_TAG = '[PaddleOnnxOcrBackend]';
+
 type DetectorConfig = {
     model_path: string;
     config_path: string;
@@ -65,7 +67,7 @@ type RecognitionAttempt = {
 };
 
 export class PaddleOnnxOcrBackend implements OcrBackend {
-    private static readonly logTag = `[${PaddleOnnxOcrBackend.name}]`;
+    private static readonly logTag = PADDLE_ONNX_LOG_TAG;
     private static readonly detectorSessionKey = 'detector';
     private static readonly recognizerSessionKey = 'recognizer';
     private static readonly sessions = new Map<string, SessionBundle>();
@@ -94,70 +96,52 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
             manifest.recognizer,
             'full-crop',
         );
+        const projectedBoxes = pageSegMode === PSM.AUTO
+            ? []
+            : extractProjectedBoxes(workingCanvas, pageSegMode, manifest.detector.box_padding);
+        const projectedCandidate = await this.recognizeSegmentBoxes(
+            workingCanvas,
+            projectedBoxes,
+            recognizerSession,
+            dictionary,
+            manifest.recognizer,
+            'projected-groups',
+        );
+        let detectedCandidate: OcrRecognitionCandidate | null = null;
 
-        if (!shouldRunDetection(pageSegMode, fullCropAttempt?.candidate ?? null)) {
-            const selectedCandidate = fullCropAttempt?.candidate ?? null;
+        if (pageSegMode === PSM.AUTO || projectedCandidate === null) {
+            const detectorSession = await this.ensureDetectorSession();
+            const detectionInput = prepareDetectionTensor(workingCanvas, manifest.detector);
+            const detectionOutput = await detectorSession.run({ x: detectionInput.tensor });
+            const probabilityTensor = detectionOutput[detectorSession.outputNames[0]];
+            const detectedBoxes = extractDetectedBoxes(
+                probabilityTensor,
+                manifest.detector,
+                detectionInput.originalWidth,
+                detectionInput.originalHeight,
+                detectionInput.resizedWidth,
+                detectionInput.resizedHeight,
+            );
 
             console.debug(
                 PaddleOnnxOcrBackend.logTag,
-                'Skipping detector and using full-crop recognition',
-                {
-                    durationMs: Math.round(performance.now() - startedAt),
-                    selected: selectedCandidate ? serializeOcrCandidate(selectedCandidate) : null,
-                },
+                `Detected ${detectedBoxes.length} candidate text regions`,
             );
 
-            return selectedCandidate?.cleanedText;
-        }
-
-        const detectorSession = await this.ensureDetectorSession();
-        const detectionInput = prepareDetectionTensor(workingCanvas, manifest.detector);
-        const detectionOutput = await detectorSession.run({ x: detectionInput.tensor });
-        const probabilityTensor = detectionOutput[detectorSession.outputNames[0]];
-        const detectedBoxes = extractDetectedBoxes(
-            probabilityTensor,
-            manifest.detector,
-            detectionInput.originalWidth,
-            detectionInput.originalHeight,
-            detectionInput.resizedWidth,
-            detectionInput.resizedHeight,
-        );
-
-        console.debug(
-            PaddleOnnxOcrBackend.logTag,
-            `Detected ${detectedBoxes.length} candidate text regions`,
-        );
-
-        const mergedBoxes = detectedBoxes.length > 0
-            ? mergeBoxesForPageSegMode(detectedBoxes, pageSegMode, workingCanvas.width, workingCanvas.height)
-            : [];
-        const segmentCandidates: OcrRecognitionCandidate[] = [];
-
-        for (const [index, box] of mergedBoxes.entries()) {
-            const cropCanvas = cropCanvasRegion(workingCanvas, box, manifest.detector.box_padding);
-            const attempt = await this.recognizeCrop(
-                cropCanvas,
+            const mergedBoxes = detectedBoxes.length > 0
+                ? mergeBoxesForPageSegMode(detectedBoxes, pageSegMode, workingCanvas.width, workingCanvas.height)
+                : [];
+            detectedCandidate = await this.recognizeSegmentBoxes(
+                workingCanvas,
+                mergedBoxes,
                 recognizerSession,
                 dictionary,
                 manifest.recognizer,
-                `box-${index}`,
+                'detected-groups',
             );
-
-            if (attempt?.candidate?.cleanedText) {
-                segmentCandidates.push(attempt.candidate);
-            }
         }
 
-        const combinedText = normalizeJoinedLines(segmentCandidates.map((candidate) => candidate.cleanedText));
-        const combinedCandidate = combinedText
-            ? buildOcrRecognitionCandidate(
-                'detected-groups',
-                combinedText,
-                average(segmentCandidates.map((candidate) => candidate.confidence)),
-                segmentCandidates.flatMap((candidate) => [candidate.averageSymbolConfidence]),
-            )
-            : null;
-        const paddleCandidate = [combinedCandidate, fullCropAttempt?.candidate ?? null]
+        const paddleCandidate = [projectedCandidate, detectedCandidate, fullCropAttempt?.candidate ?? null]
             .filter((candidate): candidate is OcrRecognitionCandidate => candidate !== null)
             .sort((left, right) => right.score - left.score)[0] ?? null;
         const finalCandidate = paddleCandidate;
@@ -165,12 +149,14 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
         console.debug(
             PaddleOnnxOcrBackend.logTag,
             'OCR candidates',
-            {
-                durationMs: Math.round(performance.now() - startedAt),
-                paddle: paddleCandidate ? serializeOcrCandidate(paddleCandidate) : null,
-                selected: finalCandidate ? serializeOcrCandidate(finalCandidate) : null,
-            },
-        );
+                {
+                    durationMs: Math.round(performance.now() - startedAt),
+                    projected: projectedCandidate ? serializeOcrCandidate(projectedCandidate) : null,
+                    detected: detectedCandidate ? serializeOcrCandidate(detectedCandidate) : null,
+                    paddle: paddleCandidate ? serializeOcrCandidate(paddleCandidate) : null,
+                    selected: finalCandidate ? serializeOcrCandidate(finalCandidate) : null,
+                },
+            );
 
         if (finalCandidate?.cleanedText) {
             return finalCandidate.cleanedText;
@@ -181,6 +167,48 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
             'No usable OCR candidate was produced for the crop',
         );
         return undefined;
+    }
+
+    private async recognizeSegmentBoxes(
+        sourceCanvas: WorkingCanvas,
+        boxes: DetectedBox[],
+        recognizerSession: ort.InferenceSession,
+        dictionary: string[],
+        recognizerConfig: RecognizerConfig,
+        id: string,
+    ): Promise<OcrRecognitionCandidate | null> {
+        const segmentCandidates: OcrRecognitionCandidate[] = [];
+
+        for (const [index, box] of boxes.entries()) {
+            const cropCanvas = cropCanvasRegion(sourceCanvas, box, 0);
+            const attempt = await this.recognizeCrop(
+                cropCanvas,
+                recognizerSession,
+                dictionary,
+                recognizerConfig,
+                `${id}-box-${index}`,
+            );
+
+            if (attempt?.candidate?.cleanedText) {
+                segmentCandidates.push(attempt.candidate);
+            }
+        }
+
+        if (segmentCandidates.length === 0) {
+            return null;
+        }
+
+        const combinedText = normalizeJoinedLines(segmentCandidates.map((candidate) => candidate.cleanedText));
+        if (!combinedText) {
+            return null;
+        }
+
+        return buildOcrRecognitionCandidate(
+            id,
+            combinedText,
+            average(segmentCandidates.map((candidate) => candidate.confidence)),
+            segmentCandidates.flatMap((candidate) => [candidate.averageSymbolConfidence]),
+        );
     }
 
     public async terminate(): Promise<void> {
@@ -921,19 +949,208 @@ function normalizeJoinedLines(lines: string[]) {
     return joinedText || undefined;
 }
 
-function shouldRunDetection(
+function extractProjectedBoxes(
+    sourceCanvas: WorkingCanvas,
     pageSegMode: PSM,
-    candidate: OcrRecognitionCandidate | null,
+    padding: number,
 ) {
-    if (!candidate) {
-        return true;
+    const orientation = pageSegMode === PSM.SINGLE_BLOCK ? 'horizontal' : 'vertical';
+    const { axisInk, axisMinCross, axisMaxCross } = buildInkProjection(sourceCanvas, orientation);
+    const smoothedInk = smoothProjection(axisInk, 2);
+    const maxInk = Math.max(...smoothedInk);
+
+    if (maxInk <= 0) {
+        return [] satisfies DetectedBox[];
     }
 
-    if (pageSegMode === PSM.AUTO) {
-        return true;
+    const averageInk = average(smoothedInk);
+    const activationThreshold = Math.max(maxInk * 0.18, averageInk * 1.6);
+    const maxGap = orientation === 'vertical'
+        ? Math.max(6, Math.round(sourceCanvas.width * 0.03))
+        : Math.max(6, Math.round(sourceCanvas.height * 0.03));
+    const runs = findProjectionRuns(smoothedInk, activationThreshold, maxGap);
+    const boxes = runs
+        .map((run) => buildProjectedBox(
+            run,
+            axisMinCross,
+            axisMaxCross,
+            orientation,
+            sourceCanvas.width,
+            sourceCanvas.height,
+            padding,
+        ))
+        .filter((box): box is DetectedBox => box !== null)
+        .sort((left, right) => orientation === 'vertical'
+            ? right.centerX - left.centerX
+            : left.centerY - right.centerY);
+
+    if (boxes.length < 2) {
+        return [] satisfies DetectedBox[];
     }
 
-    return candidate.cleanedText.length < 2;
+    console.debug(
+        PADDLE_ONNX_LOG_TAG,
+        `Projected ${boxes.length} text groups from the crop`,
+        { orientation },
+    );
+
+    return boxes;
+}
+
+function buildInkProjection(
+    sourceCanvas: WorkingCanvas,
+    orientation: 'vertical' | 'horizontal',
+) {
+    const context = get2DContext(sourceCanvas);
+    const { data } = context.getImageData(0, 0, sourceCanvas.width, sourceCanvas.height);
+    const axisLength = orientation === 'vertical' ? sourceCanvas.width : sourceCanvas.height;
+    const crossLength = orientation === 'vertical' ? sourceCanvas.height : sourceCanvas.width;
+    const axisInk = new Float32Array(axisLength);
+    const axisMinCross = new Int32Array(axisLength).fill(crossLength);
+    const axisMaxCross = new Int32Array(axisLength).fill(-1);
+    for (let y = 0; y < sourceCanvas.height; y += 1) {
+        for (let x = 0; x < sourceCanvas.width; x += 1) {
+            const index = (y * sourceCanvas.width) + x;
+            const sourceOffset = index * 4;
+            const red = data[sourceOffset];
+            const green = data[sourceOffset + 1];
+            const blue = data[sourceOffset + 2];
+            const grayscale = (red * 0.299) + (green * 0.587) + (blue * 0.114);
+            const darkness = Math.max(0, 255 - grayscale);
+            if (darkness < 28) {
+                continue;
+            }
+
+            const axisIndex = orientation === 'vertical' ? x : y;
+            const crossIndex = orientation === 'vertical' ? y : x;
+            axisInk[axisIndex] += darkness;
+            axisMinCross[axisIndex] = Math.min(axisMinCross[axisIndex], crossIndex);
+            axisMaxCross[axisIndex] = Math.max(axisMaxCross[axisIndex], crossIndex);
+        }
+    }
+
+    return { axisInk, axisMinCross, axisMaxCross };
+}
+
+function smoothProjection(values: Float32Array, radius: number) {
+    if (radius <= 0) {
+        return [...values];
+    }
+
+    const smoothed: number[] = new Array(values.length).fill(0);
+
+    for (let index = 0; index < values.length; index += 1) {
+        let sum = 0;
+        let count = 0;
+
+        for (let offset = -radius; offset <= radius; offset += 1) {
+            const targetIndex = index + offset;
+            if (targetIndex < 0 || targetIndex >= values.length) {
+                continue;
+            }
+
+            sum += values[targetIndex];
+            count += 1;
+        }
+
+        smoothed[index] = count > 0 ? sum / count : 0;
+    }
+
+    return smoothed;
+}
+
+function findProjectionRuns(
+    projection: number[],
+    threshold: number,
+    maxGap: number,
+) {
+    const runs: Array<{ start: number; end: number }> = [];
+    let runStart = -1;
+    let gapCount = 0;
+
+    for (let index = 0; index < projection.length; index += 1) {
+        const active = projection[index] >= threshold;
+
+        if (active) {
+            if (runStart < 0) {
+                runStart = index;
+            }
+            gapCount = 0;
+            continue;
+        }
+
+        if (runStart < 0) {
+            continue;
+        }
+
+        gapCount += 1;
+        if (gapCount <= maxGap) {
+            continue;
+        }
+
+        runs.push({ start: runStart, end: index - gapCount });
+        runStart = -1;
+        gapCount = 0;
+    }
+
+    if (runStart >= 0) {
+        runs.push({ start: runStart, end: projection.length - 1 });
+    }
+
+    return runs;
+}
+
+function buildProjectedBox(
+    run: { start: number; end: number },
+    axisMinCross: Int32Array,
+    axisMaxCross: Int32Array,
+    orientation: 'vertical' | 'horizontal',
+    imageWidth: number,
+    imageHeight: number,
+    padding: number,
+) {
+    let minCross = orientation === 'vertical' ? imageHeight : imageWidth;
+    let maxCross = -1;
+
+    for (let axisIndex = run.start; axisIndex <= run.end; axisIndex += 1) {
+        minCross = Math.min(minCross, axisMinCross[axisIndex] ?? minCross);
+        maxCross = Math.max(maxCross, axisMaxCross[axisIndex] ?? maxCross);
+    }
+
+    if (maxCross < minCross) {
+        return null;
+    }
+
+    if (orientation === 'vertical') {
+        const left = clamp(run.start - padding, 0, imageWidth - 1);
+        const right = clamp(run.end + padding + 1, left + 1, imageWidth);
+        const top = clamp(minCross - padding, 0, imageHeight - 1);
+        const bottom = clamp(maxCross + padding + 1, top + 1, imageHeight);
+        return createDetectedBox(left, top, right, bottom);
+    }
+
+    const left = clamp(minCross - padding, 0, imageWidth - 1);
+    const right = clamp(maxCross + padding + 1, left + 1, imageWidth);
+    const top = clamp(run.start - padding, 0, imageHeight - 1);
+    const bottom = clamp(run.end + padding + 1, top + 1, imageHeight);
+    return createDetectedBox(left, top, right, bottom);
+}
+
+function createDetectedBox(left: number, top: number, right: number, bottom: number): DetectedBox {
+    const width = right - left;
+    const height = bottom - top;
+
+    return {
+        averageScore: 1,
+        bottom,
+        centerX: left + (width / 2),
+        centerY: top + (height / 2),
+        height,
+        left,
+        right,
+        top,
+        width,
+    };
 }
 
 function average(values: number[]) {
