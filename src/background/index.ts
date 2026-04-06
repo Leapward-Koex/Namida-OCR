@@ -3,14 +3,32 @@ import { NamidaMessage, NamidaMessageAction, NamidaOcrFromOffscreenData, NamidaT
 import { Upscaler } from "./Upscaler";
 import { Settings } from "../interfaces/Storage";
 import { FuriganaHandler } from "./FuriganaHandler";
-import { OcrService } from "./OcrService";
+import { BackgroundOcrService } from "namida-background-ocr-service";
 
 console.log('Background script loaded');
+
+type BackgroundDebugState = {
+    events: Array<{
+        at: string;
+        data?: unknown;
+        message: string;
+    }>;
+    startedAt: string;
+};
+
+type BackgroundDebugGlobal = typeof globalThis & {
+    __namidaDebugState?: BackgroundDebugState;
+};
+
+((globalThis as BackgroundDebugGlobal).__namidaDebugState ??= {
+    events: [],
+    startedAt: new Date().toISOString(),
+});
 
 if (globalThis.Worker) {
     // Workers are available in the service worker, e.g. Firefox
     (async () => {
-        await OcrService.init();
+        await BackgroundOcrService.init();
     })().catch(console.error);
 }
 async function ensureOffscreenDocument() {
@@ -21,7 +39,7 @@ async function ensureOffscreenDocument() {
         await chrome.offscreen.createDocument({
             url: offscreenUrl,
             reasons: [chrome.offscreen.Reason.WORKERS],
-            justification: 'Perform background OCR using Tesseract.js'
+            justification: 'Perform background OCR with bundled local assets'
         });
     }
 }
@@ -45,7 +63,7 @@ runtime.onMessage.addListener((message, sender) => {
 
     switch (namidaMessage.action) {
         case NamidaMessageAction.CaptureFullScreen: {
-            return tabs.captureVisibleTab(undefined, { format: 'png' });
+            return tabs.captureVisibleTab(sender.tab?.windowId, { format: 'png' });
         }
 
         case NamidaMessageAction.UpscaleImage: {
@@ -70,7 +88,7 @@ runtime.onMessage.addListener((message, sender) => {
         case NamidaMessageAction.RecognizeImage: {
             return Promise.all([Settings.getPageSegMode(), Settings.getOcrModel()]).then(([pageSegMode, ocrModel]) => {
                 if (globalThis.Worker) {
-                    return OcrService.recognize(namidaMessage.data, pageSegMode, ocrModel);
+                    return BackgroundOcrService.recognize(namidaMessage.data, pageSegMode, ocrModel);
                 }
                 else {
                     return ensureOffscreenDocument().then(() => {

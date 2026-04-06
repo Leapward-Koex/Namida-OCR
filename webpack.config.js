@@ -50,6 +50,37 @@ module.exports = (env) => {
     const browser = env.browser || 'firefox';
     const buildNumber = env.build_number || "1.0.0";
     const ocrModel = env.ocr_model || process.env.NAMIDA_OCR_MODEL || 'jpn_vert';
+    const ocrBackend = env.ocr_backend || process.env.NAMIDA_OCR_BACKEND || 'tesseract';
+    const resolveAliases = {
+        'namida-ocr-backend$': path.resolve(
+            __dirname,
+            ocrBackend === 'scribejs'
+                ? 'src/background/ocr/ScribeOcrBackend.ts'
+                : 'src/background/ocr/TesseractOcrBackend.ts',
+        ),
+        'namida-background-ocr-service$': path.resolve(
+            __dirname,
+            browser === 'chrome'
+                ? 'src/background/ocr/BackgroundOcrService.stub.ts'
+                : 'src/background/ocr/BackgroundOcrService.ts',
+        ),
+    };
+
+    if (ocrBackend === 'scribejs') {
+        // scribe.js-ocr 0.10.1's SIMD core variants abort at recognize() with a missing
+        // DotProductSSE symbol in our build/runtime. Force its worker-script imports to the
+        // matching non-SIMD cores until the upstream package is usable as-is.
+        Object.assign(resolveAliases, {
+            '../core/tesseract-core-relaxedsimd-lstm.js$': path.resolve(__dirname, 'node_modules/scribe.js-ocr/tess/core/tesseract-core-lstm.js'),
+            '../core/tesseract-core-simd-lstm.js$': path.resolve(__dirname, 'node_modules/scribe.js-ocr/tess/core/tesseract-core-lstm.js'),
+            '../core/tesseract-core-relaxedsimd.js$': path.resolve(__dirname, 'node_modules/scribe.js-ocr/tess/core/tesseract-core.js'),
+            '../core/tesseract-core-simd.js$': path.resolve(__dirname, 'node_modules/scribe.js-ocr/tess/core/tesseract-core.js'),
+            '../core_vanilla/tesseract-core-relaxedsimd-lstm.js$': path.resolve(__dirname, 'node_modules/scribe.js-ocr/tess/core_vanilla/tesseract-core-lstm.js'),
+            '../core_vanilla/tesseract-core-simd-lstm.js$': path.resolve(__dirname, 'node_modules/scribe.js-ocr/tess/core_vanilla/tesseract-core-lstm.js'),
+            '../core_vanilla/tesseract-core-relaxedsimd.js$': path.resolve(__dirname, 'node_modules/scribe.js-ocr/tess/core_vanilla/tesseract-core.js'),
+            '../core_vanilla/tesseract-core-simd.js$': path.resolve(__dirname, 'node_modules/scribe.js-ocr/tess/core_vanilla/tesseract-core.js'),
+        });
+    }
 
     const createManifest = () => {
         const broswerSpecificManifest = JSON.parse(
@@ -79,8 +110,11 @@ module.exports = (env) => {
         output: {
             path: path.resolve(__dirname, 'dist'),
             filename: '[name]/index.js',
+            chunkFilename: '[name]/index.js',
+            publicPath: '/',
         },
         resolve: {
+            alias: resolveAliases,
             extensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
             fallback: {
                 "path": require.resolve("path-browserify")
@@ -97,6 +131,9 @@ module.exports = (env) => {
         },
         plugins: [
             new webpack.DefinePlugin({
+                process: 'undefined',
+                DISABLE_DOCX_XLSX: JSON.stringify(true),
+                __NAMIDA_OCR_BACKEND__: JSON.stringify(ocrBackend === 'scribejs' ? 'scribejs' : 'tesseract'),
                 __NAMIDA_OCR_MODEL__: JSON.stringify(ocrModel),
             }),
             new CopyPlugin({

@@ -1,7 +1,7 @@
 import { runtime } from "webextension-polyfill";
 import { NamidaMessage, NamidaMessageAction, NamidaOcrFromOffscreenMessage } from "../interfaces/message";
 import { FuriganaHandler } from "../background/FuriganaHandler";
-import { OcrService } from "../background/OcrService";
+import { OcrService } from "../background/ocr/OcrService";
 
 console.debug("Loading offscreen document");
 

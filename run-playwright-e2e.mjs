@@ -4,19 +4,22 @@ import path from 'node:path';
 
 const args = process.argv.slice(2);
 const DEFAULT_OCR_MODEL = 'jpn_vert';
+const DEFAULT_OCR_BACKEND = 'tesseract';
 const baseResultsDir = path.resolve(process.cwd(), 'test-results');
-const { headed, model, resultsDir, playwrightWorkers } = parseArgs(args);
+const { backend, headed, model, resultsDir, playwrightWorkers } = parseArgs(args);
 const rootCaseResultsDir = path.join(baseResultsDir, 'ocr-case-results');
 const rootSummaryPath = path.join(baseResultsDir, 'ocr-accuracy-summary.json');
 const rootCombinedResultsPath = path.join(baseResultsDir, 'ocr-case-results.json');
 
-console.log(`Building extension with OCR model '${model}'`);
+console.log(`Building extension with OCR model '${model}' using backend '${backend}'`);
 const buildExitCode = await runCommand(process.execPath, [
     './node_modules/webpack-cli/bin/cli.js',
     '--env',
     'browser=chrome',
     '--env',
     `ocr_model=${model}`,
+    '--env',
+    `ocr_backend=${backend}`,
     '--mode',
     'production',
 ]);
@@ -42,12 +45,12 @@ if (playwrightWorkers) {
 }
 
 const testExitCode = await runCommand(process.execPath, runArgs, childEnv);
-await mirrorResults(resultsDir, model);
+await mirrorResults(resultsDir, model, backend);
 process.exit(testExitCode ?? 1);
 
-async function mirrorResults(targetResultsDir, selectedModel) {
+async function mirrorResults(targetResultsDir, selectedModel, selectedBackend) {
     if (path.resolve(targetResultsDir) === baseResultsDir) {
-        await annotateSummary(rootSummaryPath, selectedModel);
+        await annotateSummary(rootSummaryPath, selectedModel, selectedBackend);
         return;
     }
 
@@ -57,13 +60,14 @@ async function mirrorResults(targetResultsDir, selectedModel) {
     await copyIfPresent(rootCaseResultsDir, path.join(targetResultsDir, 'ocr-case-results'));
     await copyIfPresent(rootCombinedResultsPath, path.join(targetResultsDir, 'ocr-case-results.json'));
     await copyIfPresent(rootSummaryPath, path.join(targetResultsDir, 'ocr-accuracy-summary.json'));
-    await annotateSummary(path.join(targetResultsDir, 'ocr-accuracy-summary.json'), selectedModel);
+    await annotateSummary(path.join(targetResultsDir, 'ocr-accuracy-summary.json'), selectedModel, selectedBackend);
 }
 
-async function annotateSummary(summaryPath, selectedModel) {
+async function annotateSummary(summaryPath, selectedModel, selectedBackend) {
     try {
         const summaryBody = await fs.readFile(summaryPath, 'utf8');
         const summary = JSON.parse(summaryBody);
+        summary.backend = selectedBackend;
         summary.model = selectedModel;
         await fs.writeFile(summaryPath, JSON.stringify(summary, null, 2));
     } catch {
@@ -84,6 +88,7 @@ async function copyIfPresent(sourcePath, targetPath) {
 }
 
 function parseArgs(commandArgs) {
+    let backend = normalizeBackend(process.env.NAMIDA_OCR_BACKEND?.trim() || DEFAULT_OCR_BACKEND);
     let headed = false;
     let model = process.env.NAMIDA_OCR_MODEL?.trim() || DEFAULT_OCR_MODEL;
     let resultsSubdir = '';
@@ -94,6 +99,12 @@ function parseArgs(commandArgs) {
 
         if (argument === '--headed') {
             headed = true;
+            continue;
+        }
+
+        if (argument === '--backend') {
+            backend = normalizeBackend(readRequiredValue(commandArgs, index, '--backend'));
+            index += 1;
             continue;
         }
 
@@ -119,6 +130,7 @@ function parseArgs(commandArgs) {
     }
 
     return {
+        backend,
         headed,
         model,
         resultsDir: resolveResultsDir(resultsSubdir),
@@ -159,6 +171,16 @@ function normalizeWorkers(value) {
     }
 
     return trimmedValue;
+}
+
+function normalizeBackend(value) {
+    const trimmedValue = value.trim().toLowerCase();
+
+    if (trimmedValue === 'tesseract' || trimmedValue === 'scribejs') {
+        return trimmedValue;
+    }
+
+    throw new Error(`Invalid OCR backend: ${value}`);
 }
 
 function runCommand(command, commandArgs, env = process.env) {

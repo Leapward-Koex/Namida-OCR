@@ -41,7 +41,6 @@ class SnippingTool {
             console.debug(SnippingTool.logTag, "Capturing screen");
             const upscalingMethod = await Settings.getUpscalingMode();
             const croppedDataURL = await screenshotHandler.captureAndCrop(upscalingMethod);
-            console.debug(SnippingTool.logTag, "Got data: " + croppedDataURL);
             const recognizedText = await this.ocr.recognizeFromContent(croppedDataURL);
             const spacesRemovedText = TextProcessorHandler.removeSpaces(recognizedText);
             const furigana = await FuriganaHandler.generateFuriganaFromContent(spacesRemovedText ?? "");

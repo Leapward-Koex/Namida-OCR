@@ -15,6 +15,8 @@ export enum StorageKey {
 }
 
 export const DEFAULT_OCR_MODEL = __NAMIDA_OCR_MODEL__;
+export type OcrBackendKind = 'tesseract' | 'scribejs';
+export const DEFAULT_OCR_BACKEND: OcrBackendKind = __NAMIDA_OCR_BACKEND__ === 'scribejs' ? 'scribejs' : 'tesseract';
 const OCR_MODEL_PATTERN = /^[A-Za-z0-9_-]+$/;
 
 export enum FuriganaTypeString {

@@ -1,6 +1,6 @@
 # Namida OCR
 
-**Namida OCR** is a completely local OCR browser extension for both **Chrome**, **Firefox**, and **Edge**. It enables you to take a “snip” (screenshot) of any part of your current tab, upscale it (either via basic linear upscaling or ESRGAN), and then perform OCR on the snipped region using Tesseract.js. The OCR supports Japanese vertical text at the moment and automatically copies the recognized text to your clipboard, making it easy to use with online dictionaries like [Yomitan](https://github.com/yomidevs/yomitan) or manual translation tools. Additionally, Namida OCR includes the option to speak the recognized text aloud using your browser’s text-to-speech capabilities.
+**Namida OCR** is a completely local OCR browser extension for both **Chrome**, **Firefox**, and **Edge**. It enables you to take a “snip” (screenshot) of any part of your current tab, upscale it (either via basic linear upscaling or ESRGAN), and then perform OCR on the snipped region using bundled OCR assets. The default backend uses Tesseract.js. The OCR supports Japanese vertical text at the moment and automatically copies the recognized text to your clipboard, making it easy to use with online dictionaries like [Yomitan](https://github.com/yomidevs/yomitan) or manual translation tools. Additionally, Namida OCR includes the option to speak the recognized text aloud using your browser’s text-to-speech capabilities.
 
 
 ***
@@ -15,7 +15,7 @@
 ## Features
 
 - **Local OCR**  
-  All OCR processing is done locally in your browser using [Tesseract.js](https://github.com/naptha/tesseract.js). No external servers are involved.
+  All OCR processing is done locally in your browser using bundled OCR assets. The default backend uses [Tesseract.js](https://github.com/naptha/tesseract.js). No external servers are involved.
 
 - **Snip & Upscale**  
   By default, **Alt + Q** on windows and **Option + Q** on mac activates the snipping mode. The selected image region is then upscaled:
@@ -86,3 +86,11 @@
 - For the best experience with TTS on Firefox or Edge, ensure your system has a Japanese language pack with text-to-speech capabilities installed. On Edge, you can access **natural** voices through the Windows settings.
 - Namida OCR is ideal for users looking to OCR Japanese text, including vertical text layouts commonly found in manga, visual novels, or other Japanese media.
 - All processing is performed locally within the browser, ensuring privacy and offline functionality.
+
+## Development
+
+- The default OCR backend is `tesseract`.
+- The OCR runtime and backend implementations live under `src/background/ocr/`.
+- You can choose the OCR backend at build time with `NAMIDA_OCR_BACKEND` or `webpack --env ocr_backend=...`.
+- `npm run test:e2e:compare-backends` runs the Chromium Playwright OCR dataset against the `tesseract` and experimental `scribejs` backends and writes `test-results/ocr-backend-comparison.json`.
+- The `scribejs` backend is experimental, must keep using bundled local assets only, and the published `scribe.js-ocr` package is AGPL-3.0 licensed.

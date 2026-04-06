@@ -5,6 +5,7 @@ const fixturePort = Number(process.env.PLAYWRIGHT_FIXTURE_PORT ?? 3210);
 export default defineConfig({
     testDir: './tests',
     testMatch: /.*\.spec\.ts/,
+    outputDir: './test-results/.playwright-artifacts',
     timeout: 120_000,
     expect: {
         timeout: 20_000,
