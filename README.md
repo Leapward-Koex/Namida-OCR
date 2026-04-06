@@ -95,8 +95,9 @@
 - Available build-time backends are `tesseract`, experimental `scribejs`, and experimental `paddleonnx`.
 - `paddleonnx` uses bundled local assets under `models/paddleocr/` and `onnxruntime-web` WASM assets copied into the extension bundle.
 - `npm run prepare:paddleocr-onnx` runs the regeneration helper at [prepare-paddleocr-onnx.py](/c:/Dev/Namida/prepare-paddleocr-onnx.py) to download official PaddleOCR repos, export ONNX files, and refresh the committed bundle metadata.
+- `npm run test:e2e:tesseract`, `npm run test:e2e:scribejs`, and `npm run test:e2e:paddleonnx` run the Chromium Playwright OCR suite against a single backend without needing an extra `--backend` flag.
 - `npm run test:e2e:compare-backends` runs the Chromium Playwright OCR dataset against the `tesseract`, experimental `scribejs`, and experimental `paddleonnx` backends and writes `test-results/ocr-backend-comparison.json`.
 - Playwright runs in this repo should use at least 5 workers. The local runner wrappers clamp lower worker counts up to `5`.
 - The `scribejs` backend is experimental, must keep using bundled local assets only, and the published `scribe.js-ocr` package is AGPL-3.0 licensed.
-- The `paddleonnx` backend is experimental, uses bundled local ONNX models only, and currently targets the bundled Chinese/Japanese PaddleOCR recognition model with a bundled detection model for full-crop OCR.
+- The `paddleonnx` backend is experimental, uses bundled local ONNX models only, currently targets the bundled Chinese/Japanese PaddleOCR recognition model with a bundled detection model for full-crop OCR, and does not fall back to Tesseract.
 

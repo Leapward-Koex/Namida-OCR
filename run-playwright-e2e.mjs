@@ -8,6 +8,7 @@ const DEFAULT_OCR_BACKEND = 'tesseract';
 const MIN_PLAYWRIGHT_WORKERS = 5;
 const baseResultsDir = path.resolve(process.cwd(), 'test-results');
 const { backend, headed, model, resultsDir, playwrightWorkers } = parseArgs(args);
+const defaultPlaywrightWorkers = backend === 'paddleonnx' ? String(MIN_PLAYWRIGHT_WORKERS) : '';
 const rootCaseResultsDir = path.join(baseResultsDir, 'ocr-case-results');
 const rootSummaryPath = path.join(baseResultsDir, 'ocr-accuracy-summary.json');
 const rootCombinedResultsPath = path.join(baseResultsDir, 'ocr-case-results.json');
@@ -39,10 +40,17 @@ const childEnv = playwrightWorkers
         ...process.env,
         PLAYWRIGHT_WORKERS: playwrightWorkers,
     }
-    : process.env;
+    : defaultPlaywrightWorkers
+        ? {
+            ...process.env,
+            PLAYWRIGHT_WORKERS: defaultPlaywrightWorkers,
+        }
+        : process.env;
 
 if (playwrightWorkers) {
     console.log(`Using PLAYWRIGHT_WORKERS=${playwrightWorkers}`);
+} else if (defaultPlaywrightWorkers) {
+    console.log(`Using PLAYWRIGHT_WORKERS=${defaultPlaywrightWorkers} for backend '${backend}'`);
 }
 
 const testExitCode = await runCommand(process.execPath, runArgs, childEnv);

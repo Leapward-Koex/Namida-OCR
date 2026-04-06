@@ -15,8 +15,8 @@ import sys
 from pathlib import Path
 
 
-DEFAULT_DET_REPO = "PaddlePaddle/PP-OCRv5_mobile_det"
-DEFAULT_REC_REPO = "PaddlePaddle/PP-OCRv5_mobile_rec"
+DEFAULT_DET_REPO = "PaddlePaddle/PP-OCRv5_server_det"
+DEFAULT_REC_REPO = "PaddlePaddle/PP-OCRv5_server_rec"
 
 
 def main() -> int:
@@ -61,7 +61,7 @@ def main() -> int:
     write_json(
         det_output_dir / "config.json",
         {
-            "model_name": "PP-OCRv5_mobile_det",
+            "model_name": "PP-OCRv5_server_det",
             "model_type": "detection",
             "framework": "PaddleOCR",
             "version": "PP-OCRv5",
@@ -75,7 +75,7 @@ def main() -> int:
     write_json(
         rec_output_dir / "config.json",
         {
-            "model_name": "PP-OCRv5_mobile_rec",
+            "model_name": "PP-OCRv5_server_rec",
             "model_type": "recognition",
             "framework": "PaddleOCR",
             "version": "PP-OCRv5",

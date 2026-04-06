@@ -44,6 +44,9 @@ When changing permissions, background execution, popup behavior, or shortcut flo
 - `npm run build:firefox`
 - `npm run prepare:paddleocr-onnx`: downloads official PaddleOCR repos, converts them to ONNX, and refreshes the committed PaddleOCR bundle metadata for the experimental `paddleonnx` backend.
 - `npm run test:e2e`: builds the Chromium extension with the default OCR model and runs the Playwright suite.
+- `npm run test:e2e:tesseract`: runs the Chromium Playwright OCR suite with the bundled `tesseract` backend.
+- `npm run test:e2e:scribejs`: runs the Chromium Playwright OCR suite with the experimental `scribejs` backend.
+- `npm run test:e2e:paddleonnx`: runs the Chromium Playwright OCR suite with the experimental `paddleonnx` backend.
 - `npm run test:e2e:compare-backends`: builds and runs the Playwright OCR dataset against the `tesseract`, experimental `scribejs`, and experimental `paddleonnx` backends, then writes a comparison summary to `test-results/`.
 - `npm run test:e2e:compare-models`: runs the OCR dataset against the bundled `jpn*` models and writes comparison output to `test-results/`.
 
@@ -57,7 +60,7 @@ Playwright currently exercises the Chromium extension harness. Firefox and Edge 
 
 - The default OCR model is `jpn_vert`.
 - The optional `scribejs` backend is experimental. Treat timeouts or missing OCR output as runtime integration failures first, not as OCR-quality regressions.
-- The optional `paddleonnx` backend is experimental. Treat startup failures, missing detected regions, ONNX session failures, or empty OCR output as runtime integration failures first, not as OCR-quality regressions.
+- The optional `paddleonnx` backend is experimental and now runs pure PaddleOCR ONNX inference with no Tesseract fallback. Treat startup failures, missing detected regions, ONNX session failures, or empty OCR output as runtime integration failures first, not as OCR-quality regressions.
 - The OCR dataset includes difficult manga and vertical-text samples. The model is not perfect.
 - Do not assume every OCR case will be an exact text match, and do not treat every OCR miss as a pure application bug.
 - Some E2E or model-comparison runs may remain non-perfect because OCR quality is a model limitation, not necessarily a regression in extension code.

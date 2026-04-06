@@ -4,7 +4,6 @@ import { PSM } from 'tesseract.js';
 import type { OcrBackend } from './OcrBackend';
 import { DEFAULT_OCR_MODEL } from '../../interfaces/Storage';
 import { buildOcrRecognitionCandidate, serializeOcrCandidate, type OcrRecognitionCandidate } from './OcrTextScoring';
-import { TesseractOcrBackend } from './TesseractOcrBackend';
 
 type WorkingCanvas = OffscreenCanvas | HTMLCanvasElement;
 type DrawingContext = OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D;
@@ -70,28 +69,49 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
     private static readonly detectorSessionKey = 'detector';
     private static readonly recognizerSessionKey = 'recognizer';
     private static readonly sessions = new Map<string, SessionBundle>();
-    private static readonly tesseractFallbackBackend = new TesseractOcrBackend();
     private static manifestPromise: Promise<PaddleOnnxManifest> | null = null;
     private static dictionaryPromise: Promise<string[]> | null = null;
     private static ortConfigured = false;
 
     public async init(): Promise<void> {
         await Promise.all([
-            this.ensureDetectorSession(),
             this.ensureRecognizerSession(),
             this.getDictionary(),
         ]);
     }
 
-    public async recognize(dataUrl: string, pageSegMode: PSM, model: string = DEFAULT_OCR_MODEL): Promise<string | undefined> {
+    public async recognize(dataUrl: string, pageSegMode: PSM, _model: string = DEFAULT_OCR_MODEL): Promise<string | undefined> {
         const startedAt = performance.now();
         const manifest = await this.getManifest();
         const sourceCanvas = await canvasFromDataUrl(dataUrl);
-        const detectorSession = await this.ensureDetectorSession();
+        const workingCanvas = padCanvas(sourceCanvas, Math.max(8, manifest.detector.box_padding));
         const recognizerSession = await this.ensureRecognizerSession();
         const dictionary = await this.getDictionary();
+        const fullCropAttempt = await this.recognizeCrop(
+            workingCanvas,
+            recognizerSession,
+            dictionary,
+            manifest.recognizer,
+            'full-crop',
+        );
 
-        const detectionInput = prepareDetectionTensor(sourceCanvas, manifest.detector);
+        if (!shouldRunDetection(pageSegMode, fullCropAttempt?.candidate ?? null)) {
+            const selectedCandidate = fullCropAttempt?.candidate ?? null;
+
+            console.debug(
+                PaddleOnnxOcrBackend.logTag,
+                'Skipping detector and using full-crop recognition',
+                {
+                    durationMs: Math.round(performance.now() - startedAt),
+                    selected: selectedCandidate ? serializeOcrCandidate(selectedCandidate) : null,
+                },
+            );
+
+            return selectedCandidate?.cleanedText;
+        }
+
+        const detectorSession = await this.ensureDetectorSession();
+        const detectionInput = prepareDetectionTensor(workingCanvas, manifest.detector);
         const detectionOutput = await detectorSession.run({ x: detectionInput.tensor });
         const probabilityTensor = detectionOutput[detectorSession.outputNames[0]];
         const detectedBoxes = extractDetectedBoxes(
@@ -109,12 +129,12 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
         );
 
         const mergedBoxes = detectedBoxes.length > 0
-            ? mergeBoxesForPageSegMode(detectedBoxes, pageSegMode, sourceCanvas.width, sourceCanvas.height)
+            ? mergeBoxesForPageSegMode(detectedBoxes, pageSegMode, workingCanvas.width, workingCanvas.height)
             : [];
         const segmentCandidates: OcrRecognitionCandidate[] = [];
 
         for (const [index, box] of mergedBoxes.entries()) {
-            const cropCanvas = cropCanvasRegion(sourceCanvas, box, manifest.detector.box_padding);
+            const cropCanvas = cropCanvasRegion(workingCanvas, box, manifest.detector.box_padding);
             const attempt = await this.recognizeCrop(
                 cropCanvas,
                 recognizerSession,
@@ -137,23 +157,10 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
                 segmentCandidates.flatMap((candidate) => [candidate.averageSymbolConfidence]),
             )
             : null;
-        const fallbackAttempt = await this.recognizeCrop(
-            sourceCanvas,
-            recognizerSession,
-            dictionary,
-            manifest.recognizer,
-            'fallback',
-        );
-        const paddleCandidate = [combinedCandidate, fallbackAttempt?.candidate ?? null]
+        const paddleCandidate = [combinedCandidate, fullCropAttempt?.candidate ?? null]
             .filter((candidate): candidate is OcrRecognitionCandidate => candidate !== null)
             .sort((left, right) => right.score - left.score)[0] ?? null;
-        const shouldRunTesseractFallback = this.shouldUseTesseractFallback(paddleCandidate, pageSegMode);
-        const tesseractCandidate = shouldRunTesseractFallback
-            ? await this.runTesseractFallback(dataUrl, pageSegMode, model)
-            : null;
-        const finalCandidate = [paddleCandidate, tesseractCandidate]
-            .filter((candidate): candidate is OcrRecognitionCandidate => candidate !== null)
-            .sort((left, right) => right.score - left.score)[0] ?? null;
+        const finalCandidate = paddleCandidate;
 
         console.debug(
             PaddleOnnxOcrBackend.logTag,
@@ -161,8 +168,6 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
             {
                 durationMs: Math.round(performance.now() - startedAt),
                 paddle: paddleCandidate ? serializeOcrCandidate(paddleCandidate) : null,
-                usedTesseractFallback: shouldRunTesseractFallback,
-                tesseract: tesseractCandidate ? serializeOcrCandidate(tesseractCandidate) : null,
                 selected: finalCandidate ? serializeOcrCandidate(finalCandidate) : null,
             },
         );
@@ -180,7 +185,6 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
 
     public async terminate(): Promise<void> {
         PaddleOnnxOcrBackend.sessions.clear();
-        await PaddleOnnxOcrBackend.tesseractFallbackBackend.terminate();
     }
 
     private async recognizeCrop(
@@ -195,7 +199,7 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
         const shouldRotate = tallAspectRatio >= recognizerConfig.rotation_aspect_threshold;
 
         if (shouldRotate) {
-            const rotatedCanvas = rotateCanvasClockwise(cropCanvas);
+            const rotatedCanvas = rotateCanvasCounterclockwise(cropCanvas);
             attempts.push({
                 candidate: await this.runRecognition(rotatedCanvas, recognizerSession, dictionary, recognizerConfig, `${id}-rotated`),
                 rotated: true,
@@ -342,57 +346,6 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
         return PaddleOnnxOcrBackend.dictionaryPromise;
     }
 
-    private shouldUseTesseractFallback(
-        paddleCandidate: OcrRecognitionCandidate | null,
-        pageSegMode: PSM,
-    ) {
-        if (!paddleCandidate) {
-            return true;
-        }
-
-        if (pageSegMode === PSM.SINGLE_BLOCK_VERT_TEXT) {
-            return paddleCandidate.score < 130
-                || paddleCandidate.japaneseRatio < 0.82
-                || paddleCandidate.normalizedText.length < 3;
-        }
-
-        return paddleCandidate.score < 105
-            || paddleCandidate.japaneseRatio < 0.65
-            || paddleCandidate.normalizedText.length < 2;
-    }
-
-    private async runTesseractFallback(
-        dataUrl: string,
-        pageSegMode: PSM,
-        model: string,
-    ): Promise<OcrRecognitionCandidate | null> {
-        const normalizedModel = this.normalizeModelName(model);
-
-        try {
-            return await PaddleOnnxOcrBackend.tesseractFallbackBackend.recognizeCandidate(
-                dataUrl,
-                pageSegMode,
-                normalizedModel,
-            );
-        } catch (error) {
-            console.warn(
-                PaddleOnnxOcrBackend.logTag,
-                `Fallback Tesseract OCR failed for model '${normalizedModel}'`,
-                error,
-            );
-            return null;
-        }
-    }
-
-    private normalizeModelName(model: string | undefined) {
-        const trimmedModel = model?.trim();
-
-        if (trimmedModel && /^[A-Za-z0-9_-]+$/.test(trimmedModel)) {
-            return trimmedModel;
-        }
-
-        return DEFAULT_OCR_MODEL;
-    }
 }
 
 function prepareDetectionTensor(sourceCanvas: WorkingCanvas, config: DetectorConfig) {
@@ -608,7 +561,7 @@ function extractDetectedBoxes(
 
     return boxes
         .sort((left, right) => right.averageScore - left.averageScore)
-        .slice(0, 32);
+        .slice(0, 24);
 }
 
 function createBinaryMask(
@@ -861,15 +814,37 @@ function cropCanvasRegion(
     return cropCanvas;
 }
 
-function rotateCanvasClockwise(sourceCanvas: WorkingCanvas) {
+function rotateCanvasCounterclockwise(sourceCanvas: WorkingCanvas) {
     const rotatedCanvas = createWorkingCanvas(sourceCanvas.height, sourceCanvas.width);
     const context = get2DContext(rotatedCanvas);
 
-    context.translate(rotatedCanvas.width, 0);
-    context.rotate(Math.PI / 2);
+    context.translate(0, rotatedCanvas.height);
+    context.rotate(-Math.PI / 2);
     context.drawImage(sourceCanvas, 0, 0);
 
     return rotatedCanvas;
+}
+
+function padCanvas(
+    sourceCanvas: WorkingCanvas,
+    padding: number,
+    background = '#ffffff',
+) {
+    if (padding <= 0) {
+        return sourceCanvas;
+    }
+
+    const paddedCanvas = createWorkingCanvas(
+        sourceCanvas.width + (padding * 2),
+        sourceCanvas.height + (padding * 2),
+    );
+    const context = get2DContext(paddedCanvas);
+
+    context.fillStyle = background;
+    context.fillRect(0, 0, paddedCanvas.width, paddedCanvas.height);
+    context.drawImage(sourceCanvas, padding, padding);
+
+    return paddedCanvas;
 }
 
 async function canvasFromDataUrl(dataUrl: string) {
@@ -944,6 +919,21 @@ function normalizeJoinedLines(lines: string[]) {
         .trim();
 
     return joinedText || undefined;
+}
+
+function shouldRunDetection(
+    pageSegMode: PSM,
+    candidate: OcrRecognitionCandidate | null,
+) {
+    if (!candidate) {
+        return true;
+    }
+
+    if (pageSegMode === PSM.AUTO) {
+        return true;
+    }
+
+    return candidate.cleanedText.length < 2;
 }
 
 function average(values: number[]) {
