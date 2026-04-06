@@ -1,6 +1,6 @@
 # Namida OCR
 
-**Namida OCR** is a completely local OCR browser extension for both **Chrome**, **Firefox**, and **Edge**. It enables you to take a “snip” (screenshot) of any part of your current tab, upscale it (either via basic linear upscaling or ESRGAN), and then perform OCR on the snipped region using bundled OCR assets. The default backend uses Tesseract.js. The OCR supports Japanese vertical text at the moment and automatically copies the recognized text to your clipboard, making it easy to use with online dictionaries like [Yomitan](https://github.com/yomidevs/yomitan) or manual translation tools. Additionally, Namida OCR includes the option to speak the recognized text aloud using your browser’s text-to-speech capabilities.
+**Namida OCR** is a completely local OCR browser extension for both **Chrome**, **Firefox**, and **Edge**. It enables you to take a “snip” (screenshot) of any part of your current tab, upscale it (either via basic linear upscaling or ESRGAN), and then perform OCR on the snipped region using bundled OCR assets. The default backend uses Tesseract.js, and the repo also includes an experimental local PaddleOCR ONNX backend. The OCR supports Japanese vertical text at the moment and automatically copies the recognized text to your clipboard, making it easy to use with online dictionaries like [Yomitan](https://github.com/yomidevs/yomitan) or manual translation tools. Additionally, Namida OCR includes the option to speak the recognized text aloud using your browser’s text-to-speech capabilities.
 
 
 ***
@@ -15,7 +15,7 @@
 ## Features
 
 - **Local OCR**  
-  All OCR processing is done locally in your browser using bundled OCR assets. The default backend uses [Tesseract.js](https://github.com/naptha/tesseract.js). No external servers are involved.
+  All OCR processing is done locally in your browser using bundled OCR assets. The default backend uses [Tesseract.js](https://github.com/naptha/tesseract.js), and the experimental `paddleonnx` backend uses bundled PaddleOCR ONNX models with `onnxruntime-web`. No external servers are involved.
 
 - **Snip & Upscale**  
   By default, **Alt + Q** on windows and **Option + Q** on mac activates the snipping mode. The selected image region is then upscaled:
@@ -92,5 +92,11 @@
 - The default OCR backend is `tesseract`.
 - The OCR runtime and backend implementations live under `src/background/ocr/`.
 - You can choose the OCR backend at build time with `NAMIDA_OCR_BACKEND` or `webpack --env ocr_backend=...`.
-- `npm run test:e2e:compare-backends` runs the Chromium Playwright OCR dataset against the `tesseract` and experimental `scribejs` backends and writes `test-results/ocr-backend-comparison.json`.
+- Available build-time backends are `tesseract`, experimental `scribejs`, and experimental `paddleonnx`.
+- `paddleonnx` uses bundled local assets under `models/paddleocr/` and `onnxruntime-web` WASM assets copied into the extension bundle.
+- `npm run prepare:paddleocr-onnx` runs the regeneration helper at [prepare-paddleocr-onnx.py](/c:/Dev/Namida/prepare-paddleocr-onnx.py) to download official PaddleOCR repos, export ONNX files, and refresh the committed bundle metadata.
+- `npm run test:e2e:compare-backends` runs the Chromium Playwright OCR dataset against the `tesseract`, experimental `scribejs`, and experimental `paddleonnx` backends and writes `test-results/ocr-backend-comparison.json`.
+- Playwright runs in this repo should use at least 5 workers. The local runner wrappers clamp lower worker counts up to `5`.
 - The `scribejs` backend is experimental, must keep using bundled local assets only, and the published `scribe.js-ocr` package is AGPL-3.0 licensed.
+- The `paddleonnx` backend is experimental, uses bundled local ONNX models only, and currently targets the bundled Chinese/Japanese PaddleOCR recognition model with a bundled detection model for full-crop OCR.
+

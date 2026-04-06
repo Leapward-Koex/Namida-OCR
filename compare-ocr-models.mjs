@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 const args = process.argv.slice(2);
+const MIN_PLAYWRIGHT_WORKERS = 5;
 const { headed, comparisonWorkers } = parseArgs(args);
 const langDir = path.resolve(process.cwd(), 'lang');
 const testResultsDir = path.resolve(process.cwd(), 'test-results');
@@ -154,7 +155,7 @@ async function discoverModels(directoryPath) {
 
 function parseArgs(commandArgs) {
     let headed = false;
-    let comparisonWorkers = process.env.PLAYWRIGHT_WORKERS?.trim() || '';
+    let comparisonWorkers = normalizeConfiguredWorkers(process.env.PLAYWRIGHT_WORKERS?.trim() || '');
 
     for (let index = 0; index < commandArgs.length; index += 1) {
         const argument = commandArgs[index];
@@ -196,7 +197,15 @@ function normalizeWorkers(value) {
         throw new Error(`Invalid worker count: ${value}`);
     }
 
-    return trimmedValue;
+    return String(Math.max(MIN_PLAYWRIGHT_WORKERS, Number.parseInt(trimmedValue, 10)));
+}
+
+function normalizeConfiguredWorkers(value) {
+    if (!value) {
+        return '';
+    }
+
+    return normalizeWorkers(value);
 }
 
 function runCommand(command, commandArgs, env = process.env) {
@@ -224,3 +233,4 @@ async function readSummary(summaryPath) {
 function formatPercent(value) {
     return `${(value * 100).toFixed(1)}%`;
 }
+

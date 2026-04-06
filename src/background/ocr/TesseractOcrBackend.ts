@@ -25,6 +25,15 @@ export class TesseractOcrBackend implements OcrBackend {
     }
 
     public async recognize(dataUrl: string, pageSegMode: PSM, model: string = DEFAULT_OCR_MODEL): Promise<string | undefined> {
+        const candidate = await this.recognizeCandidate(dataUrl, pageSegMode, model);
+        return candidate?.cleanedText;
+    }
+
+    public async recognizeCandidate(
+        dataUrl: string,
+        pageSegMode: PSM,
+        model: string = DEFAULT_OCR_MODEL,
+    ): Promise<OcrRecognitionCandidate | null> {
         const normalizedModel = this.normalizeModelName(model);
         const primaryCandidate = await this.executePlan(
             {
@@ -41,10 +50,9 @@ export class TesseractOcrBackend implements OcrBackend {
                 'Selected primary OCR candidate',
                 serializeOcrCandidate(primaryCandidate),
             );
-            return primaryCandidate.cleanedText;
         }
 
-        return undefined;
+        return primaryCandidate;
     }
 
     private normalizeModelName(model: string | undefined): string {

@@ -22,6 +22,7 @@ When changing permissions, background execution, popup behavior, or shortcut flo
 - `src/background/ocr/OcrService.ts`: OCR backend selection and lifecycle management for offscreen/background OCR.
 - `src/background/ocr/TesseractOcrBackend.ts`: bundled Tesseract worker creation and OCR cleanup/scoring behavior.
 - `src/background/ocr/ScribeOcrBackend.ts`: experimental `scribe.js-ocr` backend wired for local extension assets only.
+- `src/background/ocr/PaddleOnnxOcrBackend.ts`: experimental PaddleOCR ONNX backend using bundled local ONNX assets plus `onnxruntime-web`.
 - `src/offscreen/index.ts`: Chromium offscreen document entrypoint for OCR and furigana work when the background context cannot host workers directly.
 - `src/content/index.ts`: content-side snipping, OCR flow, clipboard, overlay, and floating window behavior.
 - `src/ui/index.ts`: popup settings UI, browser-specific shortcut UX, and speech voice availability messaging.
@@ -32,6 +33,7 @@ When changing permissions, background execution, popup behavior, or shortcut flo
 - OCR, upscaling, and furigana generation are expected to run locally from the extension bundle.
 - Keep traineddata, WASM, and model assets bundled locally. Do not switch this project to CDN downloads or server-backed OCR.
 - Any `scribe.js-ocr` integration must continue to use extension-local language/model assets. Do not rely on its CDN fallback.
+- Any `paddleonnx` integration must continue to use extension-local ONNX, dictionary, manifest, and ONNX Runtime WASM assets. Do not rely on remote model fetches or runtime downloads.
 - Do not add any extension feature that requires calling an application server to function.
 - Browser/system capabilities such as clipboard access or speech synthesis are acceptable. They are not a substitute for adding project servers.
 - The only HTTP server in this repo is `tests/serve-fixtures.mjs`, which exists solely to serve local Playwright fixtures during tests. It is not part of product architecture.
@@ -40,9 +42,12 @@ When changing permissions, background execution, popup behavior, or shortcut flo
 
 - `npm run build:chrome`
 - `npm run build:firefox`
+- `npm run prepare:paddleocr-onnx`: downloads official PaddleOCR repos, converts them to ONNX, and refreshes the committed PaddleOCR bundle metadata for the experimental `paddleonnx` backend.
 - `npm run test:e2e`: builds the Chromium extension with the default OCR model and runs the Playwright suite.
-- `npm run test:e2e:compare-backends`: builds and runs the Playwright OCR dataset against the `tesseract` and experimental `scribejs` backends, then writes a comparison summary to `test-results/`.
+- `npm run test:e2e:compare-backends`: builds and runs the Playwright OCR dataset against the `tesseract`, experimental `scribejs`, and experimental `paddleonnx` backends, then writes a comparison summary to `test-results/`.
 - `npm run test:e2e:compare-models`: runs the OCR dataset against the bundled `jpn*` models and writes comparison output to `test-results/`.
+
+When running Playwright from this repo, always use at least 5 workers/runners so failures surface quickly. The local runner wrappers clamp lower worker values up to `5`.
 
 The default OCR backend is `tesseract`. The backend can also be selected at build time with `NAMIDA_OCR_BACKEND` / `--env ocr_backend=...`.
 
@@ -52,6 +57,7 @@ Playwright currently exercises the Chromium extension harness. Firefox and Edge 
 
 - The default OCR model is `jpn_vert`.
 - The optional `scribejs` backend is experimental. Treat timeouts or missing OCR output as runtime integration failures first, not as OCR-quality regressions.
+- The optional `paddleonnx` backend is experimental. Treat startup failures, missing detected regions, ONNX session failures, or empty OCR output as runtime integration failures first, not as OCR-quality regressions.
 - The OCR dataset includes difficult manga and vertical-text samples. The model is not perfect.
 - Do not assume every OCR case will be an exact text match, and do not treat every OCR miss as a pure application bug.
 - Some E2E or model-comparison runs may remain non-perfect because OCR quality is a model limitation, not necessarily a regression in extension code.
@@ -63,4 +69,6 @@ Playwright currently exercises the Chromium extension harness. Firefox and Edge 
 - Preserve offline behavior and the no-server product boundary.
 - Keep Chrome/Edge and Firefox differences explicit in manifests and runtime code.
 - Flag `scribe.js-ocr` changes as licensing-sensitive. The npm package is AGPL-3.0, so do not assume it is shippable under the current project license without an explicit licensing decision.
+- Flag `paddleonnx` model and runtime asset changes when they materially affect extension package size, startup time, or browser compatibility.
 - If a change affects browser support, packaging, or OCR expectations, update this file along with the README or related docs.
+

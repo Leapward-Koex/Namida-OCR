@@ -6,6 +6,7 @@
   "scripts": {
     "build:chrome": "webpack --env browser=chrome --mode production",
     "build:firefox": "webpack --env browser=firefox --mode production",
+    "prepare:paddleocr-onnx": "python ./prepare-paddleocr-onnx.py",
     "test:e2e": "node ./run-playwright-e2e.mjs",
     "test:e2e:compare-backends": "node ./compare-ocr-backends.mjs",
     "test:e2e:compare-models": "node ./compare-ocr-models.mjs",
@@ -34,6 +35,7 @@
     "@upscalerjs/default-model": "^1.0.0-beta.17",
     "@upscalerjs/esrgan-medium": "^1.0.0-beta.13",
     "@upscalerjs/esrgan-thick": "^1.0.0-beta.16",
+    "onnxruntime-web": "^1.24.3",
     "scribe.js-ocr": "^0.10.1",
     "tesseract.js": "^5.1.1",
     "upscaler": "^1.0.0-beta.19"

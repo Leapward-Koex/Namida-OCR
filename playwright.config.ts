@@ -1,12 +1,17 @@
 import { defineConfig } from '@playwright/test';
 
 const fixturePort = Number(process.env.PLAYWRIGHT_FIXTURE_PORT ?? 3210);
+const configuredWorkers = Number(process.env.PLAYWRIGHT_WORKERS ?? 5);
+const workers = Number.isFinite(configuredWorkers)
+    ? Math.max(5, configuredWorkers)
+    : 5;
 
 export default defineConfig({
     testDir: './tests',
     testMatch: /.*\.spec\.ts/,
     outputDir: './test-results/.playwright-artifacts',
     timeout: 120_000,
+    workers,
     expect: {
         timeout: 20_000,
     },

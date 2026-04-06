@@ -51,12 +51,19 @@ module.exports = (env) => {
     const buildNumber = env.build_number || "1.0.0";
     const ocrModel = env.ocr_model || process.env.NAMIDA_OCR_MODEL || 'jpn_vert';
     const ocrBackend = env.ocr_backend || process.env.NAMIDA_OCR_BACKEND || 'tesseract';
+    const resolvedOcrBackend = ocrBackend === 'scribejs'
+        ? 'scribejs'
+        : ocrBackend === 'paddleonnx'
+            ? 'paddleonnx'
+            : 'tesseract';
     const resolveAliases = {
         'namida-ocr-backend$': path.resolve(
             __dirname,
-            ocrBackend === 'scribejs'
+            resolvedOcrBackend === 'scribejs'
                 ? 'src/background/ocr/ScribeOcrBackend.ts'
-                : 'src/background/ocr/TesseractOcrBackend.ts',
+                : resolvedOcrBackend === 'paddleonnx'
+                    ? 'src/background/ocr/PaddleOnnxOcrBackend.ts'
+                    : 'src/background/ocr/TesseractOcrBackend.ts',
         ),
         'namida-background-ocr-service$': path.resolve(
             __dirname,
@@ -66,7 +73,7 @@ module.exports = (env) => {
         ),
     };
 
-    if (ocrBackend === 'scribejs') {
+    if (resolvedOcrBackend === 'scribejs') {
         // scribe.js-ocr 0.10.1's SIMD core variants abort at recognize() with a missing
         // DotProductSSE symbol in our build/runtime. Force its worker-script imports to the
         // matching non-SIMD cores until the upstream package is usable as-is.
@@ -133,7 +140,7 @@ module.exports = (env) => {
             new webpack.DefinePlugin({
                 process: 'undefined',
                 DISABLE_DOCX_XLSX: JSON.stringify(true),
-                __NAMIDA_OCR_BACKEND__: JSON.stringify(ocrBackend === 'scribejs' ? 'scribejs' : 'tesseract'),
+                __NAMIDA_OCR_BACKEND__: JSON.stringify(resolvedOcrBackend),
                 __NAMIDA_OCR_MODEL__: JSON.stringify(ocrModel),
             }),
             new CopyPlugin({
@@ -147,7 +154,10 @@ module.exports = (env) => {
                     { from: 'node_modules/tesseract.js-core/tesseract-core-lstm.wasm.js', to: 'libs/tesseract-core/tesseract-core-lstm.wasm.js' },
                     { from: 'node_modules/tesseract.js-core/tesseract-core-simd-lstm.wasm.js', to: 'libs/tesseract-core/tesseract-core-simd-lstm.wasm.js' },
                     { from: 'node_modules/tesseract.js/dist/worker.min.js', to: 'libs/tesseract-worker/worker.min.js' },
+                    { from: 'node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.mjs', to: 'libs/onnxruntime/ort-wasm-simd-threaded.mjs' },
+                    { from: 'node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.wasm', to: 'libs/onnxruntime/ort-wasm-simd-threaded.wasm' },
                     ...getBundledLanguagePatterns(),
+                    { from: 'models/paddleocr', to: 'libs/paddleocr' },
                     { from: 'node_modules/@upscalerjs/esrgan-medium/models/x2', to: 'libs/tensorflow/x2' },
                     { from: 'node_modules/@leapward-koex/kuromoji/dict_extension_spoofed', to: 'libs/kuromoji' },
                     {

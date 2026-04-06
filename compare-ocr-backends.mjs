@@ -3,11 +3,12 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 const args = process.argv.slice(2);
+const MIN_PLAYWRIGHT_WORKERS = 5;
 const { backend, headed, model, comparisonWorkers, startupCheck } = parseArgs(args);
 const testResultsDir = path.resolve(process.cwd(), 'test-results');
 const comparisonPath = path.join(testResultsDir, 'ocr-backend-comparison.json');
 const startupCheckPath = path.join(testResultsDir, 'ocr-backend-startup-check.json');
-const backends = backend ? [backend] : ['tesseract', 'scribejs'];
+const backends = backend ? [backend] : ['tesseract', 'scribejs', 'paddleonnx'];
 const runs = [];
 
 if (startupCheck) {
@@ -147,7 +148,7 @@ function parseArgs(commandArgs) {
     let backend = '';
     let headed = false;
     let model = process.env.NAMIDA_OCR_MODEL?.trim() || 'jpn_vert';
-    let comparisonWorkers = process.env.PLAYWRIGHT_WORKERS?.trim() || '';
+    let comparisonWorkers = normalizeConfiguredWorkers(process.env.PLAYWRIGHT_WORKERS?.trim() || '');
     let startupCheck = false;
 
     for (let index = 0; index < commandArgs.length; index += 1) {
@@ -214,13 +215,21 @@ function normalizeWorkers(value) {
         throw new Error(`Invalid worker count: ${value}`);
     }
 
-    return trimmedValue;
+    return String(Math.max(MIN_PLAYWRIGHT_WORKERS, Number.parseInt(trimmedValue, 10)));
+}
+
+function normalizeConfiguredWorkers(value) {
+    if (!value) {
+        return '';
+    }
+
+    return normalizeWorkers(value);
 }
 
 function normalizeBackend(value) {
     const trimmedValue = value.trim().toLowerCase();
 
-    if (trimmedValue === 'tesseract' || trimmedValue === 'scribejs') {
+    if (trimmedValue === 'tesseract' || trimmedValue === 'scribejs' || trimmedValue === 'paddleonnx') {
         return trimmedValue;
     }
 
@@ -321,3 +330,4 @@ async function readSummary(summaryPath) {
 function formatPercent(value) {
     return `${(value * 100).toFixed(1)}%`;
 }
+

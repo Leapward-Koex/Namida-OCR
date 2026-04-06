@@ -5,6 +5,7 @@ import path from 'node:path';
 const args = process.argv.slice(2);
 const DEFAULT_OCR_MODEL = 'jpn_vert';
 const DEFAULT_OCR_BACKEND = 'tesseract';
+const MIN_PLAYWRIGHT_WORKERS = 5;
 const baseResultsDir = path.resolve(process.cwd(), 'test-results');
 const { backend, headed, model, resultsDir, playwrightWorkers } = parseArgs(args);
 const rootCaseResultsDir = path.join(baseResultsDir, 'ocr-case-results');
@@ -92,7 +93,7 @@ function parseArgs(commandArgs) {
     let headed = false;
     let model = process.env.NAMIDA_OCR_MODEL?.trim() || DEFAULT_OCR_MODEL;
     let resultsSubdir = '';
-    let playwrightWorkers = process.env.PLAYWRIGHT_WORKERS?.trim() || '';
+    let playwrightWorkers = normalizeConfiguredWorkers(process.env.PLAYWRIGHT_WORKERS?.trim() || '');
 
     for (let index = 0; index < commandArgs.length; index += 1) {
         const argument = commandArgs[index];
@@ -170,13 +171,21 @@ function normalizeWorkers(value) {
         throw new Error(`Invalid worker count: ${value}`);
     }
 
-    return trimmedValue;
+    return String(Math.max(MIN_PLAYWRIGHT_WORKERS, Number.parseInt(trimmedValue, 10)));
+}
+
+function normalizeConfiguredWorkers(value) {
+    if (!value) {
+        return '';
+    }
+
+    return normalizeWorkers(value);
 }
 
 function normalizeBackend(value) {
     const trimmedValue = value.trim().toLowerCase();
 
-    if (trimmedValue === 'tesseract' || trimmedValue === 'scribejs') {
+    if (trimmedValue === 'tesseract' || trimmedValue === 'scribejs' || trimmedValue === 'paddleonnx') {
         return trimmedValue;
     }
 
@@ -195,3 +204,4 @@ function runCommand(command, commandArgs, env = process.env) {
         child.on('exit', (code) => resolve(code));
     });
 }
+

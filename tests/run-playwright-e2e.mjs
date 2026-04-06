@@ -6,8 +6,12 @@ import path from 'node:path';
 const args = process.argv.slice(2);
 const headed = args.includes('--headed');
 const cpuCount = typeof os.availableParallelism === 'function' ? os.availableParallelism() : os.cpus().length;
-const defaultHeadlessWorkers = String(Math.max(2, Math.ceil(cpuCount * 1.5)));
-const workers = process.env.PLAYWRIGHT_WORKERS ?? (headed ? '1' : defaultHeadlessWorkers);
+const MIN_PLAYWRIGHT_WORKERS = 5;
+const defaultWorkers = String(Math.max(MIN_PLAYWRIGHT_WORKERS, Math.ceil(cpuCount * 1.5)));
+const configuredWorkers = process.env.PLAYWRIGHT_WORKERS?.trim();
+const workers = configuredWorkers
+    ? String(Math.max(MIN_PLAYWRIGHT_WORKERS, Number.parseInt(configuredWorkers, 10)))
+    : defaultWorkers;
 const testResultsDir = path.resolve(process.cwd(), 'test-results');
 const caseResultsDir = path.join(testResultsDir, 'ocr-case-results');
 const summaryPath = path.join(testResultsDir, 'ocr-accuracy-summary.json');
@@ -38,4 +42,5 @@ function runCommand(command, commandArgs) {
         child.on('exit', (code) => resolve(code));
     });
 }
+
 

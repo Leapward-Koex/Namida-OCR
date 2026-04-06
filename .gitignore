@@ -131,3 +131,5 @@ test-results/
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+.tmp
