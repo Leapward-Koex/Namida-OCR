@@ -7,7 +7,9 @@ export enum NamidaMessageAction {
     RecognizeImage,
     RecognizeImageOffscreen,
     GenerateFurigana,
-    GenerateFuriganaOffscreen
+    GenerateFuriganaOffscreen,
+    GetLastOcrDebugSnapshot,
+    GetLastOcrDebugSnapshotOffscreen
 }
 
 export interface NamidaMessage {
@@ -17,6 +19,7 @@ export interface NamidaMessage {
 
 
 export interface NamidaOcrFromOffscreenData {
+    debugArtifactsEnabled: boolean,
     imageData: string,
     pageSegMode: PSM,
     ocrModel: string
@@ -24,6 +27,11 @@ export interface NamidaOcrFromOffscreenData {
 export interface NamidaOcrFromOffscreenMessage {
     action: NamidaMessageAction,
     data: NamidaOcrFromOffscreenData
+}
+
+export interface NamidaOcrFromOffscreenResult {
+    debugSnapshot: unknown,
+    recognizedText: string | undefined
 }
 
 export interface NamidaTensorflowUpscaleData {

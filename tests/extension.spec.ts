@@ -2,11 +2,15 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { Page, TestInfo, Worker } from '@playwright/test';
 import { expect, test } from './extension.fixtures';
+import type { OcrDebugAttemptSnapshot, OcrDebugCropSnapshot, OcrDebugSnapshot } from '../src/background/ocr/OcrDebugSnapshot';
+import { NamidaMessageAction } from '../src/interfaces/message';
 import type { OcrCase, PageSegModeSetting, UpscalingModeSetting } from './ocr-cases';
 import { ocrCases } from './ocr-cases';
 import { scoreOcrCase, type OcrCaseResult } from './ocr-metrics';
 
-const SNIP_PAGE_ACTION = 0;
+const SNIP_PAGE_ACTION = NamidaMessageAction.SnipPage;
+const GET_LAST_OCR_DEBUG_SNAPSHOT_ACTION = NamidaMessageAction.GetLastOcrDebugSnapshot;
+const GET_LAST_OCR_DEBUG_SNAPSHOT_OFFSCREEN_ACTION = NamidaMessageAction.GetLastOcrDebugSnapshotOffscreen;
 
 test.describe('OCR accuracy dataset', () => {
     test.describe.configure({ mode: 'parallel' });
@@ -20,10 +24,13 @@ test.describe('OCR accuracy dataset', () => {
             );
 
             const actualText = await runOcrCase(page, serviceWorker, ocrCase);
+            const debugSnapshot = await fetchLastOcrDebugSnapshot(serviceWorker);
             const result = scoreOcrCase(ocrCase, actualText, caseIndex);
 
             await attachCaseResult(testInfo, result);
             await persistCaseResult(result);
+            await attachDebugSnapshot(testInfo, ocrCase.name, debugSnapshot);
+            await persistDebugSnapshot(ocrCase.name, debugSnapshot);
 
             if (ocrCase.minimumCharacterAccuracy !== undefined) {
                 expect(
@@ -105,6 +112,7 @@ async function seedExtensionSettings(
         await chrome.storage.sync.clear();
         await chrome.storage.sync.set({
             FuriganaType: 'none',
+            OcrDebugArtifacts: true,
             PageSegMode: configuredPageSegMode,
             SaveOcrCrop: false,
             ShowSpeakButton: false,
@@ -124,12 +132,149 @@ async function attachCaseResult(testInfo: TestInfo, result: OcrCaseResult) {
     });
 }
 
+async function fetchLastOcrDebugSnapshot(serviceWorker: Worker): Promise<OcrDebugSnapshot | null> {
+    return serviceWorker.evaluate(async ({ backgroundAction, offscreenAction }) => {
+        const cachedSnapshot = await chrome.runtime.sendMessage({
+            action: backgroundAction,
+            data: null,
+        });
+
+        if (cachedSnapshot) {
+            return cachedSnapshot;
+        }
+
+        return chrome.runtime.sendMessage({
+            action: offscreenAction,
+            data: null,
+        });
+    }, {
+        backgroundAction: GET_LAST_OCR_DEBUG_SNAPSHOT_ACTION,
+        offscreenAction: GET_LAST_OCR_DEBUG_SNAPSHOT_OFFSCREEN_ACTION,
+    });
+}
+
+async function attachDebugSnapshot(
+    testInfo: TestInfo,
+    caseName: string,
+    snapshot: OcrDebugSnapshot | null,
+) {
+    if (!snapshot) {
+        return;
+    }
+
+    const persistedSnapshot = await createPersistedDebugSnapshot(caseName, snapshot);
+    await testInfo.attach('ocr-debug.json', {
+        body: JSON.stringify(persistedSnapshot, null, 2),
+        contentType: 'application/json',
+    });
+}
+
 async function persistCaseResult(result: OcrCaseResult) {
     const resultsDir = path.resolve(process.cwd(), 'test-results', 'ocr-case-results');
     const resultPath = path.join(resultsDir, `${result.name}.json`);
 
     await fs.mkdir(resultsDir, { recursive: true });
     await fs.writeFile(resultPath, JSON.stringify(result, null, 2));
+}
+
+async function persistDebugSnapshot(
+    caseName: string,
+    snapshot: OcrDebugSnapshot | null,
+) {
+    if (!snapshot) {
+        return;
+    }
+
+    const persistedSnapshot = await createPersistedDebugSnapshot(caseName, snapshot);
+    const debugDir = path.resolve(process.cwd(), 'test-results', 'ocr-debug', caseName);
+
+    await fs.mkdir(debugDir, { recursive: true });
+    await fs.writeFile(
+        path.join(debugDir, 'snapshot.json'),
+        JSON.stringify(persistedSnapshot, null, 2),
+    );
+}
+
+async function createPersistedDebugSnapshot(caseName: string, snapshot: OcrDebugSnapshot) {
+    const debugDir = path.resolve(process.cwd(), 'test-results', 'ocr-debug', caseName);
+    await fs.mkdir(debugDir, { recursive: true });
+
+    return {
+        ...omitImageDataUrl(snapshot),
+        detectedGroups: await Promise.all(snapshot.detectedGroups.map((group, index) => {
+            return persistCropSnapshot(debugDir, `detected-${padIndex(index)}`, group);
+        })),
+        fullCrop: snapshot.fullCrop
+            ? await persistCropSnapshot(debugDir, 'full-crop', snapshot.fullCrop)
+            : null,
+        projectedGroups: await Promise.all(snapshot.projectedGroups.map((group, index) => {
+            return persistCropSnapshot(debugDir, `projected-${padIndex(index)}`, group);
+        })),
+        workingImagePath: await persistDataUrlAsset(
+            debugDir,
+            'working-crop.png',
+            snapshot.workingImageDataUrl,
+        ),
+    };
+}
+
+async function persistCropSnapshot(
+    debugDir: string,
+    filePrefix: string,
+    snapshot: OcrDebugCropSnapshot,
+) {
+    return {
+        ...omitImageDataUrl(snapshot),
+        attempts: await Promise.all(snapshot.attempts.map((attempt, index) => {
+            const rotationSuffix = attempt.rotated ? 'rotated' : 'plain';
+            return persistAttemptSnapshot(
+                debugDir,
+                `${filePrefix}-attempt-${padIndex(index)}-${rotationSuffix}`,
+                attempt,
+            );
+        })),
+        imagePath: await persistDataUrlAsset(
+            debugDir,
+            `${filePrefix}-crop.png`,
+            snapshot.imageDataUrl,
+        ),
+    };
+}
+
+async function persistAttemptSnapshot(
+    debugDir: string,
+    filePrefix: string,
+    snapshot: OcrDebugAttemptSnapshot,
+) {
+    return {
+        ...omitImageDataUrl(snapshot),
+        imagePath: await persistDataUrlAsset(
+            debugDir,
+            `${sanitizeFilePart(filePrefix)}.png`,
+            snapshot.imageDataUrl,
+        ),
+    };
+}
+
+function omitImageDataUrl<T extends { imageDataUrl: string }>(value: T): Omit<T, 'imageDataUrl'> {
+    const { imageDataUrl: _imageDataUrl, ...rest } = value;
+    return rest;
+}
+
+async function persistDataUrlAsset(debugDir: string, fileName: string, dataUrl: string) {
+    const outputPath = path.join(debugDir, sanitizeFilePart(fileName));
+    await fs.writeFile(outputPath, dataUrlToBuffer(dataUrl));
+    return path.relative(debugDir, outputPath);
+}
+
+function dataUrlToBuffer(dataUrl: string) {
+    const match = dataUrl.match(/^data:[^;]+;base64,(.+)$/u);
+
+    if (!match) {
+        throw new Error('Unsupported OCR debug data URL format.');
+    }
+
+    return Buffer.from(match[1], 'base64');
 }
 
 function buildFixtureUrl(ocrCase: OcrCase): string {
@@ -151,5 +296,13 @@ function buildFixtureUrl(ocrCase: OcrCase): string {
 
 function formatPercent(value: number): string {
     return `${(value * 100).toFixed(1)}%`;
+}
+
+function padIndex(index: number) {
+    return String(index).padStart(2, '0');
+}
+
+function sanitizeFilePart(value: string) {
+    return value.replace(/[^A-Za-z0-9._-]+/g, '-');
 }
 

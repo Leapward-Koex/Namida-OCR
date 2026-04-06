@@ -1,5 +1,6 @@
 import { PSM } from 'tesseract.js';
 import { OcrBackend } from './OcrBackend';
+import type { OcrDebugSnapshot } from './OcrDebugSnapshot';
 
 type OcrBackendModule = {
     ConfiguredOcrBackend: new () => OcrBackend;
@@ -8,6 +9,7 @@ type OcrBackendModule = {
 export class OcrService {
     private static backend: OcrBackend | null = null;
     private static backendPromise: Promise<OcrBackend> | null = null;
+    private static debugEnabled = false;
 
     private static async getBackend(): Promise<OcrBackend> {
         if (this.backend) {
@@ -15,9 +17,10 @@ export class OcrService {
         }
 
         if (!this.backendPromise) {
-            this.backendPromise = import('namida-ocr-backend').then((module) => {
+            this.backendPromise = import('namida-ocr-backend').then(async (module) => {
                 const backendModule = module as OcrBackendModule;
                 const backend = new backendModule.ConfiguredOcrBackend();
+                await backend.setDebugEnabled?.(this.debugEnabled);
                 this.backend = backend;
                 return backend;
             }).catch((error) => {
@@ -37,6 +40,17 @@ export class OcrService {
     public static async recognize(dataUrl: string, pageSegMode: PSM, model?: string): Promise<string | undefined> {
         const backend = await this.getBackend();
         return backend.recognize(dataUrl, pageSegMode, model);
+    }
+
+    public static async setDebugEnabled(enabled: boolean): Promise<void> {
+        this.debugEnabled = enabled;
+        const backend = await this.getBackend();
+        await backend.setDebugEnabled?.(enabled);
+    }
+
+    public static async getLastDebugSnapshot(): Promise<OcrDebugSnapshot | null> {
+        const backend = await this.getBackend();
+        return await backend.getLastDebugSnapshot?.() ?? null;
     }
 
     public static async terminate(): Promise<void> {

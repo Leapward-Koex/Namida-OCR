@@ -7,6 +7,7 @@ export enum StorageKey {
     UpscalingMode = "UpscalingMode",
     PageSegMode = "PageSegMode",
     OcrModel = "OcrModel",
+    OcrDebugArtifacts = "OcrDebugArtifacts",
     SaveOcrCrop = "SaveOcrCrop",
     ShowSpeakButton = "ShowSpeakButton",
     PreferredVoices = "PreferredVoices",
@@ -120,6 +121,11 @@ export class Settings {
     public static async getOcrModel() {
         const values = await storage.sync.get(StorageKey.OcrModel);
         return this.getOcrModelFromString((values[StorageKey.OcrModel] as string | undefined));
+    }
+
+    public static async getOcrDebugArtifacts() {
+        const values = await storage.sync.get(StorageKey.OcrDebugArtifacts);
+        return (values[StorageKey.OcrDebugArtifacts] as boolean | undefined) ?? false;
     }
 
     public static async getSaveOcrCrop() {

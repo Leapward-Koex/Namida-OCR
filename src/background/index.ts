@@ -1,9 +1,10 @@
 import { commands, runtime, tabs } from "webextension-polyfill";
-import { NamidaMessage, NamidaMessageAction, NamidaOcrFromOffscreenData, NamidaTensorflowUpscaleData } from "../interfaces/message";
+import { NamidaMessage, NamidaMessageAction, NamidaOcrFromOffscreenData, NamidaOcrFromOffscreenResult, NamidaTensorflowUpscaleData } from "../interfaces/message";
 import { Upscaler } from "./Upscaler";
 import { Settings } from "../interfaces/Storage";
 import { FuriganaHandler } from "./FuriganaHandler";
 import { BackgroundOcrService } from "namida-background-ocr-service";
+import type { OcrDebugSnapshot } from "./ocr/OcrDebugSnapshot";
 
 console.log('Background script loaded');
 
@@ -24,6 +25,8 @@ type BackgroundDebugGlobal = typeof globalThis & {
     events: [],
     startedAt: new Date().toISOString(),
 });
+
+let lastOcrDebugSnapshot: OcrDebugSnapshot | null = null;
 
 if (globalThis.Worker) {
     // Workers are available in the service worker, e.g. Firefox
@@ -86,24 +89,49 @@ runtime.onMessage.addListener((message, sender) => {
         }
 
         case NamidaMessageAction.RecognizeImage: {
-            return Promise.all([Settings.getPageSegMode(), Settings.getOcrModel()]).then(([pageSegMode, ocrModel]) => {
+            return Promise.all([
+                Settings.getPageSegMode(),
+                Settings.getOcrDebugArtifacts(),
+                Settings.getOcrModel(),
+            ]).then(([pageSegMode, debugArtifactsEnabled, ocrModel]) => {
+                lastOcrDebugSnapshot = null;
+
                 if (globalThis.Worker) {
-                    return BackgroundOcrService.recognize(namidaMessage.data, pageSegMode, ocrModel);
+                    return BackgroundOcrService.setDebugEnabled(debugArtifactsEnabled).then(async () => {
+                        const recognizedText = await BackgroundOcrService.recognize(namidaMessage.data, pageSegMode, ocrModel);
+                        lastOcrDebugSnapshot = debugArtifactsEnabled
+                            ? await BackgroundOcrService.getLastDebugSnapshot()
+                            : null;
+                        return recognizedText;
+                    });
                 }
                 else {
-                    return ensureOffscreenDocument().then(() => {
-                        return runtime.sendMessage(
+                    return ensureOffscreenDocument().then(async () => {
+                        const offscreenResult = await runtime.sendMessage(
                             {
                                 action: NamidaMessageAction.RecognizeImageOffscreen,
                                 data: {
+                                    debugArtifactsEnabled,
                                     imageData: namidaMessage.data,
                                     pageSegMode: pageSegMode,
                                     ocrModel: ocrModel
                                 } as NamidaOcrFromOffscreenData
-                            });
+                            }) as NamidaOcrFromOffscreenResult | string | undefined;
+
+                        if (typeof offscreenResult === 'object' && offscreenResult !== null && 'recognizedText' in offscreenResult) {
+                            lastOcrDebugSnapshot = (offscreenResult.debugSnapshot as OcrDebugSnapshot | null) ?? null;
+                            return offscreenResult.recognizedText;
+                        }
+
+                        lastOcrDebugSnapshot = null;
+                        return offscreenResult;
                     });
                 }
             });
+        }
+
+        case NamidaMessageAction.GetLastOcrDebugSnapshot: {
+            return Promise.resolve(lastOcrDebugSnapshot);
         }
     }
 });
