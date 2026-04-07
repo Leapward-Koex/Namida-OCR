@@ -140,6 +140,12 @@ type SegmentRecognitionResult = {
     segments: SegmentRecognitionTrace[];
 };
 
+type RecognizedSegment = {
+    box: DetectedBox;
+    candidate: OcrRecognitionCandidate;
+    index: number;
+};
+
 export class PaddleOnnxOcrBackend implements OcrBackend {
     private static readonly logTag = PADDLE_ONNX_LOG_TAG;
     private static readonly detectorSessionKey = 'detector';
@@ -186,6 +192,7 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
             dictionary,
             manifest.recognizer,
             'full-crop',
+            true,
         );
         const projectedBoxes = pageSegMode === PSM.AUTO
             ? []
@@ -306,7 +313,7 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
         recognizerConfig: RecognizerConfig,
         id: string,
     ): Promise<SegmentRecognitionResult> {
-        const segmentCandidates: OcrRecognitionCandidate[] = [];
+        const recognizedSegments: RecognizedSegment[] = [];
         const segments: SegmentRecognitionTrace[] = [];
 
         for (const [index, box] of boxes.entries()) {
@@ -322,13 +329,20 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
                 dictionary,
                 recognizerConfig,
                 `${id}-box-${index}`,
+                false,
             );
             segments.push({ box, cropCanvas, result });
 
             if (result.candidate?.cleanedText && shouldIncludeSegmentCandidate(result.candidate)) {
-                segmentCandidates.push(result.candidate);
+                recognizedSegments.push({
+                    box,
+                    candidate: result.candidate,
+                    index,
+                });
             }
         }
+
+        const segmentCandidates = selectDistinctSegmentCandidates(recognizedSegments);
 
         if (segmentCandidates.length === 0) {
             return {
@@ -375,6 +389,7 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
         dictionary: string[],
         recognizerConfig: RecognizerConfig,
         id: string,
+        allowMultiLineSplit: boolean,
     ): Promise<CropRecognitionResult> {
         const attempts: RecognitionAttempt[] = [];
         const dominantAspectRatio = Math.max(cropCanvas.width, cropCanvas.height)
@@ -422,6 +437,26 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
                     normalized: variant.normalized,
                     rotated: true,
                 });
+
+                if (allowMultiLineSplit && variant.suffix === 'prepared') {
+                    const splitLinesCandidate = await this.recognizeVerticalColumnCrop(
+                        variant.canvas,
+                        recognizerSession,
+                        dictionary,
+                        recognizerConfig,
+                        `${id}-${variant.suffix}-column-split`,
+                    );
+
+                    if (splitLinesCandidate) {
+                        attempts.push({
+                            canvas: rotatedCanvas,
+                            candidate: splitLinesCandidate,
+                            id: `${id}-${variant.suffix}-rotated-split`,
+                            normalized: variant.normalized,
+                            rotated: true,
+                        });
+                    }
+                }
             }
 
             attempts.push({
@@ -461,6 +496,65 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
             attempts,
             candidate: bestAttempt?.candidate ?? null,
         };
+    }
+
+    private async recognizeVerticalColumnCrop(
+        sourceCanvas: WorkingCanvas,
+        recognizerSession: ort.InferenceSession,
+        dictionary: string[],
+        recognizerConfig: RecognizerConfig,
+        id: string,
+    ): Promise<OcrRecognitionCandidate | null> {
+        const tallAspectRatio = sourceCanvas.height / Math.max(sourceCanvas.width, 1);
+        if (tallAspectRatio < 3.2) {
+            return null;
+        }
+
+        const columnBoxes = extractVerticalTextColumns(sourceCanvas);
+        if (columnBoxes.length !== 2) {
+            return null;
+        }
+
+        const lineCandidates: OcrRecognitionCandidate[] = [];
+        const cropPadding = Math.max(6, Math.round(sourceCanvas.width * 0.03));
+
+        for (const [index, box] of columnBoxes.entries()) {
+            const columnCanvas = cropCanvasRegion(sourceCanvas, box, cropPadding);
+            const lineCanvas = rotateCanvasCounterclockwise(columnCanvas);
+            const lineCandidate = refineRecognitionCandidate(
+                await this.runRecognition(
+                    lineCanvas,
+                    recognizerSession,
+                    dictionary,
+                    recognizerConfig,
+                    `${id}-line-${index}`,
+                ),
+                lineCanvas,
+            );
+
+            if (lineCandidate?.cleanedText && shouldIncludeLineCandidate(lineCandidate)) {
+                lineCandidates.push(lineCandidate);
+            }
+        }
+
+        if (lineCandidates.length < 2) {
+            return null;
+        }
+
+        const combinedText = normalizeJoinedLines(lineCandidates.map((candidate) => candidate.cleanedText));
+        if (!combinedText) {
+            return null;
+        }
+
+        return refineRecognitionCandidate(
+            buildOcrRecognitionCandidate(
+                id,
+                combinedText,
+                average(lineCandidates.map((candidate) => candidate.confidence)),
+                lineCandidates.flatMap((candidate) => [candidate.averageSymbolConfidence]),
+            ),
+            rotateCanvasCounterclockwise(sourceCanvas),
+        );
     }
 
     private async buildDebugSnapshot(
@@ -1126,6 +1220,67 @@ function shouldIncludeSegmentCandidate(candidate: OcrRecognitionCandidate) {
         || (candidate.japaneseRatio >= 0.75 && candidate.normalizedText.length >= 2);
 }
 
+function shouldIncludeLineCandidate(candidate: OcrRecognitionCandidate) {
+    return candidate.score >= 14
+        || (candidate.japaneseRatio >= 0.8 && candidate.normalizedText.length >= 4);
+}
+
+function selectDistinctSegmentCandidates(segments: RecognizedSegment[]) {
+    const selected: RecognizedSegment[] = [];
+
+    for (const segment of segments) {
+        let merged = false;
+
+        for (let index = 0; index < selected.length; index += 1) {
+            const existing = selected[index];
+            if (computeOverlapCoverage(segment.box, existing.box) < 0.72) {
+                continue;
+            }
+
+            if (rankOverlappingSegmentCandidate(segment) >= rankOverlappingSegmentCandidate(existing)) {
+                selected[index] = segment;
+            }
+
+            merged = true;
+            break;
+        }
+
+        if (!merged) {
+            selected.push(segment);
+        }
+    }
+
+    return selected
+        .sort((left, right) => left.index - right.index)
+        .map((segment) => segment.candidate);
+}
+
+function rankOverlappingSegmentCandidate(segment: RecognizedSegment) {
+    const normalizedTextLength = segment.candidate.normalizedText.length;
+    const area = segment.box.width * segment.box.height;
+    return segment.candidate.score
+        + Math.min(normalizedTextLength, 16) * 0.75
+        + Math.log10(Math.max(area, 10));
+}
+
+function computeOverlapCoverage(left: DetectedBox, right: DetectedBox) {
+    const intersectionLeft = Math.max(left.left, right.left);
+    const intersectionTop = Math.max(left.top, right.top);
+    const intersectionRight = Math.min(left.right, right.right);
+    const intersectionBottom = Math.min(left.bottom, right.bottom);
+    const intersectionWidth = Math.max(0, intersectionRight - intersectionLeft);
+    const intersectionHeight = Math.max(0, intersectionBottom - intersectionTop);
+    const intersectionArea = intersectionWidth * intersectionHeight;
+
+    if (intersectionArea === 0) {
+        return 0;
+    }
+
+    const leftArea = left.width * left.height;
+    const rightArea = right.width * right.height;
+    return intersectionArea / Math.max(1, Math.min(leftArea, rightArea));
+}
+
 function chooseFinalCandidate(
     candidates: Array<{
         candidate: OcrRecognitionCandidate | null;
@@ -1624,6 +1779,98 @@ function extractProjectedBoxes(
     );
 
     return boxes.slice(0, 12);
+}
+
+function extractVerticalTextColumns(sourceCanvas: WorkingCanvas) {
+    const width = sourceCanvas.width;
+    const height = sourceCanvas.height;
+    if (width < 48 || height < 24) {
+        return [] satisfies DetectedBox[];
+    }
+
+    const binarizedCanvas = binarizeCanvas(sourceCanvas);
+    const context = get2DContext(binarizedCanvas);
+    const { data } = context.getImageData(0, 0, width, height);
+    const columnInkCounts = new Uint16Array(width);
+
+    for (let x = 0; x < width; x += 1) {
+        let inkCount = 0;
+
+        for (let y = 0; y < height; y += 1) {
+            const offset = ((y * width) + x) * 4;
+            if (data[offset] < 128) {
+                inkCount += 1;
+            }
+        }
+
+        columnInkCounts[x] = inkCount;
+    }
+
+    const peakInk = columnInkCounts.reduce((maxInk, inkCount) => Math.max(maxInk, inkCount), 0);
+    const minimumInk = Math.max(
+        12,
+        Math.round(height * 0.05),
+        Math.round(peakInk * 0.12),
+    );
+    const maxBridgeGap = Math.max(1, Math.round(width * 0.003));
+    const padding = Math.max(4, Math.round(width * 0.025));
+    const minimumColumnWidth = Math.max(18, Math.round(width * 0.12));
+    const columns: Array<{ left: number; right: number }> = [];
+    let activeLeft = -1;
+    let lastInkColumn = -1;
+
+    for (let x = 0; x < width; x += 1) {
+        if (columnInkCounts[x] >= minimumInk) {
+            if (activeLeft === -1) {
+                activeLeft = x;
+            }
+            lastInkColumn = x;
+            continue;
+        }
+
+        if (activeLeft === -1 || lastInkColumn === -1) {
+            continue;
+        }
+
+        if ((x - lastInkColumn) <= maxBridgeGap) {
+            continue;
+        }
+
+        columns.push({
+            left: activeLeft,
+            right: lastInkColumn + 1,
+        });
+        activeLeft = -1;
+        lastInkColumn = -1;
+    }
+
+    if (activeLeft !== -1 && lastInkColumn !== -1) {
+        columns.push({
+            left: activeLeft,
+            right: lastInkColumn + 1,
+        });
+    }
+
+    const filteredColumns = columns
+        .map((column) => ({
+            left: clamp(column.left - padding, 0, width - 1),
+            right: clamp(column.right + padding, 1, width),
+        }))
+        .filter((column) => (column.right - column.left) >= minimumColumnWidth);
+
+    if (filteredColumns.length !== 2) {
+        return [] satisfies DetectedBox[];
+    }
+
+    const occupiedWidth = filteredColumns.reduce((sum, column) => sum + (column.right - column.left), 0);
+
+    if (occupiedWidth > Math.round(width * 0.88)) {
+        return [] satisfies DetectedBox[];
+    }
+
+    return filteredColumns
+        .sort((left, right) => right.left - left.left)
+        .map((column) => createDetectedBox(column.left, 0, column.right, height));
 }
 
 function createProjectionMask(sourceCanvas: WorkingCanvas) {
