@@ -42,7 +42,7 @@ When changing permissions, background execution, popup behavior, or shortcut flo
 
 - `npm run build:chrome`
 - `npm run build:firefox`
-- `npm run prepare:paddleocr-onnx`: downloads official PaddleOCR repos, converts them to ONNX, and refreshes the committed PaddleOCR bundle metadata for the experimental `paddleonnx` backend.
+- `npm run prepare:paddleocr-onnx`: downloads official PaddleOCR repos, converts them to ONNX, normalizes unsupported `MaxPool ceil_mode` attributes for ONNX Runtime Web acceleration, and refreshes the committed PaddleOCR bundle metadata for the experimental `paddleonnx` backend.
 - `npm run test:e2e`: builds the Chromium extension with the default OCR model and runs the Playwright suite.
 - `npm run test:e2e:tesseract`: runs the Chromium Playwright OCR suite with the bundled `tesseract` backend.
 - `npm run test:e2e:scribejs`: runs the Chromium Playwright OCR suite with the experimental `scribejs` backend.

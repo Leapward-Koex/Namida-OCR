@@ -14,6 +14,14 @@ import subprocess
 import sys
 from pathlib import Path
 
+try:
+    import onnx
+except ModuleNotFoundError as exc:  # pragma: no cover - developer environment guard
+    raise SystemExit(
+        "The 'onnx' Python package is required to normalize exported PaddleOCR models for ONNX Runtime Web. "
+        "Install it in your active Python environment before running this script."
+    ) from exc
+
 
 DEFAULT_DET_REPO = "PaddlePaddle/PP-OCRv5_server_det"
 DEFAULT_REC_REPO = "PaddlePaddle/PP-OCRv5_server_rec"
@@ -159,6 +167,13 @@ def convert_model(source_dir: Path, target_dir: Path) -> None:
     if onnx_files[0] != canonical_name:
         shutil.move(str(onnx_files[0]), canonical_name)
 
+    normalized_nodes = normalize_maxpool_ceil_mode(canonical_name)
+    if normalized_nodes:
+        print(
+            f"Normalized MaxPool ceil_mode to 0 in {canonical_name}: "
+            + ", ".join(normalized_nodes)
+        )
+
 
 def find_model_dir(root: Path) -> Path:
     pdmodel_files = sorted(root.rglob("*.pdmodel"))
@@ -177,6 +192,25 @@ def find_dictionary_file(root: Path) -> Path:
         raise SystemExit(f"Could not find a recognition dictionary file under {root}")
 
     return candidates[0]
+
+
+def normalize_maxpool_ceil_mode(model_path: Path) -> list[str]:
+    model = onnx.load(model_path)
+    normalized_nodes: list[str] = []
+
+    for node in model.graph.node:
+        if node.op_type != "MaxPool":
+            continue
+
+        for attr in node.attribute:
+            if attr.name == "ceil_mode" and attr.i != 0:
+                attr.i = 0
+                normalized_nodes.append(node.name or "<unnamed MaxPool>")
+
+    if normalized_nodes:
+        onnx.save(model, model_path)
+
+    return normalized_nodes
 
 
 def require_command(command: str) -> None:

@@ -94,7 +94,7 @@
 - You can choose the OCR backend at build time with `NAMIDA_OCR_BACKEND` or `webpack --env ocr_backend=...`.
 - Available build-time backends are `tesseract`, experimental `scribejs`, and experimental `paddleonnx`.
 - `paddleonnx` uses bundled local assets under `models/paddleocr/` plus bundled `onnxruntime-web` JSEP/WASM assets so it can prefer WebGPU when the browser exposes it and fall back to WASM locally. Set `NAMIDA_PADDLE_ONNX_DISABLE_WASM_FALLBACK=1` or pass `--env paddleonnx_disable_wasm_fallback=true` to make accelerated provider failures fatal for no-fallback testing.
-- `npm run prepare:paddleocr-onnx` runs the regeneration helper at [prepare-paddleocr-onnx.py](/c:/Dev/Namida/prepare-paddleocr-onnx.py) to download official PaddleOCR repos, export ONNX files, and refresh the committed bundle metadata.
+- `npm run prepare:paddleocr-onnx` runs the regeneration helper at [prepare-paddleocr-onnx.py](/c:/Dev/Namida/prepare-paddleocr-onnx.py) to download official PaddleOCR repos, export ONNX files, normalize unsupported `MaxPool ceil_mode` attributes for ONNX Runtime Web acceleration, and refresh the committed bundle metadata.
 - `npm run test:e2e:tesseract`, `npm run test:e2e:scribejs`, and `npm run test:e2e:paddleonnx` run the Chromium Playwright OCR suite against a single backend without needing an extra `--backend` flag.
 - `npm run test:e2e:paddleonnx:no-fallback` runs the Chromium Playwright OCR suite against `paddleonnx` with WASM fallback disabled so WebGPU/WebNN failures are surfaced directly.
 - `npm run test:e2e:compare-backends` runs the Chromium Playwright OCR dataset against the `tesseract`, experimental `scribejs`, and experimental `paddleonnx` backends and writes `test-results/ocr-backend-comparison.json`.
