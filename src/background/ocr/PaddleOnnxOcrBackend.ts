@@ -96,7 +96,15 @@ type PaddleOnnxManifest = {
 
 type SessionBundle = {
     promise: Promise<ort.InferenceSession>;
+    providerNames: string[];
     session: ort.InferenceSession | null;
+    usesAcceleratedProvider: boolean;
+};
+
+type CreatedSession = {
+    providerNames: string[];
+    session: ort.InferenceSession;
+    usesAcceleratedProvider: boolean;
 };
 
 type PreparedCanvas = {
@@ -146,6 +154,15 @@ type RecognizedSegment = {
     index: number;
 };
 
+type NavigatorWithHardwareAcceleration = Navigator & {
+    gpu?: unknown;
+    ml?: unknown;
+};
+
+const ACCELERATED_SESSION_INIT_TIMEOUT_MS = 20_000;
+const ACCELERATED_INFERENCE_TIMEOUT_MS = 15_000;
+const DISABLE_WASM_FALLBACK = __NAMIDA_PADDLE_ONNX_DISABLE_WASM_FALLBACK__;
+
 export class PaddleOnnxOcrBackend implements OcrBackend {
     private static readonly logTag = PADDLE_ONNX_LOG_TAG;
     private static readonly detectorSessionKey = 'detector';
@@ -154,6 +171,8 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
     private static manifestPromise: Promise<PaddleOnnxManifest> | null = null;
     private static dictionaryPromise: Promise<string[]> | null = null;
     private static ortConfigured = false;
+    private static readonly disableWasmFallback = DISABLE_WASM_FALLBACK;
+    private static forceWasmOnly = false;
     private debugEnabled = false;
     private lastDebugSnapshot: OcrDebugSnapshot | null = null;
 
@@ -642,7 +661,12 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
         id: string,
     ): Promise<OcrRecognitionCandidate | null> {
         const tensor = prepareRecognitionTensor(sourceCanvas, recognizerConfig);
-        const result = await recognizerSession.run({ x: tensor });
+        const result = await this.runSessionWithFallback(
+            PaddleOnnxOcrBackend.recognizerSessionKey,
+            recognizerSession,
+            () => this.ensureRecognizerSession(),
+            (session) => session.run({ x: tensor }),
+        );
         const outputTensor = result[recognizerSession.outputNames[0]];
         return decodeRecognitionTensor(outputTensor, dictionary, id);
     }
@@ -653,7 +677,12 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
         config: DetectorConfig,
     ): Promise<DetectedBox[]> {
         const detectionInput = prepareDetectionTensor(sourceCanvas, config);
-        const detectionOutput = await detectorSession.run({ x: detectionInput.tensor });
+        const detectionOutput = await this.runSessionWithFallback(
+            PaddleOnnxOcrBackend.detectorSessionKey,
+            detectorSession,
+            () => this.ensureDetectorSession(),
+            (session) => session.run({ x: detectionInput.tensor }),
+        );
         const probabilityTensor = detectionOutput[detectorSession.outputNames[0]];
         return extractDetectedBoxes(
             probabilityTensor,
@@ -671,10 +700,7 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
             async () => {
                 const manifest = await this.getManifest();
                 const sessionUrl = runtime.getURL(`libs/paddleocr/${manifest.detector.model_path}`);
-                return ort.InferenceSession.create(sessionUrl, {
-                    executionProviders: ['wasm'],
-                    graphOptimizationLevel: 'all',
-                });
+                return this.createSession(sessionUrl);
             },
         );
     }
@@ -685,17 +711,102 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
             async () => {
                 const manifest = await this.getManifest();
                 const sessionUrl = runtime.getURL(`libs/paddleocr/${manifest.recognizer.model_path}`);
-                return ort.InferenceSession.create(sessionUrl, {
-                    executionProviders: ['wasm'],
-                    graphOptimizationLevel: 'all',
-                });
+                return this.createSession(sessionUrl);
             },
         );
     }
 
+    private async createSession(sessionUrl: string): Promise<CreatedSession> {
+        let lastError: unknown;
+        const sessionOptionCandidates = getSessionOptionCandidates(
+            PaddleOnnxOcrBackend.forceWasmOnly,
+            PaddleOnnxOcrBackend.disableWasmFallback,
+        );
+
+        if (sessionOptionCandidates.length === 0) {
+            throw new Error('No accelerated ONNX execution provider is available and Paddle ONNX WASM fallback is disabled for this build.');
+        }
+
+        for (const sessionOptions of sessionOptionCandidates) {
+            const providerNames = getExecutionProviderNames(sessionOptions.executionProviders);
+
+            try {
+                const session = await withTimeout(
+                    ort.InferenceSession.create(sessionUrl, sessionOptions),
+                    includesAcceleratedProvider(sessionOptions.executionProviders)
+                        ? ACCELERATED_SESSION_INIT_TIMEOUT_MS
+                        : 0,
+                    () => new Error(`Timed out creating ONNX session with providers: ${providerNames.join(', ')}`),
+                );
+
+                return {
+                    providerNames,
+                    session,
+                    usesAcceleratedProvider: includesAcceleratedProvider(sessionOptions.executionProviders),
+                };
+            } catch (error) {
+                lastError = error;
+                console.warn(
+                    PaddleOnnxOcrBackend.logTag,
+                    'Failed to create ONNX session',
+                    {
+                        error,
+                        providers: providerNames,
+                        sessionUrl,
+                    },
+                );
+            }
+        }
+
+        throw lastError ?? new Error(`Failed to create ONNX session for ${sessionUrl}`);
+    }
+
+    private async runSessionWithFallback<T>(
+        sessionKey: string,
+        session: ort.InferenceSession,
+        ensureSession: () => Promise<ort.InferenceSession>,
+        runInference: (activeSession: ort.InferenceSession) => Promise<T>,
+    ): Promise<T> {
+        let activeSession = await this.resolveActiveSession(sessionKey, session, ensureSession);
+        let hasRetriedWithWasm = false;
+
+        while (true) {
+            try {
+                return await withTimeout(
+                    runInference(activeSession),
+                    this.getInferenceTimeoutMs(sessionKey, activeSession),
+                    () => new Error(`Timed out running ONNX inference with accelerated provider for ${sessionKey}`),
+                );
+            } catch (error) {
+                if (
+                    PaddleOnnxOcrBackend.disableWasmFallback
+                    || !shouldFallbackToWasm(error)
+                    || hasRetriedWithWasm
+                    || !this.isAcceleratedSession(sessionKey, activeSession)
+                ) {
+                    throw error;
+                }
+
+                console.warn(
+                    PaddleOnnxOcrBackend.logTag,
+                    'Disabling accelerated execution provider after runtime failure',
+                    {
+                        error,
+                        sessionKey,
+                    },
+                );
+
+                PaddleOnnxOcrBackend.forceWasmOnly = true;
+                PaddleOnnxOcrBackend.sessions.clear();
+                activeSession = await ensureSession();
+                hasRetriedWithWasm = true;
+            }
+        }
+    }
+
     private async ensureSession(
         key: string,
-        createSession: () => Promise<ort.InferenceSession>,
+        createSession: () => Promise<CreatedSession>,
     ): Promise<ort.InferenceSession> {
         this.configureOnnxRuntime();
 
@@ -705,10 +816,25 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
         }
 
         const bundle: SessionBundle = {
+            providerNames: [],
             session: null,
-            promise: createSession().then((session) => {
-                bundle.session = session;
-                return session;
+            usesAcceleratedProvider: false,
+            promise: createSession().then((createdSession) => {
+                bundle.providerNames = createdSession.providerNames;
+                bundle.session = createdSession.session;
+                bundle.usesAcceleratedProvider = createdSession.usesAcceleratedProvider;
+                console.info(
+                    PaddleOnnxOcrBackend.logTag,
+                    'Initialized ONNX session',
+                    {
+                        accelerated: createdSession.usesAcceleratedProvider,
+                        providers: createdSession.providerNames,
+                        sessionKey: key,
+                        wasmFallbackDisabled: PaddleOnnxOcrBackend.disableWasmFallback,
+                        wasmOnly: PaddleOnnxOcrBackend.forceWasmOnly,
+                    },
+                );
+                return createdSession.session;
             }).catch((error) => {
                 PaddleOnnxOcrBackend.sessions.delete(key);
                 throw error;
@@ -724,14 +850,54 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
             return;
         }
 
+        if (PaddleOnnxOcrBackend.disableWasmFallback) {
+            console.info(
+                PaddleOnnxOcrBackend.logTag,
+                'Paddle ONNX WASM fallback is disabled for this build; accelerated provider failures will be fatal.',
+            );
+        }
+
         ort.env.wasm.proxy = false;
-        ort.env.wasm.numThreads = 1;
         ort.env.wasm.wasmPaths = {
-            mjs: runtime.getURL('libs/onnxruntime/ort-wasm-simd-threaded.mjs'),
-            wasm: runtime.getURL('libs/onnxruntime/ort-wasm-simd-threaded.wasm'),
+            mjs: runtime.getURL('libs/onnxruntime/ort-wasm-simd-threaded.jsep.mjs'),
+            wasm: runtime.getURL('libs/onnxruntime/ort-wasm-simd-threaded.jsep.wasm'),
         };
 
         PaddleOnnxOcrBackend.ortConfigured = true;
+    }
+
+    private getInferenceTimeoutMs(sessionKey: string, session: ort.InferenceSession): number {
+        return this.isAcceleratedSession(sessionKey, session)
+            ? ACCELERATED_INFERENCE_TIMEOUT_MS
+            : 0;
+    }
+
+    private async resolveActiveSession(
+        sessionKey: string,
+        session: ort.InferenceSession,
+        ensureSession: () => Promise<ort.InferenceSession>,
+    ): Promise<ort.InferenceSession> {
+        const bundle = PaddleOnnxOcrBackend.sessions.get(sessionKey);
+
+        if (bundle?.session) {
+            return bundle.session;
+        }
+
+        if (PaddleOnnxOcrBackend.forceWasmOnly) {
+            return ensureSession();
+        }
+
+        return session;
+    }
+
+    private isAcceleratedSession(sessionKey: string, session: ort.InferenceSession): boolean {
+        const bundle = PaddleOnnxOcrBackend.sessions.get(sessionKey);
+
+        if (!bundle || bundle.session !== session) {
+            return true;
+        }
+
+        return bundle.usesAcceleratedProvider;
     }
 
     private async getManifest(): Promise<PaddleOnnxManifest> {
@@ -769,6 +935,104 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
         return PaddleOnnxOcrBackend.dictionaryPromise;
     }
 
+}
+
+function getSessionOptionCandidates(
+    forceWasmOnly: boolean,
+    disableWasmFallback: boolean,
+): ort.InferenceSession.SessionOptions[] {
+    if (forceWasmOnly && !disableWasmFallback) {
+        return [
+            buildSessionOptions([{ name: 'wasm' }]),
+        ];
+    }
+
+    const browserNavigator = getNavigatorWithHardwareAcceleration();
+    const candidates: ort.InferenceSession.SessionOptions[] = [];
+
+    if (browserNavigator?.gpu) {
+        candidates.push(buildSessionOptions([{ name: 'webgpu' }]));
+    }
+
+    if (browserNavigator?.ml) {
+        candidates.push(buildSessionOptions([{ 
+            deviceType: 'gpu',
+            name: 'webnn',
+            powerPreference: 'high-performance',
+        }]));
+    }
+
+    if (!disableWasmFallback) {
+        candidates.push(buildSessionOptions([{ name: 'wasm' }]));
+    }
+
+    return candidates;
+}
+
+function buildSessionOptions(
+    executionProviders: readonly ort.InferenceSession.ExecutionProviderConfig[],
+): ort.InferenceSession.SessionOptions {
+    return {
+        executionProviders,
+        graphOptimizationLevel: 'all',
+    };
+}
+
+function includesAcceleratedProvider(
+    executionProviders: readonly ort.InferenceSession.ExecutionProviderConfig[] | undefined,
+): boolean {
+    return getExecutionProviderNames(executionProviders).some((providerName) => providerName !== 'wasm');
+}
+
+function getExecutionProviderNames(
+    executionProviders: readonly ort.InferenceSession.ExecutionProviderConfig[] | undefined,
+): string[] {
+    return (executionProviders ?? []).map((provider) => typeof provider === 'string' ? provider : provider.name);
+}
+
+function getNavigatorWithHardwareAcceleration(): NavigatorWithHardwareAcceleration | null {
+    if (typeof navigator === 'undefined') {
+        return null;
+    }
+
+    return navigator as NavigatorWithHardwareAcceleration;
+}
+
+function withTimeout<T>(
+    promise: Promise<T>,
+    timeoutMs: number,
+    createError: () => Error,
+): Promise<T> {
+    if (timeoutMs <= 0) {
+        return promise;
+    }
+
+    return new Promise<T>((resolve, reject) => {
+        const timeoutId = globalThis.setTimeout(() => {
+            reject(createError());
+        }, timeoutMs);
+
+        promise.then(
+            (value) => {
+                globalThis.clearTimeout(timeoutId);
+                resolve(value);
+            },
+            (error) => {
+                globalThis.clearTimeout(timeoutId);
+                reject(error);
+            },
+        );
+    });
+}
+
+function shouldFallbackToWasm(error: unknown): boolean {
+    const errorText = error instanceof Error
+        ? `${error.message}\n${error.stack ?? ''}`
+        : String(error);
+
+    return errorText.includes('Timed out running ONNX inference with accelerated provider')
+        || errorText.includes('using ceil() in shape computation is not yet supported for MaxPool')
+        || (errorText.includes('MaxPool') && errorText.includes('not yet supported'));
 }
 
 function prepareDetectionTensor(sourceCanvas: WorkingCanvas, config: DetectorConfig) {

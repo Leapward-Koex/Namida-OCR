@@ -22,7 +22,7 @@ When changing permissions, background execution, popup behavior, or shortcut flo
 - `src/background/ocr/OcrService.ts`: OCR backend selection and lifecycle management for offscreen/background OCR.
 - `src/background/ocr/TesseractOcrBackend.ts`: bundled Tesseract worker creation and OCR cleanup/scoring behavior.
 - `src/background/ocr/ScribeOcrBackend.ts`: experimental `scribe.js-ocr` backend wired for local extension assets only.
-- `src/background/ocr/PaddleOnnxOcrBackend.ts`: experimental PaddleOCR ONNX backend using bundled local ONNX assets plus `onnxruntime-web`.
+- `src/background/ocr/PaddleOnnxOcrBackend.ts`: experimental PaddleOCR ONNX backend using bundled local ONNX assets plus `onnxruntime-web`, preferring bundled WebGPU-capable JSEP runtime assets when available.
 - `src/offscreen/index.ts`: Chromium offscreen document entrypoint for OCR and furigana work when the background context cannot host workers directly.
 - `src/content/index.ts`: content-side snipping, OCR flow, clipboard, overlay, and floating window behavior.
 - `src/ui/index.ts`: popup settings UI, browser-specific shortcut UX, and speech voice availability messaging.
@@ -33,7 +33,7 @@ When changing permissions, background execution, popup behavior, or shortcut flo
 - OCR, upscaling, and furigana generation are expected to run locally from the extension bundle.
 - Keep traineddata, WASM, and model assets bundled locally. Do not switch this project to CDN downloads or server-backed OCR.
 - Any `scribe.js-ocr` integration must continue to use extension-local language/model assets. Do not rely on its CDN fallback.
-- Any `paddleonnx` integration must continue to use extension-local ONNX, dictionary, manifest, and ONNX Runtime WASM assets. Do not rely on remote model fetches or runtime downloads.
+- Any `paddleonnx` integration must continue to use extension-local ONNX, dictionary, manifest, and ONNX Runtime JSEP/WASM assets. Do not rely on remote model fetches or runtime downloads.
 - Do not add any extension feature that requires calling an application server to function.
 - Browser/system capabilities such as clipboard access or speech synthesis are acceptable. They are not a substitute for adding project servers.
 - The only HTTP server in this repo is `tests/serve-fixtures.mjs`, which exists solely to serve local Playwright fixtures during tests. It is not part of product architecture.
@@ -47,6 +47,7 @@ When changing permissions, background execution, popup behavior, or shortcut flo
 - `npm run test:e2e:tesseract`: runs the Chromium Playwright OCR suite with the bundled `tesseract` backend.
 - `npm run test:e2e:scribejs`: runs the Chromium Playwright OCR suite with the experimental `scribejs` backend.
 - `npm run test:e2e:paddleonnx`: runs the Chromium Playwright OCR suite with the experimental `paddleonnx` backend.
+- `npm run test:e2e:paddleonnx:no-fallback`: runs the Chromium Playwright OCR suite with the experimental `paddleonnx` backend and disables the WASM fallback so accelerated-provider failures surface directly.
 - `npm run test:e2e:compare-backends`: builds and runs the Playwright OCR dataset against the `tesseract`, experimental `scribejs`, and experimental `paddleonnx` backends, then writes a comparison summary to `test-results/`.
 - `npm run test:e2e:compare-models`: runs the OCR dataset against the bundled `jpn*` models and writes comparison output to `test-results/`.
 

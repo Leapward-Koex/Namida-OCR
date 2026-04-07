@@ -7,14 +7,20 @@ const DEFAULT_OCR_MODEL = 'jpn_vert';
 const DEFAULT_OCR_BACKEND = 'tesseract';
 const MIN_PLAYWRIGHT_WORKERS = 5;
 const baseResultsDir = path.resolve(process.cwd(), 'test-results');
-const { backend, headed, model, resultsDir, playwrightWorkers } = parseArgs(args);
+const {
+    backend,
+    disablePaddleOnnxWasmFallback,
+    headed,
+    model,
+    resultsDir,
+    playwrightWorkers,
+} = parseArgs(args);
 const defaultPlaywrightWorkers = backend === 'paddleonnx' ? String(MIN_PLAYWRIGHT_WORKERS) : '';
 const rootCaseResultsDir = path.join(baseResultsDir, 'ocr-case-results');
 const rootSummaryPath = path.join(baseResultsDir, 'ocr-accuracy-summary.json');
 const rootCombinedResultsPath = path.join(baseResultsDir, 'ocr-case-results.json');
 
-console.log(`Building extension with OCR model '${model}' using backend '${backend}'`);
-const buildExitCode = await runCommand(process.execPath, [
+const buildArgs = [
     './node_modules/webpack-cli/bin/cli.js',
     '--env',
     'browser=chrome',
@@ -24,7 +30,19 @@ const buildExitCode = await runCommand(process.execPath, [
     `ocr_backend=${backend}`,
     '--mode',
     'production',
-]);
+];
+
+if (disablePaddleOnnxWasmFallback && backend === 'paddleonnx') {
+    buildArgs.push('--env', 'paddleonnx_disable_wasm_fallback=true');
+}
+
+console.log(
+    `Building extension with OCR model '${model}' using backend '${backend}'`
+    + (disablePaddleOnnxWasmFallback && backend === 'paddleonnx'
+        ? ' with Paddle ONNX WASM fallback disabled'
+        : ''),
+);
+const buildExitCode = await runCommand(process.execPath, buildArgs);
 
 if (buildExitCode !== 0) {
     process.exit(buildExitCode ?? 1);
@@ -54,12 +72,17 @@ if (playwrightWorkers) {
 }
 
 const testExitCode = await runCommand(process.execPath, runArgs, childEnv);
-await mirrorResults(resultsDir, model, backend);
+await mirrorResults(resultsDir, model, backend, disablePaddleOnnxWasmFallback);
 process.exit(testExitCode ?? 1);
 
-async function mirrorResults(targetResultsDir, selectedModel, selectedBackend) {
+async function mirrorResults(targetResultsDir, selectedModel, selectedBackend, selectedDisablePaddleOnnxWasmFallback) {
     if (path.resolve(targetResultsDir) === baseResultsDir) {
-        await annotateSummary(rootSummaryPath, selectedModel, selectedBackend);
+        await annotateSummary(
+            rootSummaryPath,
+            selectedModel,
+            selectedBackend,
+            selectedDisablePaddleOnnxWasmFallback,
+        );
         return;
     }
 
@@ -69,15 +92,26 @@ async function mirrorResults(targetResultsDir, selectedModel, selectedBackend) {
     await copyIfPresent(rootCaseResultsDir, path.join(targetResultsDir, 'ocr-case-results'));
     await copyIfPresent(rootCombinedResultsPath, path.join(targetResultsDir, 'ocr-case-results.json'));
     await copyIfPresent(rootSummaryPath, path.join(targetResultsDir, 'ocr-accuracy-summary.json'));
-    await annotateSummary(path.join(targetResultsDir, 'ocr-accuracy-summary.json'), selectedModel, selectedBackend);
+    await annotateSummary(
+        path.join(targetResultsDir, 'ocr-accuracy-summary.json'),
+        selectedModel,
+        selectedBackend,
+        selectedDisablePaddleOnnxWasmFallback,
+    );
 }
 
-async function annotateSummary(summaryPath, selectedModel, selectedBackend) {
+async function annotateSummary(
+    summaryPath,
+    selectedModel,
+    selectedBackend,
+    selectedDisablePaddleOnnxWasmFallback,
+) {
     try {
         const summaryBody = await fs.readFile(summaryPath, 'utf8');
         const summary = JSON.parse(summaryBody);
         summary.backend = selectedBackend;
         summary.model = selectedModel;
+        summary.disablePaddleOnnxWasmFallback = Boolean(selectedDisablePaddleOnnxWasmFallback && selectedBackend === 'paddleonnx');
         await fs.writeFile(summaryPath, JSON.stringify(summary, null, 2));
     } catch {
         // Leave the run output unchanged if the summary was not produced.
@@ -98,6 +132,7 @@ async function copyIfPresent(sourcePath, targetPath) {
 
 function parseArgs(commandArgs) {
     let backend = normalizeBackend(process.env.NAMIDA_OCR_BACKEND?.trim() || DEFAULT_OCR_BACKEND);
+    let disablePaddleOnnxWasmFallback = normalizeBooleanFlag(process.env.NAMIDA_PADDLE_ONNX_DISABLE_WASM_FALLBACK?.trim() || '');
     let headed = false;
     let model = process.env.NAMIDA_OCR_MODEL?.trim() || DEFAULT_OCR_MODEL;
     let resultsSubdir = '';
@@ -114,6 +149,11 @@ function parseArgs(commandArgs) {
         if (argument === '--backend') {
             backend = normalizeBackend(readRequiredValue(commandArgs, index, '--backend'));
             index += 1;
+            continue;
+        }
+
+        if (argument === '--disable-paddle-wasm-fallback') {
+            disablePaddleOnnxWasmFallback = true;
             continue;
         }
 
@@ -140,6 +180,7 @@ function parseArgs(commandArgs) {
 
     return {
         backend,
+        disablePaddleOnnxWasmFallback,
         headed,
         model,
         resultsDir: resolveResultsDir(resultsSubdir),
@@ -188,6 +229,14 @@ function normalizeConfiguredWorkers(value) {
     }
 
     return normalizeWorkers(value);
+}
+
+function normalizeBooleanFlag(value) {
+    const trimmedValue = value.trim().toLowerCase();
+    return trimmedValue === '1'
+        || trimmedValue === 'true'
+        || trimmedValue === 'yes'
+        || trimmedValue === 'on';
 }
 
 function normalizeBackend(value) {

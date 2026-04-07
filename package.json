@@ -11,6 +11,7 @@
     "test:e2e:tesseract": "node ./run-playwright-e2e.mjs --backend tesseract",
     "test:e2e:scribejs": "node ./run-playwright-e2e.mjs --backend scribejs",
     "test:e2e:paddleonnx": "node ./run-playwright-e2e.mjs --backend paddleonnx",
+    "test:e2e:paddleonnx:no-fallback": "node ./run-playwright-e2e.mjs --backend paddleonnx --disable-paddle-wasm-fallback",
     "test:e2e:compare-backends": "node ./compare-ocr-backends.mjs",
     "test:e2e:compare-models": "node ./compare-ocr-models.mjs",
     "test:e2e:headed": "node ./run-playwright-e2e.mjs --headed",

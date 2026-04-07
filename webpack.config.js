@@ -46,11 +46,30 @@ function getBundledLanguagePatterns() {
         }));
 }
 
+function normalizeBooleanEnvFlag(value) {
+    if (typeof value === 'boolean') {
+        return value;
+    }
+
+    if (typeof value !== 'string') {
+        return false;
+    }
+
+    const normalizedValue = value.trim().toLowerCase();
+    return normalizedValue === '1'
+        || normalizedValue === 'true'
+        || normalizedValue === 'yes'
+        || normalizedValue === 'on';
+}
+
 module.exports = (env) => {
     const browser = env.browser || 'firefox';
     const buildNumber = env.build_number || "1.0.0";
     const ocrModel = env.ocr_model || process.env.NAMIDA_OCR_MODEL || 'jpn_vert';
     const ocrBackend = env.ocr_backend || process.env.NAMIDA_OCR_BACKEND || 'tesseract';
+    const disablePaddleOnnxWasmFallback = normalizeBooleanEnvFlag(
+        env.paddleonnx_disable_wasm_fallback ?? process.env.NAMIDA_PADDLE_ONNX_DISABLE_WASM_FALLBACK,
+    );
     const resolvedOcrBackend = ocrBackend === 'scribejs'
         ? 'scribejs'
         : ocrBackend === 'paddleonnx'
@@ -142,6 +161,7 @@ module.exports = (env) => {
                 DISABLE_DOCX_XLSX: JSON.stringify(true),
                 __NAMIDA_OCR_BACKEND__: JSON.stringify(resolvedOcrBackend),
                 __NAMIDA_OCR_MODEL__: JSON.stringify(ocrModel),
+                __NAMIDA_PADDLE_ONNX_DISABLE_WASM_FALLBACK__: JSON.stringify(disablePaddleOnnxWasmFallback),
             }),
             new CopyPlugin({
                 patterns: [
@@ -156,6 +176,8 @@ module.exports = (env) => {
                     { from: 'node_modules/tesseract.js/dist/worker.min.js', to: 'libs/tesseract-worker/worker.min.js' },
                     { from: 'node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.mjs', to: 'libs/onnxruntime/ort-wasm-simd-threaded.mjs' },
                     { from: 'node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.wasm', to: 'libs/onnxruntime/ort-wasm-simd-threaded.wasm' },
+                    { from: 'node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.mjs', to: 'libs/onnxruntime/ort-wasm-simd-threaded.jsep.mjs' },
+                    { from: 'node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.wasm', to: 'libs/onnxruntime/ort-wasm-simd-threaded.jsep.wasm' },
                     ...getBundledLanguagePatterns(),
                     { from: 'models/paddleocr', to: 'libs/paddleocr' },
                     { from: 'node_modules/@upscalerjs/esrgan-medium/models/x2', to: 'libs/tensorflow/x2' },
