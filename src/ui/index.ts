@@ -1,5 +1,15 @@
 import { commands, runtime, storage, tabs } from "webextension-polyfill";
-import { FuriganaTypeString, Settings, StorageKey, UpscalingModeString } from "../interfaces/Storage";
+import {
+    DEFAULT_OCR_BACKEND,
+    DEFAULT_OCR_MODEL,
+    DEFAULT_PADDLE_ONNX_GPU_ENABLED,
+    FuriganaTypeString,
+    Settings,
+    StorageKey,
+    type OcrBackendKind,
+    TesseractTextDirectionString,
+    UpscalingModeString,
+} from "../interfaces/Storage";
 import { SpeechSynthesisHandler } from "../content/SpeechHandler";
 import { NamidaVoice, TTSWrapper } from "../content/TTSWrapper";
 import { BrowserType, getCurrentBrowser, isWindows } from "../interfaces/browserInfo";
@@ -8,8 +18,12 @@ import { FuriganaType } from "../background/FuriganaHandler";
 document.addEventListener('DOMContentLoaded', () => {
     const windowTimeoutSelect = document.getElementById("window-timeout") as HTMLSelectElement;
     const furiganaTypeSelect = document.getElementById("furigana-type") as HTMLSelectElement;
+    const ocrBackendSelect = document.getElementById("ocr-backend") as HTMLSelectElement;
     const upscalingSelect = document.getElementById("upscaling-mode") as HTMLSelectElement;
-    const pageSegSelect = document.getElementById("page-seg-mode") as HTMLSelectElement;
+    const tesseractTextDirectionSelect = document.getElementById("tesseract-text-direction") as HTMLSelectElement;
+    const tesseractSettings = document.getElementById("tesseract-settings") as HTMLDivElement;
+    const paddleSettings = document.getElementById("paddle-settings") as HTMLDivElement;
+    const paddleGpuCheckbox = document.getElementById("enable-paddle-gpu") as HTMLInputElement;
     const voiceSelect = document.getElementById("voice-selection") as HTMLSelectElement;
     const saveOcrCropCheckbox = document.getElementById("save-ocr-crop") as HTMLInputElement;
     const showSpeakButtonCheckbox = document.getElementById("show-speak-button") as HTMLInputElement;
@@ -17,7 +31,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const speakeDemoButton = document.getElementById("voice-demo-button") as HTMLButtonElement;
     const changeShortcut = document.getElementById("change-shortcut") as HTMLButtonElement;
 
-    loadSettings(windowTimeoutSelect, furiganaTypeSelect, upscalingSelect, pageSegSelect, saveOcrCropCheckbox, showSpeakButtonCheckbox);
+    loadSettings(
+        windowTimeoutSelect,
+        furiganaTypeSelect,
+        ocrBackendSelect,
+        upscalingSelect,
+        tesseractTextDirectionSelect,
+        paddleGpuCheckbox,
+        saveOcrCropCheckbox,
+        showSpeakButtonCheckbox,
+    ).then(() => {
+        updateBackendSettingsVisibility(ocrBackendSelect.value as OcrBackendKind, tesseractSettings, paddleSettings);
+    });
 
     // Attach listeners to save new values
     furiganaTypeSelect.addEventListener("change", () => {
@@ -33,15 +58,24 @@ document.addEventListener('DOMContentLoaded', () => {
         storage.sync.set(record);
     });
 
+    ocrBackendSelect.addEventListener("change", () => {
+        const record: Record<string, unknown> = {};
+        record[StorageKey.OcrBackend] = ocrBackendSelect.value;
+        updateBackendSettingsVisibility(ocrBackendSelect.value as OcrBackendKind, tesseractSettings, paddleSettings);
+        storage.sync.set(record);
+    });
+
     upscalingSelect.addEventListener("change", () => {
         const record: Record<string, unknown> = {};
         record[StorageKey.UpscalingMode] = upscalingSelect.value;
         storage.sync.set(record);
     });
 
-    pageSegSelect.addEventListener("change", () => {
+    tesseractTextDirectionSelect.addEventListener("change", () => {
         const record: Record<string, unknown> = {};
-        record[StorageKey.PageSegMode] = pageSegSelect.value;
+        record[StorageKey.OcrModel] = tesseractTextDirectionSelect.value === TesseractTextDirectionString.Horizontal
+            ? 'jpn'
+            : 'jpn_vert';
         storage.sync.set(record);
     });
 
@@ -56,6 +90,12 @@ document.addEventListener('DOMContentLoaded', () => {
     saveOcrCropCheckbox.addEventListener("change", () => {
         const record: Record<string, unknown> = {};
         record[StorageKey.SaveOcrCrop] = saveOcrCropCheckbox.checked;
+        storage.sync.set(record);
+    });
+
+    paddleGpuCheckbox.addEventListener("change", () => {
+        const record: Record<string, unknown> = {};
+        record[StorageKey.PaddleOnnxGpuEnabled] = paddleGpuCheckbox.checked;
         storage.sync.set(record);
     });
 
@@ -117,8 +157,10 @@ document.addEventListener('DOMContentLoaded', () => {
 async function loadSettings(
     windowTimeoutSelect: HTMLSelectElement,
     furiganaTypeSelect: HTMLSelectElement,
+    ocrBackendSelect: HTMLSelectElement,
     upscalingSelect: HTMLSelectElement,
-    pageSegSelect: HTMLSelectElement,
+    tesseractTextDirectionSelect: HTMLSelectElement,
+    paddleGpuCheckbox: HTMLInputElement,
     saveOcrCropCheckbox: HTMLInputElement,
     showSpeakButtonCheckbox: HTMLInputElement
 ) {
@@ -129,14 +171,43 @@ async function loadSettings(
     updateFuriganaExample(furiganaTypeSelect.value as FuriganaTypeString)
     windowTimeoutSelect.value =
         (values[StorageKey.WindowTimeout] as string | undefined) || "30000";
+    ocrBackendSelect.value =
+        normalizePopupBackend((values[StorageKey.OcrBackend] as string | undefined) ?? DEFAULT_OCR_BACKEND);
     upscalingSelect.value =
         (values[StorageKey.UpscalingMode] as string | undefined) || UpscalingModeString.Canvas;
-    pageSegSelect.value =
-        (values[StorageKey.PageSegMode] as string | undefined) || "single-block-vertical";
+    tesseractTextDirectionSelect.value = getTesseractTextDirectionFromModel(
+        (values[StorageKey.OcrModel] as string | undefined) ?? DEFAULT_OCR_MODEL,
+    );
+    paddleGpuCheckbox.checked =
+        (values[StorageKey.PaddleOnnxGpuEnabled] as boolean | undefined) ?? DEFAULT_PADDLE_ONNX_GPU_ENABLED;
     saveOcrCropCheckbox.checked =
         (values[StorageKey.SaveOcrCrop] as boolean | undefined) ?? false;
     showSpeakButtonCheckbox.checked =
         (values[StorageKey.ShowSpeakButton] as boolean | undefined) ?? true;
+}
+
+function normalizePopupBackend(backend: string | undefined): OcrBackendKind {
+    if (backend === 'paddleonnx') {
+        return backend;
+    }
+
+    return 'tesseract';
+}
+
+function getTesseractTextDirectionFromModel(model: string | undefined): TesseractTextDirectionString {
+    return model?.trim() === 'jpn'
+        ? TesseractTextDirectionString.Horizontal
+        : TesseractTextDirectionString.Vertical;
+}
+
+function updateBackendSettingsVisibility(
+    backend: OcrBackendKind,
+    tesseractSettings: HTMLElement,
+    paddleSettings: HTMLElement,
+) {
+    const isPaddleBackend = backend === 'paddleonnx';
+    tesseractSettings.hidden = isPaddleBackend;
+    paddleSettings.hidden = !isPaddleBackend;
 }
 
 /**

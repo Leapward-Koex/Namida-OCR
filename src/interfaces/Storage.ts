@@ -4,6 +4,8 @@ import { storage } from "webextension-polyfill";
 import { FuriganaType } from "../background/FuriganaHandler";
 
 export enum StorageKey {
+    OcrBackend = "OcrBackend",
+    PaddleOnnxGpuEnabled = "PaddleOnnxGpuEnabled",
     UpscalingMode = "UpscalingMode",
     PageSegMode = "PageSegMode",
     OcrModel = "OcrModel",
@@ -17,6 +19,7 @@ export enum StorageKey {
 
 export const DEFAULT_OCR_MODEL = __NAMIDA_OCR_MODEL__;
 export type OcrBackendKind = 'tesseract' | 'scribejs' | 'paddleonnx';
+export const DEFAULT_PADDLE_ONNX_GPU_ENABLED = true;
 
 function normalizeOcrBackendKind(backend: string): OcrBackendKind {
     if (backend === 'scribejs' || backend === 'paddleonnx') {
@@ -45,6 +48,11 @@ export enum PageSegModeString {
     SingleBlock = 'single-block',
     SingleBlockVertical = 'single-block-vertical',
     Auto = 'auto'
+}
+
+export enum TesseractTextDirectionString {
+    Horizontal = 'horizontal',
+    Vertical = 'vertical'
 }
 
 export class Settings {
@@ -111,6 +119,16 @@ export class Settings {
     public static async getUpscalingMode() {
         const values = await storage.sync.get(StorageKey.UpscalingMode);
         return this.getUpscalingModeFromString((values[StorageKey.UpscalingMode] as string | undefined));
+    }
+
+    public static async getOcrBackend() {
+        const values = await storage.sync.get(StorageKey.OcrBackend);
+        return normalizeOcrBackendKind((values[StorageKey.OcrBackend] as string | undefined) ?? DEFAULT_OCR_BACKEND);
+    }
+
+    public static async getPaddleOnnxGpuEnabled() {
+        const values = await storage.sync.get(StorageKey.PaddleOnnxGpuEnabled);
+        return (values[StorageKey.PaddleOnnxGpuEnabled] as boolean | undefined) ?? DEFAULT_PADDLE_ONNX_GPU_ENABLED;
     }
 
     public static async getPageSegMode() {

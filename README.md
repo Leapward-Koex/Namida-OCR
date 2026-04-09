@@ -69,6 +69,14 @@
   - **Linear** – Uses basic canvas scaling (faster but lower quality).  
   - **ESRGAN** – AI-based upscaling for sharper text.
 
+- **OCR Backend**
+  - **Tesseract** – Faster, but usually less accurate.
+  - **PaddleOCR** – Slower, but usually more accurate.
+  - The popup can switch between `tesseract` and experimental `paddleonnx`.
+  - Tesseract also exposes a **Text direction** setting in the popup, which switches between `jpn` and `jpn_vert`.
+  - Tesseract page segmentation is now chosen automatically from that text direction: vertical uses single-block vertical and horizontal uses single-block.
+  - **Enable GPU support** is only shown for PaddleOCR in the popup and controls whether Paddle attempts WebGPU/WebNN before local WASM fallback.
+
 - **Supported Languages**  
   - Japanese (jpn_vert)
 
@@ -91,7 +99,8 @@
 
 - The default OCR backend is `tesseract`.
 - The OCR runtime and backend implementations live under `src/background/ocr/`.
-- You can choose the OCR backend at build time with `NAMIDA_OCR_BACKEND` or `webpack --env ocr_backend=...`.
+- The popup can switch between bundled `tesseract` and experimental `paddleonnx` at runtime in normal builds.
+- You can still choose the default OCR backend at build time with `NAMIDA_OCR_BACKEND` or `webpack --env ocr_backend=...`.
 - Available build-time backends are `tesseract`, experimental `scribejs`, and experimental `paddleonnx`.
 - `paddleonnx` uses bundled local assets under `models/paddleocr/` plus bundled `onnxruntime-web` JSEP/WASM assets so it can prefer WebGPU when the browser exposes it and fall back to WASM locally. Set `NAMIDA_PADDLE_ONNX_DISABLE_WASM_FALLBACK=1` or pass `--env paddleonnx_disable_wasm_fallback=true` to make accelerated provider failures fatal for no-fallback testing.
 - `npm run prepare:paddleocr-onnx` runs the regeneration helper at [prepare-paddleocr-onnx.py](/c:/Dev/Namida/prepare-paddleocr-onnx.py) to download official PaddleOCR repos, export ONNX files, normalize unsupported `MaxPool ceil_mode` attributes for ONNX Runtime Web acceleration, and refresh the committed bundle metadata.

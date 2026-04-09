@@ -2,23 +2,124 @@ import { Settings } from "../interfaces/Storage";
 import { SpeechSynthesisHandler } from "./SpeechHandler";
 import { TTSWrapper } from "./TTSWrapper";
 
+type FloatingWindowConfig = {
+    html: string | undefined;
+    text: string | undefined;
+};
+
+type FloatingWindowState = {
+    html?: string;
+    loading?: boolean;
+    text?: string;
+    title: string;
+};
+
 export class FloatingWindow {
     private static floatingMessageEl: HTMLDivElement | null = null;
-    private speechHandler = new SpeechSynthesisHandler("ja-JP");
-    static floatingMessageTimer: number | undefined;
+    private static floatingMessageTimer: number | undefined;
+    private static titleEl: HTMLSpanElement | null = null;
+    private static textContainerEl: HTMLDivElement | null = null;
+    private static buttonRowEl: HTMLDivElement | null = null;
+    private static speakButtonEl: HTMLButtonElement | null = null;
+    private static isLoading = false;
+    private static renderToken = 0;
+    private static currentText: string | undefined;
+    private static readonly speechHandler = new SpeechSynthesisHandler("ja-JP");
 
-    constructor(config: { text: string | undefined, html: string | undefined }) {
-        // Remove existing message if it's still visible
-        if (FloatingWindow.floatingMessageEl) {
-            FloatingWindow.floatingMessageEl.remove();
-            FloatingWindow.floatingMessageEl = null;
-            if (FloatingWindow.floatingMessageTimer) {
-                window.clearTimeout(FloatingWindow.floatingMessageTimer);
-                FloatingWindow.floatingMessageTimer = undefined;
-            }
+    constructor(config: FloatingWindowConfig) {
+        FloatingWindow.showResult(config);
+    }
+
+    public static showStatus(message = "Scanning text...") {
+        this.render({
+            loading: true,
+            text: message,
+            title: "Scanning text...",
+        });
+    }
+
+    public static showFailure(message?: string) {
+        this.render({
+            text: message,
+            title: "Failed to recognize text, please try again.",
+        });
+    }
+
+    public static showResult(config: FloatingWindowConfig) {
+        this.render({
+            html: config.html,
+            text: config.text,
+            title: config.text || config.html
+                ? "Recognized text:"
+                : "Failed to recognize text, please try again.",
+        });
+    }
+
+    private static render(state: FloatingWindowState) {
+        this.ensureWindow();
+        this.renderToken += 1;
+        const renderToken = this.renderToken;
+        this.isLoading = Boolean(state.loading);
+        this.currentText = state.loading ? undefined : state.text;
+        this.clearFadeTimer();
+
+        if (!this.floatingMessageEl || !this.titleEl || !this.textContainerEl || !this.buttonRowEl || !this.speakButtonEl) {
+            return;
         }
 
-        // Create the main floating container
+        this.floatingMessageEl.style.opacity = '1';
+        this.titleEl.innerText = state.title;
+
+        const hasVisibleText = Boolean(state.loading || state.text || state.html);
+        this.textContainerEl.hidden = !hasVisibleText;
+        this.textContainerEl.style.fontStyle = state.loading ? 'italic' : 'normal';
+        this.textContainerEl.style.padding = state.html ? '20px' : '10px';
+        this.textContainerEl.innerHTML = '';
+
+        if (state.html) {
+            this.textContainerEl.innerHTML = state.html;
+        }
+        else if (state.text) {
+            this.textContainerEl.innerText = state.text;
+        }
+
+        if (state.loading) {
+            this.textContainerEl.removeAttribute('data-testid');
+        }
+        else {
+            this.textContainerEl.setAttribute('data-testid', 'namida-floating-window-text');
+        }
+
+        this.buttonRowEl.style.display = 'none';
+        this.speakButtonEl.innerText = 'Speak';
+
+        if (!state.loading) {
+            this.startFadeTimer();
+        }
+
+        if (!state.loading && state.text) {
+            Settings.getShowSpeakButton().then(async (showSpeakButton) => {
+                const voice = await this.speechHandler.voiceForLanguage();
+
+                if (
+                    renderToken !== this.renderToken
+                    || !this.floatingMessageEl
+                    || !this.buttonRowEl
+                ) {
+                    return;
+                }
+
+                const canSpeak = Boolean(state.text) && Boolean(voice);
+                this.buttonRowEl.style.display = showSpeakButton && canSpeak ? 'flex' : 'none';
+            });
+        }
+    }
+
+    private static ensureWindow() {
+        if (this.floatingMessageEl) {
+            return;
+        }
+
         const floatingDiv = document.createElement('div');
         floatingDiv.setAttribute('data-testid', 'namida-floating-window');
         floatingDiv.style.position = 'fixed';
@@ -34,22 +135,14 @@ export class FloatingWindow {
         floatingDiv.style.opacity = '1';
         floatingDiv.style.transition = 'opacity 0.4s ease';
 
-        // --- Header row (title + dismiss button) ---
         const headerRow = document.createElement('div');
         headerRow.style.display = 'flex';
         headerRow.style.justifyContent = 'space-between';
         headerRow.style.alignItems = 'center';
 
-        // Title
         const titleEl = document.createElement('span');
         titleEl.style.fontWeight = 'bold';
-        if (config.text || config.html) {
-            titleEl.innerText = "Recognized text:";
-        } else {
-            titleEl.innerText = "Failed to recognize text, please try again.";
-        }
 
-        // Dismiss button (X)
         const dismissButton = document.createElement('button');
         dismissButton.innerText = '×';
         dismissButton.style.background = 'transparent';
@@ -60,43 +153,23 @@ export class FloatingWindow {
         dismissButton.style.fontWeight = 'bold';
         dismissButton.style.marginLeft = '10px';
         dismissButton.addEventListener('click', () => {
-            // Instantly remove the window (no fade needed)
-            if (FloatingWindow.floatingMessageEl) {
-                FloatingWindow.floatingMessageEl.remove();
-                FloatingWindow.floatingMessageEl = null;
-            }
+            this.removeWindow();
         });
 
-        // Assemble header row
         headerRow.appendChild(titleEl);
         headerRow.appendChild(dismissButton);
 
-        // --- Recognized text container ---
         const textContainer = document.createElement('div');
-        textContainer.setAttribute('data-testid', 'namida-floating-window-text');
         textContainer.style.background = '#333';
         textContainer.style.borderRadius = '6px';
-        textContainer.style.padding = config.html ? '20px' : '10px';
         textContainer.style.marginTop = '8px';
         textContainer.style.fontSize = '28px';
         textContainer.style.lineHeight = '1.4';
 
-        if (config.html) {
-            textContainer.innerHTML = config.html;
-        }
-        else if (config.text) {
-            textContainer.innerText = config.text;
-        }
-        else {
-            textContainer.innerText = "";
-        }
-
-        // --- Button row (Speak, etc.) ---
         const buttonRow = document.createElement('div');
-        buttonRow.style.display = 'flex';
+        buttonRow.style.display = 'none';
         buttonRow.style.marginTop = '10px';
 
-        // Speak button
         const speakButton = document.createElement('button');
         speakButton.innerText = 'Speak';
         speakButton.style.background = '#1976d2';
@@ -107,89 +180,101 @@ export class FloatingWindow {
         speakButton.style.cursor = 'pointer';
         speakButton.style.fontSize = '20px';
         speakButton.style.marginRight = '6px';
-
         speakButton.addEventListener('click', () => {
-            // Only speak if text is defined
-            if (config.text) {
-                if (TTSWrapper.isSpeaking()) {
-                    TTSWrapper.cancel();
-                    speakButton.innerText = 'Speak';
-                }
-                else {
-                    this.speechHandler.speak(config.text).finally(() => {
-                        speakButton.innerText = 'Speak';
-                    });
-                    speakButton.textContent = 'Speaking...'
-                }
+            const text = this.currentText;
+            if (!text) {
+                return;
             }
+
+            if (TTSWrapper.isSpeaking()) {
+                TTSWrapper.cancel();
+                speakButton.innerText = 'Speak';
+                return;
+            }
+
+            this.speechHandler.speak(text).finally(() => {
+                if (this.speakButtonEl) {
+                    this.speakButtonEl.innerText = 'Speak';
+                }
+            });
+            speakButton.textContent = 'Speaking...';
         });
 
-        // Append speak button (we'll conditionally attach it later)
         buttonRow.appendChild(speakButton);
-
-        // Add all elements to the main container
         floatingDiv.appendChild(headerRow);
-        // Only show the text container if we have recognized text or want to show something
-        if (config.text || config.html) {
-            floatingDiv.appendChild(textContainer);
-        }
-        // We'll conditionally add the button row only if the speak button is shown
+        floatingDiv.appendChild(textContainer);
+        floatingDiv.appendChild(buttonRow);
+        document.body.appendChild(floatingDiv);
 
-        Settings.getShowSpeakButton().then(async (showSpeakButton) => {
-            const voice = await this.speechHandler.voiceForLanguage();
-            const canSpeak = Boolean(config.text) && Boolean(voice);
-            if (showSpeakButton && canSpeak) {
-                floatingDiv.appendChild(buttonRow);
-            }
+        floatingDiv.addEventListener('mouseenter', () => {
+            this.clearFadeTimer();
+        });
 
-            // Add floatingDiv to the DOM
-            document.body.appendChild(floatingDiv);
-            FloatingWindow.floatingMessageEl = floatingDiv;
-
-            // Hover events to pause the fade timer
-            floatingDiv.addEventListener('mouseenter', () => {
-                if (FloatingWindow.floatingMessageTimer) {
-                    window.clearTimeout(FloatingWindow.floatingMessageTimer);
-                    FloatingWindow.floatingMessageTimer = undefined;
-                }
-            });
-
-            floatingDiv.addEventListener('mouseleave', () => {
-                this.startFadeTimer();
-            });
-
-            // Start fade timer
+        floatingDiv.addEventListener('mouseleave', () => {
             this.startFadeTimer();
         });
+
+        this.floatingMessageEl = floatingDiv;
+        this.titleEl = titleEl;
+        this.textContainerEl = textContainer;
+        this.buttonRowEl = buttonRow;
+        this.speakButtonEl = speakButton;
     }
 
-    private startFadeTimer() {
-        // Clear any existing timer
+    private static startFadeTimer() {
+        if (!this.floatingMessageEl || this.isLoading) {
+            return;
+        }
+
         Settings.getWindowTimeout().then((windowTimeout) => {
-            if (FloatingWindow.floatingMessageTimer) {
-                window.clearTimeout(FloatingWindow.floatingMessageTimer);
+            if (!this.floatingMessageEl || this.isLoading) {
+                return;
             }
 
-            if (windowTimeout != -1) {
-                FloatingWindow.floatingMessageTimer = window.setTimeout(() => {
+            this.clearFadeTimer();
+
+            if (windowTimeout !== -1) {
+                this.floatingMessageTimer = window.setTimeout(() => {
                     this.fadeOutMessage();
                 }, windowTimeout);
             }
-        })
+        });
     }
 
-    private fadeOutMessage() {
-        if (!FloatingWindow.floatingMessageEl) return;
+    private static clearFadeTimer() {
+        if (this.floatingMessageTimer) {
+            window.clearTimeout(this.floatingMessageTimer);
+            this.floatingMessageTimer = undefined;
+        }
+    }
 
-        // Fade out by setting opacity to 0
-        FloatingWindow.floatingMessageEl.style.opacity = '0';
+    private static fadeOutMessage() {
+        if (!this.floatingMessageEl) {
+            return;
+        }
 
-        // Remove after the transition finishes (0.4s)
-        setTimeout(() => {
-            if (FloatingWindow.floatingMessageEl) {
-                FloatingWindow.floatingMessageEl.remove();
-                FloatingWindow.floatingMessageEl = null;
+        this.floatingMessageEl.style.opacity = '0';
+
+        window.setTimeout(() => {
+            if (this.floatingMessageEl?.style.opacity === '0') {
+                this.removeWindow();
             }
         }, 400);
+    }
+
+    private static removeWindow() {
+        this.clearFadeTimer();
+
+        if (this.floatingMessageEl) {
+            this.floatingMessageEl.remove();
+        }
+
+        this.floatingMessageEl = null;
+        this.titleEl = null;
+        this.textContainerEl = null;
+        this.buttonRowEl = null;
+        this.speakButtonEl = null;
+        this.isLoading = false;
+        this.currentText = undefined;
     }
 }

@@ -80,9 +80,7 @@ module.exports = (env) => {
             __dirname,
             resolvedOcrBackend === 'scribejs'
                 ? 'src/background/ocr/ScribeOcrBackend.ts'
-                : resolvedOcrBackend === 'paddleonnx'
-                    ? 'src/background/ocr/PaddleOnnxOcrBackend.ts'
-                    : 'src/background/ocr/TesseractOcrBackend.ts',
+                : 'src/background/ocr/RuntimeSelectableOcrBackend.ts',
         ),
         'namida-background-ocr-service$': path.resolve(
             __dirname,

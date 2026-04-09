@@ -61,18 +61,36 @@
 
     <div class="section">
       <h2>Advanced</h2>
+      <label for="ocr-backend">OCR Backend</label>
+      <select id="ocr-backend" title="Tesseract is faster but usually less accurate. PaddleOCR is slower but usually more accurate.">
+        <option value="tesseract" selected>Tesseract</option>
+        <option value="paddleonnx">PaddleOCR</option>
+      </select>
+      <p class="setting-description" id="ocr-backend-description">
+        Tesseract is faster but usually less accurate. PaddleOCR is slower but usually more accurate.
+      </p>
       <label for="upscaling-mode">Upscaling Mode</label>
       <select id="upscaling-mode">
         <option value="none">None</option>
         <option value="canvas" selected>Canvas</option>
         <option value="tensorflow">Tensorflow</option>
       </select>
-      <label for="page-seg-mode">Page Segregation Mode</label>
-      <select id="page-seg-mode">
-        <option value="single-block-vertical" selected>Single Block Vertical</option>
-        <option value="single-block">Single Block</option>
-        <option value="auto">Auto</option>
-      </select>
+      <div id="tesseract-settings">
+        <label for="tesseract-text-direction">Text direction</label>
+        <select id="tesseract-text-direction">
+          <option value="vertical" selected>Vertical (`jpn_vert`)</option>
+          <option value="horizontal">Horizontal (`jpn`)</option>
+        </select>
+      </div>
+      <div id="paddle-settings" hidden>
+        <div class="inline-setting">
+          <input id="enable-paddle-gpu" type="checkbox" />
+          <label for="enable-paddle-gpu">Enable GPU support</label>
+        </div>
+        <p class="setting-description">
+          Uses WebGPU or WebNN when the browser exposes them, otherwise PaddleOCR falls back to local WASM.
+        </p>
+      </div>
     </div>
 
     <div class="section">

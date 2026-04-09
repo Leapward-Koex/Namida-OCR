@@ -6,6 +6,7 @@ declare module 'namida-ocr-backend' {
         init(model?: string): Promise<void>;
         recognize(dataUrl: string, pageSegMode: import('tesseract.js').PSM, model?: string): Promise<string | undefined>;
         setDebugEnabled?(enabled: boolean): Promise<void>;
+        setGpuEnabled?(enabled: boolean): Promise<void>;
         getLastDebugSnapshot?(): Promise<OcrDebugSnapshot | null>;
         terminate(): Promise<void>;
     }

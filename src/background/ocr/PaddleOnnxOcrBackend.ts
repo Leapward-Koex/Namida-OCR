@@ -173,6 +173,7 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
     private static ortConfigured = false;
     private static readonly disableWasmFallback = DISABLE_WASM_FALLBACK;
     private static forceWasmOnly = false;
+    private static gpuEnabled = true;
     private debugEnabled = false;
     private lastDebugSnapshot: OcrDebugSnapshot | null = null;
 
@@ -189,6 +190,16 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
         if (!enabled) {
             this.lastDebugSnapshot = null;
         }
+    }
+
+    public async setGpuEnabled(enabled: boolean): Promise<void> {
+        if (PaddleOnnxOcrBackend.gpuEnabled === enabled) {
+            return;
+        }
+
+        PaddleOnnxOcrBackend.gpuEnabled = enabled;
+        PaddleOnnxOcrBackend.forceWasmOnly = false;
+        PaddleOnnxOcrBackend.sessions.clear();
     }
 
     public async getLastDebugSnapshot(): Promise<OcrDebugSnapshot | null> {
@@ -721,6 +732,7 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
         const sessionOptionCandidates = getSessionOptionCandidates(
             PaddleOnnxOcrBackend.forceWasmOnly,
             PaddleOnnxOcrBackend.disableWasmFallback,
+            PaddleOnnxOcrBackend.gpuEnabled,
         );
 
         if (sessionOptionCandidates.length === 0) {
@@ -940,7 +952,16 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
 function getSessionOptionCandidates(
     forceWasmOnly: boolean,
     disableWasmFallback: boolean,
+    gpuEnabled: boolean,
 ): ort.InferenceSession.SessionOptions[] {
+    if (!gpuEnabled) {
+        return disableWasmFallback
+            ? []
+            : [
+                buildSessionOptions([{ name: 'wasm' }]),
+            ];
+    }
+
     if (forceWasmOnly && !disableWasmFallback) {
         return [
             buildSessionOptions([{ name: 'wasm' }]),

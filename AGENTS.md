@@ -53,7 +53,7 @@ When changing permissions, background execution, popup behavior, or shortcut flo
 
 When running Playwright from this repo, always use at least 5 workers/runners so failures surface quickly. The local runner wrappers clamp lower worker values up to `5`.
 
-The default OCR backend is `tesseract`. The backend can also be selected at build time with `NAMIDA_OCR_BACKEND` / `--env ocr_backend=...`.
+The default OCR backend is `tesseract`. Normal builds expose popup settings that let users switch between bundled `tesseract` and experimental `paddleonnx` at runtime, while `NAMIDA_OCR_BACKEND` / `--env ocr_backend=...` still choose the build-time default backend.
 
 Playwright currently exercises the Chromium extension harness. Firefox and Edge changes still need build validation and targeted manual verification.
 
@@ -62,6 +62,9 @@ Playwright currently exercises the Chromium extension harness. Firefox and Edge 
 - The default OCR model is `jpn_vert`.
 - The optional `scribejs` backend is experimental. Treat timeouts or missing OCR output as runtime integration failures first, not as OCR-quality regressions.
 - The optional `paddleonnx` backend is experimental and now runs pure PaddleOCR ONNX inference with no Tesseract fallback. Treat startup failures, missing detected regions, ONNX session failures, or empty OCR output as runtime integration failures first, not as OCR-quality regressions.
+- The popup presents `tesseract` as the faster/lower-accuracy option and experimental `paddleonnx` as the slower/higher-accuracy option. Tesseract-only and Paddle-only controls should stay scoped to the matching backend in the popup.
+- Tesseract popup settings include a text-direction selector that maps to bundled `jpn` vs `jpn_vert` model selection. Keep that mapping local to the bundled extension assets.
+- Tesseract page segmentation is not user-configurable in the popup. It should be derived automatically from the selected text direction/model: `jpn_vert` uses single-block vertical and `jpn` uses single-block.
 - The OCR dataset includes difficult manga and vertical-text samples. The model is not perfect.
 - Do not assume every OCR case will be an exact text match, and do not treat every OCR miss as a pure application bug.
 - Some E2E or model-comparison runs may remain non-perfect because OCR quality is a model limitation, not necessarily a regression in extension code.
@@ -75,4 +78,3 @@ Playwright currently exercises the Chromium extension harness. Firefox and Edge 
 - Flag `scribe.js-ocr` changes as licensing-sensitive. The npm package is AGPL-3.0, so do not assume it is shippable under the current project license without an explicit licensing decision.
 - Flag `paddleonnx` model and runtime asset changes when they materially affect extension package size, startup time, or browser compatibility.
 - If a change affects browser support, packaging, or OCR expectations, update this file along with the README or related docs.
-

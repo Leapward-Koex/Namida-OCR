@@ -1,4 +1,5 @@
 import { commands, runtime, tabs } from "webextension-polyfill";
+import { PSM } from "tesseract.js";
 import { NamidaMessage, NamidaMessageAction, NamidaOcrFromOffscreenData, NamidaOcrFromOffscreenResult, NamidaTensorflowUpscaleData } from "../interfaces/message";
 import { Upscaler } from "./Upscaler";
 import { Settings } from "../interfaces/Storage";
@@ -90,15 +91,20 @@ runtime.onMessage.addListener((message, sender) => {
 
         case NamidaMessageAction.RecognizeImage: {
             return Promise.all([
-                Settings.getPageSegMode(),
                 Settings.getOcrDebugArtifacts(),
                 Settings.getOcrModel(),
-            ]).then(([pageSegMode, debugArtifactsEnabled, ocrModel]) => {
+                Settings.getOcrBackend(),
+            ]).then(([debugArtifactsEnabled, ocrModel, ocrBackend]) => {
                 lastOcrDebugSnapshot = null;
+                const resolvedPageSegMode = ocrBackend === 'paddleonnx'
+                    ? PSM.AUTO
+                    : ocrModel.trim() === 'jpn'
+                        ? PSM.SINGLE_BLOCK
+                        : PSM.SINGLE_BLOCK_VERT_TEXT;
 
                 if (globalThis.Worker) {
                     return BackgroundOcrService.setDebugEnabled(debugArtifactsEnabled).then(async () => {
-                        const recognizedText = await BackgroundOcrService.recognize(namidaMessage.data, pageSegMode, ocrModel);
+                        const recognizedText = await BackgroundOcrService.recognize(namidaMessage.data, resolvedPageSegMode, ocrModel);
                         lastOcrDebugSnapshot = debugArtifactsEnabled
                             ? await BackgroundOcrService.getLastDebugSnapshot()
                             : null;
@@ -113,7 +119,7 @@ runtime.onMessage.addListener((message, sender) => {
                                 data: {
                                     debugArtifactsEnabled,
                                     imageData: namidaMessage.data,
-                                    pageSegMode: pageSegMode,
+                                    pageSegMode: resolvedPageSegMode,
                                     ocrModel: ocrModel
                                 } as NamidaOcrFromOffscreenData
                             }) as NamidaOcrFromOffscreenResult | string | undefined;

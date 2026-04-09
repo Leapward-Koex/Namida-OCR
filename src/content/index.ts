@@ -39,7 +39,15 @@ class SnippingTool {
         const screenshotHandler = new ScreenshotHandler(selection);
         try {
             console.debug(SnippingTool.logTag, "Capturing screen");
-            const upscalingMethod = await Settings.getUpscalingMode();
+            const [upscalingMethod, ocrBackend] = await Promise.all([
+                Settings.getUpscalingMode(),
+                Settings.getOcrBackend(),
+            ]);
+
+            if (ocrBackend === 'paddleonnx') {
+                FloatingWindow.showStatus("Scanning text...");
+            }
+
             const croppedDataURL = await screenshotHandler.captureAndCrop(upscalingMethod);
             const recognizedText = await this.ocr.recognizeFromContent(croppedDataURL);
             const spacesRemovedText = TextProcessorHandler.removeSpaces(recognizedText);
@@ -52,6 +60,7 @@ class SnippingTool {
             }
         } catch (error) {
             console.error(SnippingTool.logTag, 'Failed when creating selection and performing OCR', error);
+            FloatingWindow.showFailure();
         }
     }
 }

@@ -109,6 +109,14 @@ input[type="checkbox"] {
     margin-bottom: 0;
 }
 
+.setting-description {
+    margin-top: -0.25em;
+    margin-bottom: 0.75em;
+    color: #555;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
 ol {
     margin-left: 1em;
 }
