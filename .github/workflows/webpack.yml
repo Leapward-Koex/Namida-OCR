@@ -23,7 +23,7 @@ jobs:
           node-version: ${{ matrix.node-version }}
 
       - name: Cache NPM dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.npm
           key: ${{ runner.os }}-npm-${{ hashFiles('package-lock.json') }}
@@ -39,10 +39,11 @@ jobs:
         shell: bash
 
       - name: Upload Firefox Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: namida-ocr-ff
           path: dist
+          if-no-files-found: error
 
       - name: Clean dist
         run: |
@@ -54,7 +55,8 @@ jobs:
         shell: bash
 
       - name: Upload Chrome Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: namida-ocr-chromium
           path: dist
+          if-no-files-found: error
