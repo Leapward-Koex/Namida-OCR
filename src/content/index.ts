@@ -51,7 +51,16 @@ class SnippingTool {
             const croppedDataURL = await screenshotHandler.captureAndCrop(upscalingMethod);
             const recognizedText = await this.ocr.recognizeFromContent(croppedDataURL);
             const spacesRemovedText = TextProcessorHandler.removeSpaces(recognizedText);
-            const furigana = await FuriganaHandler.generateFuriganaFromContent(spacesRemovedText ?? "");
+            let furigana: string | undefined;
+
+            if (spacesRemovedText) {
+                try {
+                    furigana = await FuriganaHandler.generateFuriganaFromContent(spacesRemovedText);
+                } catch (error) {
+                    console.warn(SnippingTool.logTag, 'Failed to generate furigana; continuing with plain text output', error);
+                }
+            }
+
             ClipboardHandler.copyText(spacesRemovedText);
             new FloatingWindow({ text: spacesRemovedText, html: furigana });
             if (await Settings.getSaveOcrCrop()) {

@@ -1,6 +1,6 @@
 import { PSM } from 'tesseract.js';
 import { DEFAULT_OCR_BACKEND, Settings, type OcrBackendKind } from '../../interfaces/Storage';
-import type { OcrBackend } from './OcrBackend';
+import type { OcrBackend, OcrBackendRuntimeSettings } from './OcrBackend';
 import { PaddleOnnxOcrBackend } from './PaddleOnnxOcrBackend';
 import { TesseractOcrBackend } from './TesseractOcrBackend';
 import type { OcrDebugSnapshot } from './OcrDebugSnapshot';
@@ -28,6 +28,7 @@ export class RuntimeSelectableOcrBackend implements OcrBackend {
     private activeBackend: RuntimeBackend | null = null;
     private activeBackendKey: string | null = null;
     private debugEnabled = false;
+    private runtimeSettingsOverride: RuntimeBackendSettings | null = null;
 
     public async init(model?: string): Promise<void> {
         const backend = await this.ensureBackend();
@@ -42,6 +43,13 @@ export class RuntimeSelectableOcrBackend implements OcrBackend {
     public async setDebugEnabled(enabled: boolean): Promise<void> {
         this.debugEnabled = enabled;
         await this.activeBackend?.setDebugEnabled?.(enabled);
+    }
+
+    public async setRuntimeSettings(settings: OcrBackendRuntimeSettings): Promise<void> {
+        this.runtimeSettingsOverride = {
+            backend: normalizeRuntimeBackendKind(settings.backend),
+            paddleGpuEnabled: settings.paddleGpuEnabled,
+        };
     }
 
     public async getLastDebugSnapshot(): Promise<OcrDebugSnapshot | null> {
@@ -93,6 +101,10 @@ export class RuntimeSelectableOcrBackend implements OcrBackend {
     }
 
     private async getSettings(): Promise<RuntimeBackendSettings> {
+        if (this.runtimeSettingsOverride) {
+            return this.runtimeSettingsOverride;
+        }
+
         const [ocrBackend, paddleGpuEnabled] = await Promise.all([
             Settings.getOcrBackend(),
             Settings.getPaddleOnnxGpuEnabled(),

@@ -1,0 +1,45 @@
+{
+  "version": "generated-mixed",
+  "source_repo": "PaddlePaddle/PP-OCRv5_mobile_rec + PP-OCRv5_server_det",
+  "detector": {
+    "model_path": "detection/v5/det.onnx",
+    "config_path": "detection/v5/config.json",
+    "limit_side_len": 736,
+    "limit_type": "min",
+    "max_side_len": 1536,
+    "mean": [
+      0.485,
+      0.456,
+      0.406
+    ],
+    "std": [
+      0.229,
+      0.224,
+      0.225
+    ],
+    "threshold": 0.3,
+    "box_score_threshold": 0.55,
+    "dilation_radius": 1,
+    "min_box_size": 6,
+    "box_padding": 4
+  },
+  "recognizer": {
+    "model_path": "languages/chinese/rec.onnx",
+    "config_path": "languages/chinese/config.json",
+    "dict_path": "languages/chinese/dict.txt",
+    "image_height": 48,
+    "min_image_width": 48,
+    "max_image_width": 320,
+    "mean": [
+      0.5,
+      0.5,
+      0.5
+    ],
+    "std": [
+      0.5,
+      0.5,
+      0.5
+    ],
+    "rotation_aspect_threshold": 1.5
+  }
+}

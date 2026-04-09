@@ -7,6 +7,8 @@
     "build:chrome": "webpack --env browser=chrome --mode production",
     "build:firefox": "webpack --env browser=firefox --mode production",
     "prepare:paddleocr-onnx": "python ./prepare-paddleocr-onnx.py",
+    "prepare:paddleocr-onnx:server": "python ./prepare-paddleocr-onnx.py --variant server",
+    "prepare:paddleocr-onnx:mobile": "python ./prepare-paddleocr-onnx.py --variant mobile",
     "test:e2e": "node ./run-playwright-e2e.mjs",
     "test:e2e:tesseract": "node ./run-playwright-e2e.mjs --backend tesseract",
     "test:e2e:scribejs": "node ./run-playwright-e2e.mjs --backend scribejs",

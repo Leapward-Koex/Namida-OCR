@@ -1,0 +1,11 @@
+{
+  "model_name": "PP-OCRv5_mobile_det",
+  "model_type": "detection",
+  "framework": "PaddleOCR",
+  "version": "PP-OCRv5",
+  "source_repo": "PaddlePaddle/PP-OCRv5_mobile_det",
+  "original_format": "PaddlePaddle",
+  "converted_format": "ONNX",
+  "input_shape": "dynamic (batch_size, 3, height, width)",
+  "output_shape": "dynamic"
+}

@@ -17,12 +17,17 @@ export interface NamidaMessage {
     data: any
 }
 
+export interface NamidaOcrRuntimeSettings {
+    ocrBackend: 'tesseract' | 'paddleonnx',
+    paddleGpuEnabled: boolean,
+}
 
 export interface NamidaOcrFromOffscreenData {
     debugArtifactsEnabled: boolean,
     imageData: string,
     pageSegMode: PSM,
-    ocrModel: string
+    ocrModel: string,
+    runtimeSettings: NamidaOcrRuntimeSettings
 }
 export interface NamidaOcrFromOffscreenMessage {
     action: NamidaMessageAction,

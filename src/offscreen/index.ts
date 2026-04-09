@@ -5,23 +5,21 @@ import { OcrService } from "../background/ocr/OcrService";
 
 console.debug("Loading offscreen document");
 
-/**
- * 1. Initialize the OCR worker once on script startup.
- *    This way, the offscreen worker is ready whenever a recognize request comes in.
- */
-(async () => {
-    await OcrService.init();
-})().catch(console.error);
-
 runtime.onMessage.addListener((message) => {
     const namidaMessage = message as NamidaMessage;
     if (namidaMessage.action === NamidaMessageAction.RecognizeImageOffscreen) {
         const namidaOcrMessage = message as NamidaOcrFromOffscreenMessage;
+        const runtimeSettings = {
+            backend: namidaOcrMessage.data.runtimeSettings.ocrBackend,
+            paddleGpuEnabled: namidaOcrMessage.data.runtimeSettings.paddleGpuEnabled,
+        } as const;
+
         return OcrService.setDebugEnabled(namidaOcrMessage.data.debugArtifactsEnabled).then(() => {
             return OcrService.recognize(
                 namidaOcrMessage.data.imageData,
                 namidaOcrMessage.data.pageSegMode,
                 namidaOcrMessage.data.ocrModel,
+                runtimeSettings,
             ).then(async (recognizedText) => {
                 const debugSnapshot = namidaOcrMessage.data.debugArtifactsEnabled
                     ? await OcrService.getLastDebugSnapshot()

@@ -23,31 +23,47 @@ except ModuleNotFoundError as exc:  # pragma: no cover - developer environment g
     ) from exc
 
 
-DEFAULT_DET_REPO = "PaddlePaddle/PP-OCRv5_server_det"
-DEFAULT_REC_REPO = "PaddlePaddle/PP-OCRv5_server_rec"
+MODEL_VARIANTS = {
+    "server": {
+        "det_repo": "PaddlePaddle/PP-OCRv5_server_det",
+        "rec_repo": "PaddlePaddle/PP-OCRv5_server_rec",
+        "det_model_name": "PP-OCRv5_server_det",
+        "rec_model_name": "PP-OCRv5_server_rec",
+    },
+    "mobile": {
+        "det_repo": "PaddlePaddle/PP-OCRv5_mobile_det",
+        "rec_repo": "PaddlePaddle/PP-OCRv5_mobile_rec",
+        "det_model_name": "PP-OCRv5_mobile_det",
+        "rec_model_name": "PP-OCRv5_mobile_rec",
+    },
+}
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output-dir", type=Path, default=Path("models/paddleocr"))
+    parser.add_argument("--variant", choices=sorted(MODEL_VARIANTS), default="server")
+    parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--work-dir", type=Path, default=Path(".cache/paddleocr-onnx"))
-    parser.add_argument("--det-repo", default=DEFAULT_DET_REPO)
-    parser.add_argument("--rec-repo", default=DEFAULT_REC_REPO)
+    parser.add_argument("--det-repo")
+    parser.add_argument("--rec-repo")
     parser.add_argument("--skip-download", action="store_true")
     parser.add_argument("--skip-convert", action="store_true")
     args = parser.parse_args()
 
-    output_dir = args.output_dir.resolve()
+    variant = MODEL_VARIANTS[args.variant]
+    det_repo = args.det_repo or variant["det_repo"]
+    rec_repo = args.rec_repo or variant["rec_repo"]
+    output_dir = (args.output_dir or (Path("models/paddleocr") / args.variant)).resolve()
     work_dir = args.work_dir.resolve()
-    det_source_dir = work_dir / "det-source"
-    rec_source_dir = work_dir / "rec-source"
+    det_source_dir = work_dir / args.variant / "det-source"
+    rec_source_dir = work_dir / args.variant / "rec-source"
     det_output_dir = output_dir / "detection" / "v5"
     rec_output_dir = output_dir / "languages" / "chinese"
 
     if not args.skip_download:
         require_command("hf")
-        download_repo(args.det_repo, det_source_dir)
-        download_repo(args.rec_repo, rec_source_dir)
+        download_repo(det_repo, det_source_dir)
+        download_repo(rec_repo, rec_source_dir)
 
     det_model_dir = find_model_dir(det_source_dir)
     rec_model_dir = find_model_dir(rec_source_dir)
@@ -69,11 +85,11 @@ def main() -> int:
     write_json(
         det_output_dir / "config.json",
         {
-            "model_name": "PP-OCRv5_server_det",
+            "model_name": variant["det_model_name"],
             "model_type": "detection",
             "framework": "PaddleOCR",
             "version": "PP-OCRv5",
-            "source_repo": args.det_repo,
+            "source_repo": det_repo,
             "original_format": "PaddlePaddle",
             "converted_format": "ONNX",
             "input_shape": "dynamic (batch_size, 3, height, width)",
@@ -83,7 +99,7 @@ def main() -> int:
     write_json(
         rec_output_dir / "config.json",
         {
-            "model_name": "PP-OCRv5_server_rec",
+            "model_name": variant["rec_model_name"],
             "model_type": "recognition",
             "framework": "PaddleOCR",
             "version": "PP-OCRv5",
@@ -95,7 +111,7 @@ def main() -> int:
                 "English",
                 "Japanese",
             ],
-            "source_repo": args.rec_repo,
+            "source_repo": rec_repo,
             "original_format": "PaddlePaddle",
             "converted_format": "ONNX",
             "dictionary_file": "dict.txt",
@@ -107,7 +123,7 @@ def main() -> int:
         output_dir / "manifest.json",
         {
             "version": "generated",
-            "source_repo": args.rec_repo,
+            "source_repo": rec_repo,
             "detector": {
                 "model_path": "detection/v5/det.onnx",
                 "config_path": "detection/v5/config.json",
@@ -136,7 +152,7 @@ def main() -> int:
         },
     )
 
-    print(f"Prepared PaddleOCR ONNX bundle at {output_dir}")
+    print(f"Prepared PaddleOCR ONNX {args.variant} bundle at {output_dir}")
     return 0
 
 
@@ -177,18 +193,27 @@ def convert_model(source_dir: Path, target_dir: Path) -> None:
 
 def find_model_dir(root: Path) -> Path:
     pdmodel_files = sorted(root.rglob("*.pdmodel"))
-    if not pdmodel_files:
-        raise SystemExit(
-            f"Could not find a Paddle inference model under {root}. "
-            "Download the official repo first or pass --skip-download only when the work dir is already populated."
-        )
+    if pdmodel_files:
+        return pdmodel_files[0].parent
 
-    return pdmodel_files[0].parent
+    pir_model_files = sorted(root.rglob("inference.json"))
+    if pir_model_files:
+        return pir_model_files[0].parent
+
+    raise SystemExit(
+        f"Could not find a Paddle inference model under {root}. "
+        "Expected either a legacy *.pdmodel export or a PIR inference.json export. "
+        "Download the official repo first or pass --skip-download only when the work dir is already populated."
+    )
 
 
 def find_dictionary_file(root: Path) -> Path:
     candidates = sorted(root.rglob("*dict*.txt"))
     if not candidates:
+        bundled_candidates = sorted((Path("models/paddleocr") / "server").rglob("*dict*.txt"))
+        if bundled_candidates:
+            return bundled_candidates[0]
+
         raise SystemExit(f"Could not find a recognition dictionary file under {root}")
 
     return candidates[0]

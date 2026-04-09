@@ -1,6 +1,5 @@
 import { PSM } from "tesseract.js";
 import { UpscaleMethod } from "../content/ScreenshotHandler";
-import { storage } from "webextension-polyfill";
 import { FuriganaType } from "../background/FuriganaHandler";
 
 export enum StorageKey {
@@ -55,6 +54,51 @@ export enum TesseractTextDirectionString {
     Vertical = 'vertical'
 }
 
+type StorageQuery = string | string[] | { [key: string]: unknown } | null;
+
+function describeStorageQuery(query: StorageQuery): string {
+    if (query === null) {
+        return 'null';
+    }
+
+    if (typeof query === 'string') {
+        return query;
+    }
+
+    if (Array.isArray(query)) {
+        return query.join(', ');
+    }
+
+    return Object.keys(query).join(', ');
+}
+
+function getSyncStorageArea(query: StorageQuery) {
+    const syncStorage = chrome?.storage?.sync;
+
+    if (!syncStorage) {
+        throw new Error(`chrome.storage.sync is unavailable while reading ${describeStorageQuery(query)}.`);
+    }
+
+    return syncStorage;
+}
+
+function readSyncStorage(query: StorageQuery): Promise<Record<string, unknown>> {
+    const syncStorage = getSyncStorageArea(query);
+
+    return new Promise((resolve, reject) => {
+        syncStorage.get(query, (items) => {
+            const lastError = chrome.runtime?.lastError;
+
+            if (lastError) {
+                reject(new Error(lastError.message));
+                return;
+            }
+
+            resolve((items ?? {}) as Record<string, unknown>);
+        });
+    });
+}
+
 export class Settings {
     private static getOcrModelFromString(settingString: string | undefined) {
         const trimmedSetting = settingString?.trim();
@@ -106,53 +150,53 @@ export class Settings {
     }
 
     public static async getWindowTimeout() {
-        const values = await storage.sync.get(StorageKey.WindowTimeout);
+        const values = await readSyncStorage(StorageKey.WindowTimeout);
         const value = values[StorageKey.WindowTimeout] as string | undefined;
         return Number(value ?? "30000");
     }
 
     public static async getFuriganaType() {
-        const values = await storage.sync.get(StorageKey.FuriganaType);
+        const values = await readSyncStorage(StorageKey.FuriganaType);
         return this.getFuriganaTypeString((values[StorageKey.FuriganaType] as string | undefined));
     }
 
     public static async getUpscalingMode() {
-        const values = await storage.sync.get(StorageKey.UpscalingMode);
+        const values = await readSyncStorage(StorageKey.UpscalingMode);
         return this.getUpscalingModeFromString((values[StorageKey.UpscalingMode] as string | undefined));
     }
 
     public static async getOcrBackend() {
-        const values = await storage.sync.get(StorageKey.OcrBackend);
+        const values = await readSyncStorage(StorageKey.OcrBackend);
         return normalizeOcrBackendKind((values[StorageKey.OcrBackend] as string | undefined) ?? DEFAULT_OCR_BACKEND);
     }
 
     public static async getPaddleOnnxGpuEnabled() {
-        const values = await storage.sync.get(StorageKey.PaddleOnnxGpuEnabled);
+        const values = await readSyncStorage(StorageKey.PaddleOnnxGpuEnabled);
         return (values[StorageKey.PaddleOnnxGpuEnabled] as boolean | undefined) ?? DEFAULT_PADDLE_ONNX_GPU_ENABLED;
     }
 
     public static async getPageSegMode() {
-        const values = await storage.sync.get(StorageKey.PageSegMode);
+        const values = await readSyncStorage(StorageKey.PageSegMode);
         return this.getPageSegModeFromString((values[StorageKey.PageSegMode] as string | undefined));
     }
 
     public static async getOcrModel() {
-        const values = await storage.sync.get(StorageKey.OcrModel);
+        const values = await readSyncStorage(StorageKey.OcrModel);
         return this.getOcrModelFromString((values[StorageKey.OcrModel] as string | undefined));
     }
 
     public static async getOcrDebugArtifacts() {
-        const values = await storage.sync.get(StorageKey.OcrDebugArtifacts);
+        const values = await readSyncStorage(StorageKey.OcrDebugArtifacts);
         return (values[StorageKey.OcrDebugArtifacts] as boolean | undefined) ?? false;
     }
 
     public static async getSaveOcrCrop() {
-        const values = await storage.sync.get(StorageKey.SaveOcrCrop);
+        const values = await readSyncStorage(StorageKey.SaveOcrCrop);
         return (values[StorageKey.SaveOcrCrop] as boolean | undefined) ?? false;
     }
 
     public static async getShowSpeakButton() {
-        const values = await storage.sync.get(StorageKey.ShowSpeakButton);
+        const values = await readSyncStorage(StorageKey.ShowSpeakButton);
         return (values[StorageKey.ShowSpeakButton] as boolean | undefined) ?? true;
     }
 
@@ -162,7 +206,7 @@ export class Settings {
     }
 
     public static async getPreferredVoicesUri() {
-        const values = await storage.sync.get(StorageKey.PreferredVoices);
+        const values = await readSyncStorage(StorageKey.PreferredVoices);
         // language code -> voiceURI
         return (values[StorageKey.PreferredVoices] as { [language: string]: string } | undefined) ?? {};
     }

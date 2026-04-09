@@ -12,6 +12,7 @@ const {
     disablePaddleOnnxWasmFallback,
     headed,
     model,
+    paddleOnnxModelVariant,
     resultsDir,
     playwrightWorkers,
 } = parseArgs(args);
@@ -36,8 +37,13 @@ if (disablePaddleOnnxWasmFallback && backend === 'paddleonnx') {
     buildArgs.push('--env', 'paddleonnx_disable_wasm_fallback=true');
 }
 
+if (backend === 'paddleonnx') {
+    buildArgs.push('--env', `paddleonnx_model_variant=${paddleOnnxModelVariant}`);
+}
+
 console.log(
     `Building extension with OCR model '${model}' using backend '${backend}'`
+    + (backend === 'paddleonnx' ? ` and Paddle model variant '${paddleOnnxModelVariant}'` : '')
     + (disablePaddleOnnxWasmFallback && backend === 'paddleonnx'
         ? ' with Paddle ONNX WASM fallback disabled'
         : ''),
@@ -56,14 +62,25 @@ if (headed) {
 const childEnv = playwrightWorkers
     ? {
         ...process.env,
+        NAMIDA_TEST_OCR_BACKEND: backend,
+        NAMIDA_TEST_OCR_MODEL: model,
+        NAMIDA_TEST_PADDLE_ONNX_MODEL_VARIANT: backend === 'paddleonnx' ? paddleOnnxModelVariant : '',
         PLAYWRIGHT_WORKERS: playwrightWorkers,
     }
     : defaultPlaywrightWorkers
         ? {
             ...process.env,
+            NAMIDA_TEST_OCR_BACKEND: backend,
+            NAMIDA_TEST_OCR_MODEL: model,
+            NAMIDA_TEST_PADDLE_ONNX_MODEL_VARIANT: backend === 'paddleonnx' ? paddleOnnxModelVariant : '',
             PLAYWRIGHT_WORKERS: defaultPlaywrightWorkers,
         }
-        : process.env;
+        : {
+            ...process.env,
+            NAMIDA_TEST_OCR_BACKEND: backend,
+            NAMIDA_TEST_OCR_MODEL: model,
+            NAMIDA_TEST_PADDLE_ONNX_MODEL_VARIANT: backend === 'paddleonnx' ? paddleOnnxModelVariant : '',
+        };
 
 if (playwrightWorkers) {
     console.log(`Using PLAYWRIGHT_WORKERS=${playwrightWorkers}`);
@@ -72,15 +89,22 @@ if (playwrightWorkers) {
 }
 
 const testExitCode = await runCommand(process.execPath, runArgs, childEnv);
-await mirrorResults(resultsDir, model, backend, disablePaddleOnnxWasmFallback);
+await mirrorResults(resultsDir, model, backend, paddleOnnxModelVariant, disablePaddleOnnxWasmFallback);
 process.exit(testExitCode ?? 1);
 
-async function mirrorResults(targetResultsDir, selectedModel, selectedBackend, selectedDisablePaddleOnnxWasmFallback) {
+async function mirrorResults(
+    targetResultsDir,
+    selectedModel,
+    selectedBackend,
+    selectedPaddleOnnxModelVariant,
+    selectedDisablePaddleOnnxWasmFallback,
+) {
     if (path.resolve(targetResultsDir) === baseResultsDir) {
         await annotateSummary(
             rootSummaryPath,
             selectedModel,
             selectedBackend,
+            selectedPaddleOnnxModelVariant,
             selectedDisablePaddleOnnxWasmFallback,
         );
         return;
@@ -96,6 +120,7 @@ async function mirrorResults(targetResultsDir, selectedModel, selectedBackend, s
         path.join(targetResultsDir, 'ocr-accuracy-summary.json'),
         selectedModel,
         selectedBackend,
+        selectedPaddleOnnxModelVariant,
         selectedDisablePaddleOnnxWasmFallback,
     );
 }
@@ -104,6 +129,7 @@ async function annotateSummary(
     summaryPath,
     selectedModel,
     selectedBackend,
+    selectedPaddleOnnxModelVariant,
     selectedDisablePaddleOnnxWasmFallback,
 ) {
     try {
@@ -111,6 +137,9 @@ async function annotateSummary(
         const summary = JSON.parse(summaryBody);
         summary.backend = selectedBackend;
         summary.model = selectedModel;
+        summary.paddleOnnxModelVariant = selectedBackend === 'paddleonnx'
+            ? selectedPaddleOnnxModelVariant
+            : null;
         summary.disablePaddleOnnxWasmFallback = Boolean(selectedDisablePaddleOnnxWasmFallback && selectedBackend === 'paddleonnx');
         await fs.writeFile(summaryPath, JSON.stringify(summary, null, 2));
     } catch {
@@ -135,6 +164,10 @@ function parseArgs(commandArgs) {
     let disablePaddleOnnxWasmFallback = normalizeBooleanFlag(process.env.NAMIDA_PADDLE_ONNX_DISABLE_WASM_FALLBACK?.trim() || '');
     let headed = false;
     let model = process.env.NAMIDA_OCR_MODEL?.trim() || DEFAULT_OCR_MODEL;
+    let paddleOnnxModelVariant = normalizePaddleOnnxModelVariant(
+        process.env.NAMIDA_PADDLE_ONNX_MODEL_VARIANT?.trim() || '',
+        'server',
+    );
     let resultsSubdir = '';
     let playwrightWorkers = normalizeConfiguredWorkers(process.env.PLAYWRIGHT_WORKERS?.trim() || '');
 
@@ -163,6 +196,15 @@ function parseArgs(commandArgs) {
             continue;
         }
 
+        if (argument === '--paddleonnx-model-variant') {
+            paddleOnnxModelVariant = normalizePaddleOnnxModelVariant(
+                readRequiredValue(commandArgs, index, '--paddleonnx-model-variant'),
+                paddleOnnxModelVariant,
+            );
+            index += 1;
+            continue;
+        }
+
         if (argument === '--results-subdir') {
             resultsSubdir = readRequiredValue(commandArgs, index, '--results-subdir');
             index += 1;
@@ -183,6 +225,7 @@ function parseArgs(commandArgs) {
         disablePaddleOnnxWasmFallback,
         headed,
         model,
+        paddleOnnxModelVariant,
         resultsDir: resolveResultsDir(resultsSubdir),
         playwrightWorkers,
     };
@@ -249,6 +292,20 @@ function normalizeBackend(value) {
     throw new Error(`Invalid OCR backend: ${value}`);
 }
 
+function normalizePaddleOnnxModelVariant(value, fallbackValue) {
+    const trimmedValue = value.trim().toLowerCase();
+
+    if (!trimmedValue) {
+        return fallbackValue;
+    }
+
+    if (/^[a-z0-9_-]+$/u.test(trimmedValue)) {
+        return trimmedValue;
+    }
+
+    throw new Error(`Invalid Paddle ONNX model variant: ${value}`);
+}
+
 function runCommand(command, commandArgs, env = process.env) {
     return new Promise((resolve, reject) => {
         const child = spawn(command, commandArgs, {
@@ -261,4 +318,3 @@ function runCommand(command, commandArgs, env = process.env) {
         child.on('exit', (code) => resolve(code));
     });
 }
-

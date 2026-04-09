@@ -1,5 +1,5 @@
 import { PSM } from 'tesseract.js';
-import { OcrBackend } from './OcrBackend';
+import { OcrBackend, type OcrBackendRuntimeSettings } from './OcrBackend';
 import type { OcrDebugSnapshot } from './OcrDebugSnapshot';
 
 type OcrBackendModule = {
@@ -32,13 +32,24 @@ export class OcrService {
         return this.backendPromise;
     }
 
-    public static async init(model?: string): Promise<void> {
+    public static async init(model?: string, runtimeSettings?: OcrBackendRuntimeSettings): Promise<void> {
         const backend = await this.getBackend();
+        if (runtimeSettings) {
+            await backend.setRuntimeSettings?.(runtimeSettings);
+        }
         await backend.init(model);
     }
 
-    public static async recognize(dataUrl: string, pageSegMode: PSM, model?: string): Promise<string | undefined> {
+    public static async recognize(
+        dataUrl: string,
+        pageSegMode: PSM,
+        model?: string,
+        runtimeSettings?: OcrBackendRuntimeSettings,
+    ): Promise<string | undefined> {
         const backend = await this.getBackend();
+        if (runtimeSettings) {
+            await backend.setRuntimeSettings?.(runtimeSettings);
+        }
         return backend.recognize(dataUrl, pageSegMode, model);
     }
 
@@ -46,6 +57,11 @@ export class OcrService {
         this.debugEnabled = enabled;
         const backend = await this.getBackend();
         await backend.setDebugEnabled?.(enabled);
+    }
+
+    public static async setRuntimeSettings(runtimeSettings: OcrBackendRuntimeSettings): Promise<void> {
+        const backend = await this.getBackend();
+        await backend.setRuntimeSettings?.(runtimeSettings);
     }
 
     public static async getLastDebugSnapshot(): Promise<OcrDebugSnapshot | null> {

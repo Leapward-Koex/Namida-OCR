@@ -1,0 +1,20 @@
+{
+  "model_name": "PP-OCRv5_mobile_rec",
+  "model_type": "recognition",
+  "framework": "PaddleOCR",
+  "version": "PP-OCRv5",
+  "language_group": "chinese",
+  "supported_languages": [
+    "Chinese (Simplified)",
+    "Pinyin",
+    "Traditional Chinese",
+    "English",
+    "Japanese"
+  ],
+  "source_repo": "PaddlePaddle/PP-OCRv5_mobile_rec",
+  "original_format": "PaddlePaddle",
+  "converted_format": "ONNX",
+  "dictionary_file": "dict.txt",
+  "input_shape": "dynamic (batch_size, 3, 48, dynamic_width)",
+  "output_shape": "dynamic (batch_size, sequence_length, num_classes)"
+}

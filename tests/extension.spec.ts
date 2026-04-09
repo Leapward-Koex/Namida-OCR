@@ -11,6 +11,8 @@ import { scoreOcrCase, type OcrCaseResult } from './ocr-metrics';
 const SNIP_PAGE_ACTION = NamidaMessageAction.SnipPage;
 const GET_LAST_OCR_DEBUG_SNAPSHOT_ACTION = NamidaMessageAction.GetLastOcrDebugSnapshot;
 const GET_LAST_OCR_DEBUG_SNAPSHOT_OFFSCREEN_ACTION = NamidaMessageAction.GetLastOcrDebugSnapshotOffscreen;
+const TEST_OCR_BACKEND = normalizeTestOcrBackend(process.env.NAMIDA_TEST_OCR_BACKEND);
+const TEST_OCR_MODEL = process.env.NAMIDA_TEST_OCR_MODEL?.trim() || 'jpn_vert';
 
 test.describe('OCR accuracy dataset', () => {
     test.describe.configure({ mode: 'parallel' });
@@ -21,6 +23,8 @@ test.describe('OCR accuracy dataset', () => {
                 serviceWorker,
                 ocrCase.pageSegMode ?? 'single-block-vertical',
                 ocrCase.upscalingMode ?? 'canvas',
+                TEST_OCR_BACKEND,
+                TEST_OCR_MODEL,
             );
 
             const actualText = await runOcrCase(page, serviceWorker, ocrCase);
@@ -107,13 +111,23 @@ async function seedExtensionSettings(
     serviceWorker: Worker,
     pageSegMode: PageSegModeSetting,
     upscalingMode: UpscalingModeSetting,
+    ocrBackend: 'tesseract' | 'scribejs' | 'paddleonnx',
+    ocrModel: string,
 ) {
-    await serviceWorker.evaluate(async ({ configuredPageSegMode, configuredUpscalingMode }) => {
+    await serviceWorker.evaluate(async ({
+        configuredPageSegMode,
+        configuredUpscalingMode,
+        configuredOcrBackend,
+        configuredOcrModel,
+    }) => {
         await chrome.storage.sync.clear();
         await chrome.storage.sync.set({
             FuriganaType: 'none',
+            OcrBackend: configuredOcrBackend,
             OcrDebugArtifacts: true,
+            OcrModel: configuredOcrModel,
             PageSegMode: configuredPageSegMode,
+            PaddleOnnxGpuEnabled: true,
             SaveOcrCrop: false,
             ShowSpeakButton: false,
             UpscalingMode: configuredUpscalingMode,
@@ -122,7 +136,19 @@ async function seedExtensionSettings(
     }, {
         configuredPageSegMode: pageSegMode,
         configuredUpscalingMode: upscalingMode,
+        configuredOcrBackend: ocrBackend,
+        configuredOcrModel: ocrModel,
     });
+}
+
+function normalizeTestOcrBackend(
+    backend: string | undefined,
+): 'tesseract' | 'scribejs' | 'paddleonnx' {
+    if (backend === 'scribejs' || backend === 'paddleonnx') {
+        return backend;
+    }
+
+    return 'tesseract';
 }
 
 async function attachCaseResult(testInfo: TestInfo, result: OcrCaseResult) {

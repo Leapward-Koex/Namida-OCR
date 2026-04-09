@@ -94,17 +94,28 @@ runtime.onMessage.addListener((message, sender) => {
                 Settings.getOcrDebugArtifacts(),
                 Settings.getOcrModel(),
                 Settings.getOcrBackend(),
-            ]).then(([debugArtifactsEnabled, ocrModel, ocrBackend]) => {
+                Settings.getPaddleOnnxGpuEnabled(),
+            ]).then(([debugArtifactsEnabled, ocrModel, ocrBackend, paddleGpuEnabled]) => {
                 lastOcrDebugSnapshot = null;
                 const resolvedPageSegMode = ocrBackend === 'paddleonnx'
                     ? PSM.AUTO
                     : ocrModel.trim() === 'jpn'
                         ? PSM.SINGLE_BLOCK
                         : PSM.SINGLE_BLOCK_VERT_TEXT;
+                const runtimeSettings = {
+                    backend: ocrBackend === 'paddleonnx' ? 'paddleonnx' : 'tesseract',
+                    paddleGpuEnabled,
+                } as const;
 
                 if (globalThis.Worker) {
                     return BackgroundOcrService.setDebugEnabled(debugArtifactsEnabled).then(async () => {
-                        const recognizedText = await BackgroundOcrService.recognize(namidaMessage.data, resolvedPageSegMode, ocrModel);
+                        await BackgroundOcrService.setRuntimeSettings(runtimeSettings);
+                        const recognizedText = await BackgroundOcrService.recognize(
+                            namidaMessage.data,
+                            resolvedPageSegMode,
+                            ocrModel,
+                            runtimeSettings,
+                        );
                         lastOcrDebugSnapshot = debugArtifactsEnabled
                             ? await BackgroundOcrService.getLastDebugSnapshot()
                             : null;
@@ -120,7 +131,11 @@ runtime.onMessage.addListener((message, sender) => {
                                     debugArtifactsEnabled,
                                     imageData: namidaMessage.data,
                                     pageSegMode: resolvedPageSegMode,
-                                    ocrModel: ocrModel
+                                    ocrModel: ocrModel,
+                                    runtimeSettings: {
+                                        ocrBackend: runtimeSettings.backend,
+                                        paddleGpuEnabled: runtimeSettings.paddleGpuEnabled,
+                                    },
                                 } as NamidaOcrFromOffscreenData
                             }) as NamidaOcrFromOffscreenResult | string | undefined;
 

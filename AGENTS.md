@@ -26,7 +26,7 @@ When changing permissions, background execution, popup behavior, or shortcut flo
 - `src/offscreen/index.ts`: Chromium offscreen document entrypoint for OCR and furigana work when the background context cannot host workers directly.
 - `src/content/index.ts`: content-side snipping, OCR flow, clipboard, overlay, and floating window behavior.
 - `src/ui/index.ts`: popup settings UI, browser-specific shortcut UX, and speech voice availability messaging.
-- `webpack.config.js`: browser-specific manifest merge plus local bundling of OCR language data and runtime assets.
+- `webpack.config.js`: browser-specific manifest merge plus local bundling of OCR language data and runtime assets, including browser-specific PaddleOCR bundle selection.
 
 ## Offline and No-Server Rules
 
@@ -34,6 +34,7 @@ When changing permissions, background execution, popup behavior, or shortcut flo
 - Keep traineddata, WASM, and model assets bundled locally. Do not switch this project to CDN downloads or server-backed OCR.
 - Any `scribe.js-ocr` integration must continue to use extension-local language/model assets. Do not rely on its CDN fallback.
 - Any `paddleonnx` integration must continue to use extension-local ONNX, dictionary, manifest, and ONNX Runtime JSEP/WASM assets. Do not rely on remote model fetches or runtime downloads.
+- Keep both committed PaddleOCR bundles local to the repo when Chromium/server and Firefox/mobile packaging are supported, but only copy the browser-appropriate bundle into `dist/` at build time.
 - Do not add any extension feature that requires calling an application server to function.
 - Browser/system capabilities such as clipboard access or speech synthesis are acceptable. They are not a substitute for adding project servers.
 - The only HTTP server in this repo is `tests/serve-fixtures.mjs`, which exists solely to serve local Playwright fixtures during tests. It is not part of product architecture.
@@ -42,7 +43,8 @@ When changing permissions, background execution, popup behavior, or shortcut flo
 
 - `npm run build:chrome`
 - `npm run build:firefox`
-- `npm run prepare:paddleocr-onnx`: downloads official PaddleOCR repos, converts them to ONNX, normalizes unsupported `MaxPool ceil_mode` attributes for ONNX Runtime Web acceleration, and refreshes the committed PaddleOCR bundle metadata for the experimental `paddleonnx` backend.
+- `npm run prepare:paddleocr-onnx`: downloads the official PP-OCRv5 server repos, converts them to ONNX, normalizes unsupported `MaxPool ceil_mode` attributes for ONNX Runtime Web acceleration, and refreshes the committed server PaddleOCR bundle metadata for the experimental `paddleonnx` backend.
+- `npm run prepare:paddleocr-onnx:mobile`: downloads the official PP-OCRv5 mobile repos, converts them to ONNX, normalizes unsupported `MaxPool ceil_mode` attributes for ONNX Runtime Web acceleration, and refreshes the committed Firefox/mobile PaddleOCR bundle metadata for the experimental `paddleonnx` backend.
 - `npm run test:e2e`: builds the Chromium extension with the default OCR model and runs the Playwright suite.
 - `npm run test:e2e:tesseract`: runs the Chromium Playwright OCR suite with the bundled `tesseract` backend.
 - `npm run test:e2e:scribejs`: runs the Chromium Playwright OCR suite with the experimental `scribejs` backend.
@@ -55,6 +57,8 @@ When running Playwright from this repo, always use at least 5 workers/runners so
 
 The default OCR backend is `tesseract`. Normal builds expose popup settings that let users switch between bundled `tesseract` and experimental `paddleonnx` at runtime, while `NAMIDA_OCR_BACKEND` / `--env ocr_backend=...` still choose the build-time default backend.
 
+Firefox builds should package the smaller `mobile_det_server_rec` mixed PaddleOCR bundle by default to stay within Firefox add-on size limits. Chromium builds should continue to package the PP-OCRv5 server detector/recognizer bundle by default unless `NAMIDA_PADDLE_ONNX_MODEL_VARIANT` / `--env paddleonnx_model_variant=...` explicitly overrides that selection.
+
 Playwright currently exercises the Chromium extension harness. Firefox and Edge changes still need build validation and targeted manual verification.
 
 ## OCR Test Expectations
@@ -62,6 +66,7 @@ Playwright currently exercises the Chromium extension harness. Firefox and Edge 
 - The default OCR model is `jpn_vert`.
 - The optional `scribejs` backend is experimental. Treat timeouts or missing OCR output as runtime integration failures first, not as OCR-quality regressions.
 - The optional `paddleonnx` backend is experimental and now runs pure PaddleOCR ONNX inference with no Tesseract fallback. Treat startup failures, missing detected regions, ONNX session failures, or empty OCR output as runtime integration failures first, not as OCR-quality regressions.
+- Chromium/server and Firefox/mobile PaddleOCR bundles may have different package sizes, startup time, and OCR accuracy characteristics. Evaluate regressions against the bundle that the target browser actually ships.
 - The popup presents `tesseract` as the faster/lower-accuracy option and experimental `paddleonnx` as the slower/higher-accuracy option. Tesseract-only and Paddle-only controls should stay scoped to the matching backend in the popup.
 - Tesseract popup settings include a text-direction selector that maps to bundled `jpn` vs `jpn_vert` model selection. Keep that mapping local to the bundled extension assets.
 - Tesseract page segmentation is not user-configurable in the popup. It should be derived automatically from the selected text direction/model: `jpn_vert` uses single-block vertical and `jpn` uses single-block.

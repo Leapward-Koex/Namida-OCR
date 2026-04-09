@@ -62,11 +62,29 @@ function normalizeBooleanEnvFlag(value) {
         || normalizedValue === 'on';
 }
 
+function resolvePaddleOcrModelVariant(browser, env) {
+    const requestedVariant = env.paddleonnx_model_variant
+        || process.env.NAMIDA_PADDLE_ONNX_MODEL_VARIANT
+        || (browser === 'firefox' ? 'mobile_det_server_rec' : 'server');
+
+    const normalizedVariant = String(requestedVariant).trim().toLowerCase();
+    const bundlePath = path.resolve(__dirname, 'models/paddleocr', normalizedVariant);
+    if (!fs.existsSync(bundlePath)) {
+        throw new Error(
+            `Missing PaddleOCR bundle for variant "${normalizedVariant}" at ${bundlePath}. `
+            + 'Generate it with prepare-paddleocr-onnx.py before building.',
+        );
+    }
+
+    return normalizedVariant;
+}
+
 module.exports = (env) => {
     const browser = env.browser || 'firefox';
     const buildNumber = env.build_number || "1.0.0";
     const ocrModel = env.ocr_model || process.env.NAMIDA_OCR_MODEL || 'jpn_vert';
     const ocrBackend = env.ocr_backend || process.env.NAMIDA_OCR_BACKEND || 'tesseract';
+    const paddleOcrModelVariant = resolvePaddleOcrModelVariant(browser, env);
     const disablePaddleOnnxWasmFallback = normalizeBooleanEnvFlag(
         env.paddleonnx_disable_wasm_fallback ?? process.env.NAMIDA_PADDLE_ONNX_DISABLE_WASM_FALLBACK,
     );
@@ -177,7 +195,7 @@ module.exports = (env) => {
                     { from: 'node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.mjs', to: 'libs/onnxruntime/ort-wasm-simd-threaded.jsep.mjs' },
                     { from: 'node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.wasm', to: 'libs/onnxruntime/ort-wasm-simd-threaded.jsep.wasm' },
                     ...getBundledLanguagePatterns(),
-                    { from: 'models/paddleocr', to: 'libs/paddleocr' },
+                    { from: `models/paddleocr/${paddleOcrModelVariant}`, to: 'libs/paddleocr' },
                     { from: 'node_modules/@upscalerjs/esrgan-medium/models/x2', to: 'libs/tensorflow/x2' },
                     { from: 'node_modules/@leapward-koex/kuromoji/dict_extension_spoofed', to: 'libs/kuromoji' },
                     {
