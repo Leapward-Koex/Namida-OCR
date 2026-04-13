@@ -20,6 +20,12 @@ const defaultPlaywrightWorkers = backend === 'paddleonnx' ? String(MIN_PLAYWRIGH
 const rootCaseResultsDir = path.join(baseResultsDir, 'ocr-case-results');
 const rootSummaryPath = path.join(baseResultsDir, 'ocr-accuracy-summary.json');
 const rootCombinedResultsPath = path.join(baseResultsDir, 'ocr-case-results.json');
+const rootRunMetadataPath = path.join(baseResultsDir, 'ocr-run-metadata.json');
+
+await fs.rm(rootCaseResultsDir, { recursive: true, force: true });
+await fs.rm(rootSummaryPath, { force: true });
+await fs.rm(rootCombinedResultsPath, { force: true });
+await fs.rm(rootRunMetadataPath, { force: true });
 
 const buildArgs = [
     './node_modules/webpack-cli/bin/cli.js',
@@ -48,11 +54,10 @@ console.log(
         ? ' with Paddle ONNX WASM fallback disabled'
         : ''),
 );
+const runStartedAtMs = Date.now();
+const buildStartedAtMs = Date.now();
 const buildExitCode = await runCommand(process.execPath, buildArgs);
-
-if (buildExitCode !== 0) {
-    process.exit(buildExitCode ?? 1);
-}
+const buildCompletedAtMs = Date.now();
 
 const runArgs = ['./tests/run-playwright-e2e.mjs'];
 if (headed) {
@@ -88,9 +93,51 @@ if (playwrightWorkers) {
     console.log(`Using PLAYWRIGHT_WORKERS=${defaultPlaywrightWorkers} for backend '${backend}'`);
 }
 
-const testExitCode = await runCommand(process.execPath, runArgs, childEnv);
-await mirrorResults(resultsDir, model, backend, paddleOnnxModelVariant, disablePaddleOnnxWasmFallback);
-process.exit(testExitCode ?? 1);
+let testExitCode = null;
+let testStartedAtMs = null;
+let testCompletedAtMs = null;
+
+if (buildExitCode === 0) {
+    testStartedAtMs = Date.now();
+    testExitCode = await runCommand(process.execPath, runArgs, childEnv);
+    testCompletedAtMs = Date.now();
+}
+
+const resolvedPlaywrightWorkers = playwrightWorkers || defaultPlaywrightWorkers || '';
+const exitCode = buildExitCode === 0 ? (testExitCode ?? 1) : (buildExitCode ?? 1);
+const runCompletedAtMs = Date.now();
+const runMetadata = {
+    backend,
+    model,
+    paddleOnnxModelVariant: backend === 'paddleonnx' ? paddleOnnxModelVariant : null,
+    disablePaddleOnnxWasmFallback: Boolean(disablePaddleOnnxWasmFallback && backend === 'paddleonnx'),
+    playwrightWorkers: resolvedPlaywrightWorkers
+        ? Number.parseInt(resolvedPlaywrightWorkers, 10)
+        : null,
+    startedAt: new Date(runStartedAtMs).toISOString(),
+    completedAt: new Date(runCompletedAtMs).toISOString(),
+    buildDurationMs: buildCompletedAtMs - buildStartedAtMs,
+    testDurationMs: testStartedAtMs === null || testCompletedAtMs === null
+        ? null
+        : testCompletedAtMs - testStartedAtMs,
+    totalDurationMs: runCompletedAtMs - runStartedAtMs,
+    buildExitCode: buildExitCode ?? 1,
+    testExitCode: buildExitCode === 0 ? (testExitCode ?? 1) : null,
+    exitCode,
+    status: buildExitCode !== 0 ? 'build_failed' : exitCode === 0 ? 'passed' : 'failed',
+};
+
+await fs.mkdir(baseResultsDir, { recursive: true });
+await fs.writeFile(rootRunMetadataPath, JSON.stringify(runMetadata, null, 2));
+await mirrorResults(
+    resultsDir,
+    model,
+    backend,
+    paddleOnnxModelVariant,
+    disablePaddleOnnxWasmFallback,
+    runMetadata,
+);
+process.exit(exitCode);
 
 async function mirrorResults(
     targetResultsDir,
@@ -98,6 +145,7 @@ async function mirrorResults(
     selectedBackend,
     selectedPaddleOnnxModelVariant,
     selectedDisablePaddleOnnxWasmFallback,
+    runMetadata,
 ) {
     if (path.resolve(targetResultsDir) === baseResultsDir) {
         await annotateSummary(
@@ -106,6 +154,7 @@ async function mirrorResults(
             selectedBackend,
             selectedPaddleOnnxModelVariant,
             selectedDisablePaddleOnnxWasmFallback,
+            runMetadata,
         );
         return;
     }
@@ -116,12 +165,14 @@ async function mirrorResults(
     await copyIfPresent(rootCaseResultsDir, path.join(targetResultsDir, 'ocr-case-results'));
     await copyIfPresent(rootCombinedResultsPath, path.join(targetResultsDir, 'ocr-case-results.json'));
     await copyIfPresent(rootSummaryPath, path.join(targetResultsDir, 'ocr-accuracy-summary.json'));
+    await copyIfPresent(rootRunMetadataPath, path.join(targetResultsDir, 'ocr-run-metadata.json'));
     await annotateSummary(
         path.join(targetResultsDir, 'ocr-accuracy-summary.json'),
         selectedModel,
         selectedBackend,
         selectedPaddleOnnxModelVariant,
         selectedDisablePaddleOnnxWasmFallback,
+        runMetadata,
     );
 }
 
@@ -131,6 +182,7 @@ async function annotateSummary(
     selectedBackend,
     selectedPaddleOnnxModelVariant,
     selectedDisablePaddleOnnxWasmFallback,
+    runMetadata,
 ) {
     try {
         const summaryBody = await fs.readFile(summaryPath, 'utf8');
@@ -141,6 +193,7 @@ async function annotateSummary(
             ? selectedPaddleOnnxModelVariant
             : null;
         summary.disablePaddleOnnxWasmFallback = Boolean(selectedDisablePaddleOnnxWasmFallback && selectedBackend === 'paddleonnx');
+        summary.run = runMetadata;
         await fs.writeFile(summaryPath, JSON.stringify(summary, null, 2));
     } catch {
         // Leave the run output unchanged if the summary was not produced.

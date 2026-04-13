@@ -110,6 +110,7 @@
 - `npm run test:e2e:tesseract`, `npm run test:e2e:scribejs`, and `npm run test:e2e:paddleonnx` run the Chromium Playwright OCR suite against a single backend without needing an extra `--backend` flag.
 - `npm run test:e2e:paddleonnx:no-fallback` runs the Chromium Playwright OCR suite against `paddleonnx` with WASM fallback disabled so WebGPU/WebNN failures are surfaced directly.
 - `npm run test:e2e:compare-backends` runs the Chromium Playwright OCR dataset against the `tesseract`, experimental `scribejs`, and experimental `paddleonnx` backends and writes `test-results/ocr-backend-comparison.json`.
+- `.github/workflows/ocr-performance.yml` runs on every branch push, executes `npm run test:e2e:tesseract` and `npm run test:e2e:paddleonnx`, writes [reports/ocr-performance.md](/c:/Dev/Namida/reports/ocr-performance.md), and commits that Markdown report back with `GITHUB_TOKEN`.
 - Playwright runs in this repo should use at least 5 workers. The local runner wrappers clamp lower worker counts up to `5`.
 - The `scribejs` backend is experimental, must keep using bundled local assets only, and the published `scribe.js-ocr` package is AGPL-3.0 licensed.
 - The `paddleonnx` backend is experimental, uses bundled local ONNX models only, currently targets the bundled Chinese/Japanese PaddleOCR recognition model with a bundled detection model for full-crop OCR, and does not fall back to Tesseract.
