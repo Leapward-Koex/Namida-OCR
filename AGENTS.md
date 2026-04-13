@@ -75,6 +75,56 @@ Playwright currently exercises the Chromium extension harness. Firefox and Edge 
 - Some E2E or model-comparison runs may remain non-perfect because OCR quality is a model limitation, not necessarily a regression in extension code.
 - When assessing OCR changes, look at the generated summaries in `test-results/` and compare accuracy/regression trends instead of expecting perfect recognition.
 
+## Paddle ONNX Reliability Workflow
+
+- Use `reports/ocr-performance.md` as the current ONNX baseline. It is the source of truth for backend-level timing/accuracy and per-case accuracy before you claim an improvement or a regression.
+- When improving one `paddleonnx` OCR case, do not rerun the whole ONNX suite on every edit. Rebuild once, then run only the target case until it reaches the task's target pass rate. After the focused case is stable, run the full ONNX suite and confirm that the other cases did not regress.
+- For this workflow, define "pass" up front for the task. In practice that usually means either exact match or hitting a chosen `characterAccuracy` threshold for the case. The current Playwright OCR dataset mostly records metrics instead of enforcing per-case Paddle thresholds, so use the generated JSON results for pass-rate tracking instead of relying only on Playwright's green/red status.
+- Keep Playwright at `5` workers or more even for filtered runs. The local wrappers clamp worker counts up to `5`, and direct Playwright invocations should do the same.
+- Preserve before/after data when useful with `--results-subdir ...` on the wrapper runs so you can compare summaries instead of relying on memory.
+
+PowerShell example for a focused single-case pass-rate loop:
+
+```powershell
+node .\node_modules\webpack-cli\bin\cli.js --env browser=chrome --env ocr_backend=paddleonnx --env ocr_model=jpn_vert --env paddleonnx_model_variant=server --mode production
+
+$env:NAMIDA_TEST_OCR_BACKEND = 'paddleonnx'
+$env:NAMIDA_TEST_OCR_MODEL = 'jpn_vert'
+$env:PLAYWRIGHT_WORKERS = '5'
+
+$case = 'case-008-ore-otoko-no-ko-damon'
+$targetAccuracy = 0.80
+$runs = 10
+$passes = 0
+
+for ($i = 1; $i -le $runs; $i++) {
+    node .\node_modules\@playwright\test\cli.js test .\tests\extension.spec.ts --project chromium-extension --grep "recognizes $case"
+    $result = Get-Content ".\test-results\ocr-case-results\$case.json" | ConvertFrom-Json
+    if ($result.characterAccuracy -ge $targetAccuracy) {
+        $passes += 1
+    }
+}
+
+"{0}/{1} runs met target ({2:P1})" -f $passes, $runs, ($passes / $runs)
+```
+
+After the focused case meets the target pass rate, run the full regression sweep:
+
+```powershell
+npm run test:e2e:paddleonnx -- --workers 5 --results-subdir onnx-full-after
+```
+
+- The main focused-run artifacts are `test-results/ocr-case-results/<case>.json` and `test-results/ocr-debug/<case>/`.
+- `tests/extension.spec.ts` always enables `OcrDebugArtifacts` for the OCR dataset and persists `snapshot.json` plus PNG crops/attempt images under `test-results/ocr-debug/<case>/`.
+- `snapshot.json` tells you which source won: `candidates.fullCrop`, `candidates.detected`, `candidates.projected`, and `candidates.selected`.
+- `working-crop.png` is the padded crop sent into Paddle preprocessing.
+- `full-crop-*.png`, `detected-*.png`, and `projected-*.png` show the actual crops and recognition attempts. Each attempt records `normalized`, `rotated`, `selected`, and the candidate text/score.
+- Empty `projectedGroups` is currently expected in the extension E2E ONNX path. `src/background/index.ts` forces `paddleonnx` requests to `PSM.AUTO`, and `PaddleOnnxOcrBackend.recognize()` skips projection extraction when the page segmentation mode is `AUTO`.
+- If the right text exists in one attempt image but loses selection, inspect scoring/ranking code first instead of detection code. The relevant logic lives in `src/background/ocr/OcrTextScoring.ts`, `refineRecognitionCandidate()`, `rankRecognitionAttempt()`, and `chooseFinalCandidate()` in `src/background/ocr/PaddleOnnxOcrBackend.ts`.
+- If the detector misses lines or merges them badly, inspect `detectTextBoxes()`, detector thresholds/padding from the Paddle manifest, `mergeBoxesForPageSegMode()`, and the crop geometry in `snapshot.json`.
+- If a tall vertical crop should split into multiple lines but does not, inspect `recognizeVerticalColumnCrop()` and `extractVerticalTextColumns()`.
+- If runs vary because of runtime/provider behavior instead of OCR quality, inspect ONNX provider logs and fallback behavior in `PaddleOnnxOcrBackend.ts`. Search for messages such as `Initialized ONNX session`, `Failed to create ONNX session`, and `Disabling accelerated execution provider after runtime failure`.
+
 ## Change Guidance
 
 - Preserve the browser-extension-only architecture.
