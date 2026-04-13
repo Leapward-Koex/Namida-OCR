@@ -79,6 +79,7 @@ Playwright currently exercises the Chromium extension harness. Firefox and Edge 
 
 - Use `reports/ocr-performance.md` as the current ONNX baseline. It is the source of truth for backend-level timing/accuracy and per-case accuracy before you claim an improvement or a regression.
 - When improving one `paddleonnx` OCR case, do not rerun the whole ONNX suite on every edit. Rebuild once, then run only the target case until it reaches the task's target pass rate. After the focused case is stable, run the full ONNX suite and confirm that the other cases did not regress.
+- If you are fixing a regression introduced by a prior `paddleonnx` case-specific change, do not close the task when the focused case recovers. Finish by rerunning the full ONNX suite, comparing it with `reports/ocr-performance.md`, and verifying that no other OCR cases regressed.
 - For this workflow, define "pass" up front for the task. In practice that usually means either exact match or hitting a chosen `characterAccuracy` threshold for the case. The current Playwright OCR dataset mostly records metrics instead of enforcing per-case Paddle thresholds, so use the generated JSON results for pass-rate tracking instead of relying only on Playwright's green/red status.
 - Keep Playwright at `5` workers or more even for filtered runs. The local wrappers clamp worker counts up to `5`, and direct Playwright invocations should do the same.
 - Preserve before/after data when useful with `--results-subdir ...` on the wrapper runs so you can compare summaries instead of relying on memory.

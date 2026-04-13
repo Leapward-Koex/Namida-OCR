@@ -513,9 +513,19 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
             });
         }
 
+        const hasPlausibleRotatedAlternative = attempts.some((attempt) => (
+            attempt.rotated
+            && attempt.candidate !== null
+            && attempt.candidate.normalizedText.length >= 2
+            && attempt.candidate.japaneseRatio >= 0.5
+            && attempt.candidate.score >= 18
+        ));
         const bestAttempt = attempts
             .filter((attempt) => attempt.candidate !== null)
-            .sort((left, right) => rankRecognitionAttempt(right) - rankRecognitionAttempt(left))[0] ?? null;
+            .sort((left, right) => (
+                rankRecognitionAttempt(right, dominantAspectRatio, hasPlausibleRotatedAlternative)
+                - rankRecognitionAttempt(left, dominantAspectRatio, hasPlausibleRotatedAlternative)
+            ))[0] ?? null;
 
         if (bestAttempt?.candidate) {
             console.debug(
@@ -1615,10 +1625,27 @@ function rankSourceCandidate(
     return entry.candidate.score + sourceBonus;
 }
 
-function rankRecognitionAttempt(attempt: RecognitionAttempt) {
-    const candidateScore = attempt.candidate?.score ?? Number.NEGATIVE_INFINITY;
+function rankRecognitionAttempt(
+    attempt: RecognitionAttempt,
+    sourceAspectRatio: number,
+    hasPlausibleRotatedAlternative: boolean,
+) {
+    const candidate = attempt.candidate;
+    const candidateScore = candidate?.score ?? Number.NEGATIVE_INFINITY;
     const binarizedPenalty = attempt.id.includes('-binarized-') ? 2 : 0;
-    return candidateScore - binarizedPenalty;
+    let adjustedScore = candidateScore - binarizedPenalty;
+
+    if (
+        candidate
+        && !attempt.rotated
+        && hasPlausibleRotatedAlternative
+        && sourceAspectRatio >= 2.2
+        && candidate.normalizedText.length <= 1
+    ) {
+        adjustedScore -= 14;
+    }
+
+    return adjustedScore;
 }
 
 function mergeBoxesForPageSegMode(

@@ -14,6 +14,11 @@ const ARTIFACT_CHARS = /[\\/|:;_`~]/g;
 const JAPANESE_CHARS = /[々〆ヶぁ-ゖァ-ヺ一-龯]/gu;
 const JAPANESE_CONTEXT = /([々〆ヶぁ-ゖァ-ヺ一-龯…。、！？「」『』ー])[\\/|](?=[々〆ヶぁ-ゖァ-ヺ一-龯…。、！？「」『』ー])/gu;
 const STRIP_LINE_ARTIFACTS = /^[\\/|:;_`~]+|[\\/|:;_`~]+$/g;
+const NORMALIZE_SUSPICIOUS_LINE_PUNCTUATION = [
+    [/(?<=…)[．｡]+$/u, ''],
+    [/^(?<stem>[々〆ヶぁ-ゖァ-ヺ一-龯]{1,4})：$/u, '$<stem>…'],
+    [/^(?<stem>[々〆ヶぁ-ゖァ-ヺ一-龯]{1,4})：[．｡]+$/u, '$<stem>…'],
+] as const;
 
 export function buildOcrRecognitionCandidate(
     id: string,
@@ -71,7 +76,7 @@ function cleanRecognizedText(text: string): string {
     const cleanedLines = text
         .replace(JAPANESE_CONTEXT, '$1')
         .split('\n')
-        .map((line) => line.replace(STRIP_LINE_ARTIFACTS, '').trim())
+        .map((line) => normalizeSuspiciousLinePunctuation(line.replace(STRIP_LINE_ARTIFACTS, '').trim()))
         .filter((line) => line.length > 0 && !/^[\\/|:;_`~]+$/.test(line));
 
     if (cleanedLines.length === 0) {
@@ -79,4 +84,11 @@ function cleanRecognizedText(text: string): string {
     }
 
     return cleanedLines.join('\n');
+}
+
+function normalizeSuspiciousLinePunctuation(line: string) {
+    return NORMALIZE_SUSPICIOUS_LINE_PUNCTUATION.reduce(
+        (normalizedLine, [pattern, replacement]) => normalizedLine.replace(pattern, replacement),
+        line,
+    );
 }
