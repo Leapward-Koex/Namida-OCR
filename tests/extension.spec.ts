@@ -13,6 +13,7 @@ const GET_LAST_OCR_DEBUG_SNAPSHOT_ACTION = NamidaMessageAction.GetLastOcrDebugSn
 const GET_LAST_OCR_DEBUG_SNAPSHOT_OFFSCREEN_ACTION = NamidaMessageAction.GetLastOcrDebugSnapshotOffscreen;
 const TEST_OCR_BACKEND = normalizeTestOcrBackend(process.env.NAMIDA_TEST_OCR_BACKEND);
 const TEST_OCR_MODEL = process.env.NAMIDA_TEST_OCR_MODEL?.trim() || 'jpn_vert';
+const OCR_RESULT_TIMEOUT_MS = process.env.CI ? 240_000 : 120_000;
 
 test.describe('OCR accuracy dataset', () => {
     test.describe.configure({ mode: 'parallel' });
@@ -103,7 +104,7 @@ async function runOcrCase(page: Page, serviceWorker: Worker, ocrCase: OcrCase) {
     await page.mouse.up();
 
     const result = page.getByTestId('namida-floating-window-text');
-    await expect(result).toBeVisible({ timeout: 120_000 });
+    await expect(result).toBeVisible({ timeout: OCR_RESULT_TIMEOUT_MS });
     return result.textContent();
 }
 
