@@ -224,9 +224,14 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
             'full-crop',
             true,
         );
-        const projectedBoxes = pageSegMode === PSM.AUTO
+        const projectedPageSegMode = resolveProjectedPageSegMode(pageSegMode, workingCanvas);
+        const projectedBoxes = projectedPageSegMode === null
             ? []
-            : extractProjectedBoxes(preparedWorkingCanvas.canvas, pageSegMode, manifest.detector.box_padding);
+            : extractProjectedBoxes(
+                preparedWorkingCanvas.canvas,
+                projectedPageSegMode,
+                manifest.detector.box_padding,
+            );
         const projectedResult = await this.recognizeSegmentBoxes(
             workingCanvas,
             preparedWorkingCanvas.canvas,
@@ -471,11 +476,11 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
 
                 if (allowMultiLineSplit && variant.suffix === 'prepared') {
                     const splitLinesCandidate = await this.recognizeVerticalColumnCrop(
-                        variant.canvas,
+                        cropCanvas,
                         recognizerSession,
                         dictionary,
                         recognizerConfig,
-                        `${id}-${variant.suffix}-column-split`,
+                        `${id}-original-column-split`,
                     );
 
                     if (splitLinesCandidate) {
@@ -540,51 +545,66 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
             return null;
         }
 
-        const columnBoxes = extractVerticalTextColumns(sourceCanvas);
-        if (columnBoxes.length !== 2) {
+        const detectedColumnBoxes = extractVerticalTextColumns(sourceCanvas);
+        const columnBoxSets = detectedColumnBoxes.length === 2
+            ? [detectedColumnBoxes]
+            : buildHeuristicVerticalSplitColumnSets(sourceCanvas);
+
+        if (columnBoxSets.length === 0) {
             return null;
         }
 
-        const lineCandidates: OcrRecognitionCandidate[] = [];
         const cropPadding = Math.max(6, Math.round(sourceCanvas.width * 0.03));
+        const splitCandidates: OcrRecognitionCandidate[] = [];
 
-        for (const [index, box] of columnBoxes.entries()) {
-            const columnCanvas = cropCanvasRegion(sourceCanvas, box, cropPadding);
-            const lineCanvas = rotateCanvasCounterclockwise(columnCanvas);
-            const lineCandidate = refineRecognitionCandidate(
-                await this.runRecognition(
+        for (const [setIndex, columnBoxes] of columnBoxSets.entries()) {
+            const lineCandidates: OcrRecognitionCandidate[] = [];
+
+            for (const [index, box] of columnBoxes.entries()) {
+                const columnCanvas = cropCanvasRegion(sourceCanvas, box, cropPadding);
+                const lineCanvas = rotateCanvasCounterclockwise(columnCanvas);
+                const lineCandidate = refineRecognitionCandidate(
+                    await this.runRecognition(
+                        lineCanvas,
+                        recognizerSession,
+                        dictionary,
+                        recognizerConfig,
+                        `${id}-set-${setIndex}-line-${index}`,
+                    ),
                     lineCanvas,
-                    recognizerSession,
-                    dictionary,
-                    recognizerConfig,
-                    `${id}-line-${index}`,
+                );
+
+                if (lineCandidate?.cleanedText && shouldIncludeLineCandidate(lineCandidate)) {
+                    lineCandidates.push(lineCandidate);
+                }
+            }
+
+            if (lineCandidates.length < 2) {
+                continue;
+            }
+
+            const combinedText = normalizeJoinedLines(lineCandidates.map((candidate) => candidate.cleanedText));
+            if (!combinedText) {
+                continue;
+            }
+
+            const splitCandidate = refineRecognitionCandidate(
+                buildOcrRecognitionCandidate(
+                    `${id}-set-${setIndex}`,
+                    combinedText,
+                    average(lineCandidates.map((candidate) => candidate.confidence)),
+                    lineCandidates.flatMap((candidate) => [candidate.averageSymbolConfidence]),
                 ),
-                lineCanvas,
+                rotateCanvasCounterclockwise(sourceCanvas),
             );
 
-            if (lineCandidate?.cleanedText && shouldIncludeLineCandidate(lineCandidate)) {
-                lineCandidates.push(lineCandidate);
+            if (splitCandidate) {
+                splitCandidates.push(splitCandidate);
             }
         }
 
-        if (lineCandidates.length < 2) {
-            return null;
-        }
-
-        const combinedText = normalizeJoinedLines(lineCandidates.map((candidate) => candidate.cleanedText));
-        if (!combinedText) {
-            return null;
-        }
-
-        return refineRecognitionCandidate(
-            buildOcrRecognitionCandidate(
-                id,
-                combinedText,
-                average(lineCandidates.map((candidate) => candidate.confidence)),
-                lineCandidates.flatMap((candidate) => [candidate.averageSymbolConfidence]),
-            ),
-            rotateCanvasCounterclockwise(sourceCanvas),
-        );
+        return splitCandidates
+            .sort((left, right) => right.score - left.score)[0] ?? null;
     }
 
     private async buildDebugSnapshot(
@@ -2136,12 +2156,33 @@ function extractVerticalTextColumns(sourceCanvas: WorkingCanvas) {
         });
     }
 
-    const filteredColumns = columns
+    let filteredColumns = columns
         .map((column) => ({
             left: clamp(column.left - padding, 0, width - 1),
             right: clamp(column.right + padding, 1, width),
         }))
         .filter((column) => (column.right - column.left) >= minimumColumnWidth);
+
+    if (filteredColumns.length !== 2) {
+        filteredColumns = splitVerticalColumnsByValley(
+            columnInkCounts,
+            width,
+            height,
+            peakInk,
+            padding,
+            minimumColumnWidth,
+        );
+    }
+
+    if (filteredColumns.length !== 2) {
+        filteredColumns = splitVerticalColumnsByLocalBands(
+            data,
+            width,
+            height,
+            padding,
+            minimumColumnWidth,
+        );
+    }
 
     if (filteredColumns.length !== 2) {
         return [] satisfies DetectedBox[];
@@ -2175,6 +2216,383 @@ function extractVerticalTextColumns(sourceCanvas: WorkingCanvas) {
 
 function isVerticalMultiLineSplitCandidate(sourceCanvas: WorkingCanvas) {
     return sourceCanvas.height >= Math.round(sourceCanvas.width * 1.35);
+}
+
+function splitVerticalColumnsByValley(
+    columnInkCounts: Uint16Array,
+    width: number,
+    height: number,
+    peakInk: number,
+    padding: number,
+    minimumColumnWidth: number,
+) {
+    if (width < 96 || peakInk <= 0) {
+        return [] satisfies Array<{ left: number; right: number }>;
+    }
+
+    const smoothingRadius = clamp(Math.round(width * 0.01), 2, 8);
+    const smoothedCounts = new Float32Array(width);
+
+    for (let x = 0; x < width; x += 1) {
+        let sum = 0;
+        let count = 0;
+
+        for (let offset = -smoothingRadius; offset <= smoothingRadius; offset += 1) {
+            const sampleX = x + offset;
+            if (sampleX < 0 || sampleX >= width) {
+                continue;
+            }
+
+            sum += columnInkCounts[sampleX] ?? 0;
+            count += 1;
+        }
+
+        smoothedCounts[x] = count > 0 ? (sum / count) : 0;
+    }
+
+    const searchStart = Math.round(width * 0.2);
+    const searchEnd = Math.round(width * 0.8);
+    let splitX = -1;
+    let minInk = Number.POSITIVE_INFINITY;
+
+    for (let x = searchStart; x <= searchEnd; x += 1) {
+        const ink = smoothedCounts[x] ?? 0;
+        if (ink < minInk) {
+            minInk = ink;
+            splitX = x;
+        }
+    }
+
+    if (splitX === -1 || minInk > Math.max(10, Math.round(peakInk * 0.28))) {
+        return [] satisfies Array<{ left: number; right: number }>;
+    }
+
+    const bandThreshold = Math.max(
+        10,
+        Math.round(height * 0.03),
+        Math.round(peakInk * 0.22),
+    );
+    const leftBand = collectColumnBand(columnInkCounts, 0, splitX, bandThreshold);
+    const rightBand = collectColumnBand(columnInkCounts, splitX, width, bandThreshold);
+
+    if (!leftBand || !rightBand) {
+        return [] satisfies Array<{ left: number; right: number }>;
+    }
+
+    const paddedBands = [leftBand, rightBand]
+        .map((band) => ({
+            left: clamp(band.left - padding, 0, width - 1),
+            right: clamp(band.right + padding, 1, width),
+        }))
+        .filter((band) => (band.right - band.left) >= minimumColumnWidth);
+
+    if (paddedBands.length !== 2) {
+        return [] satisfies Array<{ left: number; right: number }>;
+    }
+
+    return paddedBands;
+}
+
+function collectColumnBand(
+    columnInkCounts: Uint16Array,
+    start: number,
+    end: number,
+    threshold: number,
+) {
+    let left = -1;
+    let right = -1;
+
+    for (let x = start; x < end; x += 1) {
+        if ((columnInkCounts[x] ?? 0) < threshold) {
+            continue;
+        }
+
+        if (left === -1) {
+            left = x;
+        }
+        right = x + 1;
+    }
+
+    if (left === -1 || right === -1 || right <= left) {
+        return null;
+    }
+
+    return { left, right };
+}
+
+function splitVerticalColumnsByLocalBands(
+    imageData: Uint8ClampedArray,
+    width: number,
+    height: number,
+    padding: number,
+    minimumColumnWidth: number,
+) {
+    if (width < 96 || height < 160) {
+        return [] satisfies Array<{ left: number; right: number }>;
+    }
+
+    const bandHeight = clamp(Math.round(width * 0.45), 96, Math.min(320, height));
+    const bandStep = Math.max(48, Math.round(bandHeight * 0.5));
+    const maxBridgeGap = Math.max(1, Math.round(width * 0.003));
+    const minimumBandWidth = Math.max(24, Math.round(width * 0.08));
+    const maximumBandWidth = Math.max(
+        minimumBandWidth + 12,
+        Math.round(width * 0.62),
+    );
+    const bandPadding = Math.max(2, Math.round(padding * 0.35));
+    const bandStarts: number[] = [];
+    const lastBandTop = Math.max(0, height - bandHeight);
+
+    for (let top = 0; top <= lastBandTop; top += bandStep) {
+        bandStarts.push(top);
+    }
+
+    if (bandStarts.length === 0 || bandStarts[bandStarts.length - 1] !== lastBandTop) {
+        bandStarts.push(lastBandTop);
+    }
+
+    const bandSegments: Array<{
+        left: number;
+        right: number;
+        top: number;
+        bottom: number;
+        centerX: number;
+    }> = [];
+
+    for (const bandTop of bandStarts) {
+        const bandBottom = Math.min(height, bandTop + bandHeight);
+        const bandColumnInkCounts = new Uint16Array(width);
+        let bandPeakInk = 0;
+
+        for (let x = 0; x < width; x += 1) {
+            let inkCount = 0;
+
+            for (let y = bandTop; y < bandBottom; y += 1) {
+                const offset = ((y * width) + x) * 4;
+                if (imageData[offset] < 128) {
+                    inkCount += 1;
+                }
+            }
+
+            bandColumnInkCounts[x] = inkCount;
+            bandPeakInk = Math.max(bandPeakInk, inkCount);
+        }
+
+        if (bandPeakInk <= 0) {
+            continue;
+        }
+
+        const minimumBandInk = Math.max(
+            8,
+            Math.round((bandBottom - bandTop) * 0.08),
+            Math.round(bandPeakInk * 0.18),
+        );
+        const widestSegments = collectColumnBands(
+            bandColumnInkCounts,
+            width,
+            minimumBandInk,
+            maxBridgeGap,
+        )
+            .map((segment) => ({
+                left: clamp(segment.left - bandPadding, 0, width - 1),
+                right: clamp(segment.right + bandPadding, 1, width),
+            }))
+            .filter((segment) => {
+                const segmentWidth = segment.right - segment.left;
+                return segmentWidth >= minimumBandWidth && segmentWidth <= maximumBandWidth;
+            })
+            .sort((left, right) => (right.right - right.left) - (left.right - left.left))
+            .slice(0, 2);
+
+        for (const segment of widestSegments) {
+            bandSegments.push({
+                ...segment,
+                top: bandTop,
+                bottom: bandBottom,
+                centerX: segment.left + ((segment.right - segment.left) / 2),
+            });
+        }
+    }
+
+    if (bandSegments.length < 4) {
+        return [] satisfies Array<{ left: number; right: number }>;
+    }
+
+    const sortedSegments = [...bandSegments].sort((left, right) => left.centerX - right.centerX);
+    let splitIndex = -1;
+    let widestGap = 0;
+
+    for (let index = 2; index <= (sortedSegments.length - 2); index += 1) {
+        const gap = sortedSegments[index].centerX - sortedSegments[index - 1].centerX;
+        if (gap <= widestGap) {
+            continue;
+        }
+
+        widestGap = gap;
+        splitIndex = index;
+    }
+
+    if (splitIndex === -1 || widestGap < Math.max(18, Math.round(width * 0.08))) {
+        return [] satisfies Array<{ left: number; right: number }>;
+    }
+
+    const splitCenterX = (sortedSegments[splitIndex - 1].centerX + sortedSegments[splitIndex].centerX) / 2;
+    const splitLeftBoundary = clamp(Math.floor(splitCenterX) - 2, 1, width - 2);
+    const splitRightBoundary = clamp(Math.ceil(splitCenterX) + 2, 2, width - 1);
+    const groupedSegments = [
+        sortedSegments.slice(0, splitIndex),
+        sortedSegments.slice(splitIndex),
+    ];
+
+    const mergedGroups = groupedSegments.map((segments, index) => {
+        const left = Math.min(...segments.map((segment) => segment.left));
+        const top = Math.min(...segments.map((segment) => segment.top));
+        const right = Math.max(...segments.map((segment) => segment.right));
+        const bottom = Math.max(...segments.map((segment) => segment.bottom));
+        const boundedLeft = index === 0 ? left : Math.max(left, splitRightBoundary);
+        const boundedRight = index === 0 ? Math.min(right, splitLeftBoundary) : right;
+        return {
+            bottom,
+            height: bottom - top,
+            left: boundedLeft,
+            right: boundedRight,
+            segmentCount: segments.length,
+            top,
+            width: boundedRight - boundedLeft,
+        };
+    });
+    const sortedGroups = [...mergedGroups].sort((left, right) => left.left - right.left);
+    const leftGroup = sortedGroups[0];
+    const rightGroup = sortedGroups[1];
+    const verticalOverlap = Math.min(leftGroup.bottom, rightGroup.bottom) - Math.max(leftGroup.top, rightGroup.top);
+    const centerGap = rightGroup.left - leftGroup.right;
+    const maxColumnWidth = Math.max(leftGroup.width, rightGroup.width);
+    const minColumnWidth = Math.max(1, Math.min(leftGroup.width, rightGroup.width));
+    const occupiedWidth = leftGroup.width + rightGroup.width;
+
+    if (
+        leftGroup.segmentCount < 2
+        || rightGroup.segmentCount < 2
+        || leftGroup.height < Math.round(height * 0.2)
+        || rightGroup.height < Math.round(height * 0.2)
+        || verticalOverlap < Math.max(48, Math.round(Math.min(leftGroup.height, rightGroup.height) * 0.22))
+        || centerGap < Math.max(12, Math.round(width * 0.03))
+        || (maxColumnWidth / minColumnWidth) > 2.6
+        || occupiedWidth > Math.round(width * 0.9)
+    ) {
+        return [] satisfies Array<{ left: number; right: number }>;
+    }
+
+    return sortedGroups
+        .map((group, index) => ({
+            left: index === 0
+                ? clamp(group.left - padding, 0, splitLeftBoundary - 1)
+                : clamp(Math.max(group.left - padding, splitRightBoundary), 0, width - 1),
+            right: index === 0
+                ? clamp(Math.min(group.right + padding, splitLeftBoundary), 1, width)
+                : clamp(group.right + padding, splitRightBoundary + 1, width),
+        }))
+        .filter((group) => (group.right - group.left) >= minimumColumnWidth);
+}
+
+function collectColumnBands(
+    columnInkCounts: Uint16Array,
+    width: number,
+    threshold: number,
+    maxBridgeGap: number,
+) {
+    const segments: Array<{ left: number; right: number }> = [];
+    let activeLeft = -1;
+    let lastInkColumn = -1;
+
+    for (let x = 0; x < width; x += 1) {
+        if ((columnInkCounts[x] ?? 0) >= threshold) {
+            if (activeLeft === -1) {
+                activeLeft = x;
+            }
+            lastInkColumn = x;
+            continue;
+        }
+
+        if (activeLeft === -1 || lastInkColumn === -1) {
+            continue;
+        }
+
+        if ((x - lastInkColumn) <= maxBridgeGap) {
+            continue;
+        }
+
+        segments.push({
+            left: activeLeft,
+            right: lastInkColumn + 1,
+        });
+        activeLeft = -1;
+        lastInkColumn = -1;
+    }
+
+    if (activeLeft !== -1 && lastInkColumn !== -1) {
+        segments.push({
+            left: activeLeft,
+            right: lastInkColumn + 1,
+        });
+    }
+
+    return segments;
+}
+
+function buildHeuristicVerticalSplitColumnSets(sourceCanvas: WorkingCanvas) {
+    const width = sourceCanvas.width;
+    const height = sourceCanvas.height;
+    if (width < 240 || height < Math.round(width * 4)) {
+        return [] satisfies DetectedBox[][];
+    }
+
+    const gap = Math.max(6, Math.round(width * 0.018));
+    const minimumColumnWidth = Math.max(72, Math.round(width * 0.26));
+    const splitRatios = [0.54];
+    const columnSets = splitRatios
+        .map((ratio) => {
+            const splitX = clamp(
+                Math.round(width * ratio),
+                Math.round(width * 0.4),
+                Math.round(width * 0.6),
+            );
+            const leftRight = clamp(splitX - Math.floor(gap / 2), minimumColumnWidth, width - minimumColumnWidth);
+            const rightLeft = clamp(splitX + Math.ceil(gap / 2), minimumColumnWidth, width - minimumColumnWidth);
+
+            if ((leftRight < minimumColumnWidth) || ((width - rightLeft) < minimumColumnWidth)) {
+                return null;
+            }
+
+            return [
+                createDetectedBox(rightLeft, 0, width, height),
+                createDetectedBox(0, 0, leftRight, height),
+            ] satisfies DetectedBox[];
+        })
+        .filter((columnSet): columnSet is DetectedBox[] => columnSet !== null);
+
+    return columnSets.filter((columnSet, index) => {
+        return columnSets.findIndex((otherSet) => (
+            otherSet[0].left === columnSet[0].left
+            && otherSet[1].right === columnSet[1].right
+        )) === index;
+    });
+}
+
+function resolveProjectedPageSegMode(pageSegMode: PSM, sourceCanvas: WorkingCanvas): PSM | null {
+    if (pageSegMode !== PSM.AUTO) {
+        return pageSegMode;
+    }
+
+    if (sourceCanvas.height >= Math.round(sourceCanvas.width * 1.6)) {
+        return PSM.SINGLE_BLOCK_VERT_TEXT;
+    }
+
+    if (sourceCanvas.width >= Math.round(sourceCanvas.height * 1.6)) {
+        return PSM.SINGLE_BLOCK;
+    }
+
+    return null;
 }
 
 function createProjectionMask(sourceCanvas: WorkingCanvas) {
