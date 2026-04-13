@@ -349,6 +349,7 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
         for (const [index, box] of boxes.entries()) {
             const cropCanvas = cropCanvasRegion(sourceCanvas, box, 0);
             const preparedCropCanvas = cropCanvasRegion(preparedSourceCanvas, box, 0);
+            const allowMultiLineSplit = isVerticalMultiLineSplitCandidate(cropCanvas);
             const result = await this.recognizeCrop(
                 cropCanvas,
                 {
@@ -359,7 +360,7 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
                 dictionary,
                 recognizerConfig,
                 `${id}-box-${index}`,
-                false,
+                allowMultiLineSplit,
             );
             segments.push({ box, cropCanvas, result });
 
@@ -535,8 +536,7 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
         recognizerConfig: RecognizerConfig,
         id: string,
     ): Promise<OcrRecognitionCandidate | null> {
-        const tallAspectRatio = sourceCanvas.height / Math.max(sourceCanvas.width, 1);
-        if (tallAspectRatio < 3.2) {
+        if (!isVerticalMultiLineSplitCandidate(sourceCanvas)) {
             return null;
         }
 
@@ -2147,6 +2147,21 @@ function extractVerticalTextColumns(sourceCanvas: WorkingCanvas) {
         return [] satisfies DetectedBox[];
     }
 
+    const sortedColumns = [...filteredColumns].sort((left, right) => left.left - right.left);
+    const columnGap = sortedColumns[1].left - sortedColumns[0].right;
+    const leftColumnWidth = sortedColumns[0].right - sortedColumns[0].left;
+    const rightColumnWidth = sortedColumns[1].right - sortedColumns[1].left;
+    const maxColumnWidth = Math.max(leftColumnWidth, rightColumnWidth);
+    const minColumnWidth = Math.max(1, Math.min(leftColumnWidth, rightColumnWidth));
+
+    if (columnGap < Math.max(6, Math.round(width * 0.04))) {
+        return [] satisfies DetectedBox[];
+    }
+
+    if ((maxColumnWidth / minColumnWidth) > 2.4) {
+        return [] satisfies DetectedBox[];
+    }
+
     const occupiedWidth = filteredColumns.reduce((sum, column) => sum + (column.right - column.left), 0);
 
     if (occupiedWidth > Math.round(width * 0.88)) {
@@ -2156,6 +2171,10 @@ function extractVerticalTextColumns(sourceCanvas: WorkingCanvas) {
     return filteredColumns
         .sort((left, right) => right.left - left.left)
         .map((column) => createDetectedBox(column.left, 0, column.right, height));
+}
+
+function isVerticalMultiLineSplitCandidate(sourceCanvas: WorkingCanvas) {
+    return sourceCanvas.height >= Math.round(sourceCanvas.width * 1.35);
 }
 
 function createProjectionMask(sourceCanvas: WorkingCanvas) {
