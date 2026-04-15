@@ -4,8 +4,10 @@ on:
   push:
     branches:
       - '**'
-    paths-ignore:
-      - 'reports/ocr-performance.md'
+    paths:
+      - 'src/background/ocr/**'
+      - 'models/**'
+      - 'lang/**'
 
 permissions:
   contents: write
