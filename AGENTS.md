@@ -35,6 +35,7 @@ When changing permissions, background execution, popup behavior, or shortcut flo
 - Any `scribe.js-ocr` integration must continue to use extension-local language/model assets. Do not rely on its CDN fallback.
 - Any `paddleonnx` integration must continue to use extension-local ONNX, dictionary, manifest, and ONNX Runtime JSEP/WASM assets. Do not rely on remote model fetches or runtime downloads.
 - Keep both committed PaddleOCR bundles local to the repo when Chromium/server and Firefox/mobile packaging are supported, but only copy the browser-appropriate bundle into `dist/` at build time.
+- Keep the built PaddleOCR metadata file named `libs/paddleocr/paddleocr-manifest.json`; Chrome Web Store uploads must not include nested `manifest.json` files beyond the root extension manifest.
 - Do not add any extension feature that requires calling an application server to function.
 - Browser/system capabilities such as clipboard access or speech synthesis are acceptable. They are not a substitute for adding project servers.
 - The only HTTP server in this repo is `tests/serve-fixtures.mjs`, which exists solely to serve local Playwright fixtures during tests. It is not part of product architecture.

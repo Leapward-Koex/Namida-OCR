@@ -10,6 +10,7 @@ type WorkingCanvas = OffscreenCanvas | HTMLCanvasElement;
 type DrawingContext = OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D;
 
 const PADDLE_ONNX_LOG_TAG = '[PaddleOnnxOcrBackend]';
+const PADDLE_ONNX_MANIFEST_PATH = 'libs/paddleocr/paddleocr-manifest.json';
 const PADDLE_OUTPUT_VARIANTS: Record<string, string> = {
     '亂': '乱',
     '來': '来',
@@ -944,7 +945,7 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
 
     private async getManifest(): Promise<PaddleOnnxManifest> {
         if (!PaddleOnnxOcrBackend.manifestPromise) {
-            PaddleOnnxOcrBackend.manifestPromise = fetch(runtime.getURL('libs/paddleocr/manifest.json'))
+            PaddleOnnxOcrBackend.manifestPromise = fetch(runtime.getURL(PADDLE_ONNX_MANIFEST_PATH))
                 .then(async (response) => {
                     if (!response.ok) {
                         throw new Error(`Failed to load paddleocr manifest: ${response.status} ${response.statusText}`);

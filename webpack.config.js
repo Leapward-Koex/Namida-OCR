@@ -154,6 +154,7 @@ module.exports = (env) => {
             filename: '[name]/index.js',
             chunkFilename: '[name]/index.js',
             publicPath: '/',
+            clean: true,
         },
         resolve: {
             alias: resolveAliases,
@@ -195,7 +196,17 @@ module.exports = (env) => {
                     { from: 'node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.mjs', to: 'libs/onnxruntime/ort-wasm-simd-threaded.jsep.mjs' },
                     { from: 'node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.wasm', to: 'libs/onnxruntime/ort-wasm-simd-threaded.jsep.wasm' },
                     ...getBundledLanguagePatterns(),
-                    { from: `models/paddleocr/${paddleOcrModelVariant}`, to: 'libs/paddleocr' },
+                    {
+                        from: `models/paddleocr/${paddleOcrModelVariant}`,
+                        to: 'libs/paddleocr',
+                        globOptions: {
+                            ignore: ['**/manifest.json'],
+                        },
+                    },
+                    {
+                        from: `models/paddleocr/${paddleOcrModelVariant}/manifest.json`,
+                        to: 'libs/paddleocr/paddleocr-manifest.json',
+                    },
                     { from: 'node_modules/@upscalerjs/esrgan-medium/models/x2', to: 'libs/tensorflow/x2' },
                     { from: 'node_modules/@leapward-koex/kuromoji/dict_extension_spoofed', to: 'libs/kuromoji' },
                     {

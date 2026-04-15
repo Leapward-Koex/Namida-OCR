@@ -103,6 +103,7 @@
 - You can still choose the default OCR backend at build time with `NAMIDA_OCR_BACKEND` or `webpack --env ocr_backend=...`.
 - Available build-time backends are `tesseract`, experimental `scribejs`, and experimental `paddleonnx`.
 - `paddleonnx` uses bundled local assets under `models/paddleocr/` plus bundled `onnxruntime-web` JSEP/WASM assets so it can prefer WebGPU when the browser exposes it and fall back to WASM locally.
+- Paddle source bundles keep their generated `manifest.json`, but builds publish it as `libs/paddleocr/paddleocr-manifest.json` so Chrome Web Store packages contain only the root extension `manifest.json`.
 - Chromium builds package the PP-OCRv5 server detector/recognizer bundle by default, while Firefox builds package the smaller `mobile_det_server_rec` mixed bundle by default to stay under Firefox add-on size limits.
 - Override the packaged Paddle bundle with `NAMIDA_PADDLE_ONNX_MODEL_VARIANT=<bundle-name>` or `webpack --env paddleonnx_model_variant=<bundle-name>` when you need a non-default browser/model combination such as `server`, `mobile`, `mobile_det_server_rec`, or `server_det_mobile_rec`.
 - Set `NAMIDA_PADDLE_ONNX_DISABLE_WASM_FALLBACK=1` or pass `--env paddleonnx_disable_wasm_fallback=true` to make accelerated provider failures fatal for no-fallback testing.

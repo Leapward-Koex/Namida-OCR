@@ -42,7 +42,7 @@
                 "/libs/tesseract-core/tesseract-core-simd-lstm.wasm.js",
                 "/libs/tesseract-lang/*",
                 "/libs/onnxruntime/*",
-                "/libs/paddleocr/manifest.json",
+                "/libs/paddleocr/paddleocr-manifest.json",
                 "/libs/paddleocr/detection/v5/*",
                 "/libs/paddleocr/languages/chinese/*",
                 "/libs/tensorflow/x2/model.json",
