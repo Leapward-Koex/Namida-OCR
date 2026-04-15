@@ -62,12 +62,14 @@
     <div class="section">
       <h2>Advanced</h2>
       <label for="ocr-backend">OCR Backend</label>
-      <select id="ocr-backend" title="Tesseract is faster but usually less accurate. PaddleOCR is slower but usually more accurate.">
+      <select id="ocr-backend" title="Tesseract is faster, but you must manually set the correct text direction or the result will usually be wrong. PaddleOCR is slower, but usually more accurate on difficult text and is strongly recommended with GPU support enabled.">
         <option value="tesseract" selected>Tesseract</option>
         <option value="paddleonnx">PaddleOCR</option>
       </select>
       <p class="setting-description" id="ocr-backend-description">
-        Tesseract is faster but usually less accurate. PaddleOCR is slower but usually more accurate.
+        <strong>Tesseract:</strong> Faster and lighter, but you must manually choose the correct text direction. If this text direction setting does not match the source text, the OCR output will most likely be incorrect.
+        <br />
+        <strong>PaddleOCR:</strong> Usually more accurate for difficult text, but slower to start and scan. GPU support is highly recommended for practical scan speed when your browser and hardware allow it.
       </p>
       <label for="upscaling-mode">Upscaling Mode</label>
       <select id="upscaling-mode">
