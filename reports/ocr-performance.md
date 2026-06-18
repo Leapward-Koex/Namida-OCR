@@ -2,52 +2,52 @@
 
 # OCR Performance Report
 
-Generated: 2026-04-15T11:05:00.288Z
+Generated: 2026-06-18T11:10:19.888Z
 Repository: `Leapward-Koex/Namida-OCR`
 Branch: `master`
-Commit: [`09083f1`](https://github.com/Leapward-Koex/Namida-OCR/commit/09083f1b08017c4eaecfa670d9192d5690e75fbf)
-Workflow run: [#5](https://github.com/Leapward-Koex/Namida-OCR/actions/runs/24450555791)
+Commit: [`9a2ab6c`](https://github.com/Leapward-Koex/Namida-OCR/commit/9a2ab6c8b221dac1e999643a477732ec195a9d0e)
+Workflow run: [#6](https://github.com/Leapward-Koex/Namida-OCR/actions/runs/27755010324)
 
 ## Summary
 
 | Backend | Status | Model | Variant | Exact Matches | Exact Match Rate | Avg Character Accuracy | Build Time | Test Time | Total Time |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Tesseract | Passed | jpn_vert | n/a | 7/20 | 35.0% | 72.5% | 43s | 55s | 1m 38s |
-| PaddleOCR ONNX | Passed | jpn_vert | server | 6/20 | 30.0% | 73.3% | 44s | 7m 33s | 8m 17s |
+| Tesseract | Passed | jpn_vert | n/a | 6/20 | 30.0% | 71.4% | 43s | 54s | 1m 37s |
+| PaddleOCR ONNX | Passed | jpn_vert | server | 9/20 | 45.0% | 83.4% | 44s | 4m 16s | 5m 0s |
 
 ## Comparison
 
 | Metric | Tesseract | PaddleOCR ONNX | Delta |
 | --- | --- | --- | --- |
-| Exact matches | 7/20 | 6/20 | -1 |
-| Exact match rate | 35.0% | 30.0% | -5.0 pp |
-| Avg character accuracy | 72.5% | 73.3% | +0.8 pp |
-| Total time | 1m 38s | 8m 17s | +6m 39s |
+| Exact matches | 6/20 | 9/20 | +3 |
+| Exact match rate | 30.0% | 45.0% | +15.0 pp |
+| Avg character accuracy | 71.4% | 83.4% | +12.1 pp |
+| Total time | 1m 37s | 5m 0s | +3m 23s |
 
 ## Case Accuracy
 
 | Case | Tesseract | PaddleOCR ONNX | Delta | Better |
 | --- | --- | --- | --- | --- |
-| manga-ocr-case-001-sunao-ni-ayamaru-shika | 32.0% | 80.0% | +48.0 pp | PaddleOCR ONNX |
-| manga-ocr-case-002-tachikawa-de-mita-ana-no-shita-no-kyodaina-me-wa | 2.3% | 57.9% | +55.6 pp | PaddleOCR ONNX |
+| manga-ocr-case-001-sunao-ni-ayamaru-shika | 32.0% | 63.6% | +31.6 pp | PaddleOCR ONNX |
+| manga-ocr-case-002-tachikawa-de-mita-ana-no-shita-no-kyodaina-me-wa | 2.3% | 39.1% | +36.8 pp | PaddleOCR ONNX |
 | manga-ocr-case-003-jissen-kenjutsu-mo-ichiryuu-desu | 55.6% | 100.0% | +44.4 pp | PaddleOCR ONNX |
-| manga-ocr-case-004-gya | 100.0% | 33.3% | -66.7 pp | Tesseract |
-| manga-ocr-case-005-pinpoon | 18.8% | 50.0% | +31.3 pp | PaddleOCR ONNX |
-| manga-ocr-case-006-faia-panchi | 37.5% | 14.3% | -23.2 pp | Tesseract |
-| manga-ocr-case-007-keisatsu-nimo-sensei-nimo-machijuu-no-hitotachi-ni | 32.0% | 43.3% | +11.3 pp | PaddleOCR ONNX |
-| case-001-inuda-san | 100.0% | 20.0% | -80.0 pp | Tesseract |
+| manga-ocr-case-004-gya | 66.7% | 66.7% | 0.0 pp | Tie |
+| manga-ocr-case-005-pinpoon | 18.8% | 66.7% | +47.9 pp | PaddleOCR ONNX |
+| manga-ocr-case-006-faia-panchi | 42.9% | 100.0% | +57.1 pp | PaddleOCR ONNX |
+| manga-ocr-case-007-keisatsu-nimo-sensei-nimo-machijuu-no-hitotachi-ni | 37.5% | 44.4% | +6.9 pp | PaddleOCR ONNX |
+| case-001-inuda-san | 100.0% | 42.9% | -57.1 pp | Tesseract |
 | case-002-hai-owari-mou-dame | 100.0% | 100.0% | 0.0 pp | Tie |
 | case-003-kako | 50.0% | 100.0% | +50.0 pp | PaddleOCR ONNX |
 | case-004-genzai | 100.0% | 100.0% | 0.0 pp | Tie |
 | case-005-teto-san-kekkon-shiyou | 100.0% | 100.0% | 0.0 pp | Tie |
-| case-006-a-sore-zenbu-iinchou-dayo | 100.0% | 81.8% | -18.2 pp | Tesseract |
+| case-006-a-sore-zenbu-iinchou-dayo | 100.0% | 100.0% | 0.0 pp | Tie |
 | case-007-kawaii | 100.0% | 75.0% | -25.0 pp | Tesseract |
-| case-008-ore-otoko-no-ko-damon | 89.5% | 94.7% | +5.3 pp | PaddleOCR ONNX |
-| case-009-saikin-kurasu-no-fuuki | 95.2% | 60.0% | -35.2 pp | Tesseract |
-| case-010-daiji-na-no-wa-konten-tsu-daro | 92.9% | 100.0% | +7.1 pp | PaddleOCR ONNX |
-| case-011-zundamon-senpai-tsumetai-kute-kimochi-ii | 85.0% | 88.9% | +3.9 pp | PaddleOCR ONNX |
-| case-012-obaachan | 94.1% | 75.0% | -19.1 pp | Tesseract |
-| case-013 | 64.3% | 91.7% | +27.4 pp | PaddleOCR ONNX |
+| case-008-ore-otoko-no-ko-damon | 90.0% | 90.0% | 0.0 pp | Tie |
+| case-009-saikin-kurasu-no-fuuki | 95.2% | 100.0% | +4.8 pp | PaddleOCR ONNX |
+| case-010-daiji-na-no-wa-konten-tsu-daro | 92.9% | 92.3% | -0.5 pp | Tesseract |
+| case-011-zundamon-senpai-tsumetai-kute-kimochi-ii | 85.0% | 94.4% | +9.4 pp | PaddleOCR ONNX |
+| case-012-obaachan | 94.1% | 93.8% | -0.4 pp | Tesseract |
+| case-013 | 64.3% | 100.0% | +35.7 pp | PaddleOCR ONNX |
 
 ## Notes
 
