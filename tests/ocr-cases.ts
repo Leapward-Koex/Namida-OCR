@@ -27,7 +27,7 @@ export const ocrCases: OcrCase[] = [
     {
         name: 'manga-ocr-case-002-tachikawa-de-mita-ana-no-shita-no-kyodaina-me-wa',
         image: 'images/manga-ocr-case-02.jpg',
-        expectedText: '立川で見た〝穴〟の下の巨大な眼は...',
+        expectedText: '立川で見た〝穴〟の下の巨大な眼は…',
         pageSegMode: 'single-block-vertical',
         upscalingMode: 'canvas',
     },
@@ -113,14 +113,14 @@ export const ocrCases: OcrCase[] = [
     {
         name: 'case-007-kawaii',
         image: 'images/ocr-case-007.png',
-        expectedText: '可愛い',
+        expectedText: '可愛い…',
         pageSegMode: 'single-block-vertical',
         upscalingMode: 'canvas',
     },
     {
         name: 'case-008-ore-otoko-no-ko-damon',
         image: 'images/ocr-case-008.png',
-        expectedText: '俺男の子だもん\nこれお母さんに\nあげるよ',
+        expectedText: '俺、男の子だもん\nこれお母さんに\nあげるよ…',
         pageSegMode: 'single-block-vertical',
         upscalingMode: 'canvas',
     },
@@ -134,7 +134,7 @@ export const ocrCases: OcrCase[] = [
     {
         name: 'case-010-daiji-na-no-wa-konten-tsu-daro',
         image: 'images/ocr-case-010.png',
-        expectedText: '大事なのはコンテンツだろ?',
+        expectedText: '大事なのはコンテンツだろ？',
         pageSegMode: 'single-block-vertical',
         upscalingMode: 'canvas',
     },
