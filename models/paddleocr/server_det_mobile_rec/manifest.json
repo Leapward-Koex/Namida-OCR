@@ -1,9 +1,12 @@
 {
-  "version": "generated-mixed",
-  "source_repo": "PaddlePaddle/PP-OCRv5_mobile_rec + PP-OCRv5_server_det",
+  "version": "2026-06-12",
+  "model_version": "PP-OCRv6",
+  "variant": "server_det_mobile_rec",
+  "description": "Mixed override bundle with the strongest detector and a smaller recognizer.",
+  "source_repo": "PaddlePaddle/PP-OCRv6_medium_det_onnx + PaddlePaddle/PP-OCRv6_small_rec_onnx",
   "detector": {
-    "model_path": "detection/v5/det.onnx",
-    "config_path": "detection/v5/config.json",
+    "model_path": "detection/v6/det.onnx",
+    "config_path": "detection/v6/config.json",
     "limit_side_len": 736,
     "limit_type": "min",
     "max_side_len": 1536,
@@ -17,8 +20,8 @@
       0.224,
       0.225
     ],
-    "threshold": 0.3,
-    "box_score_threshold": 0.55,
+    "threshold": 0.2,
+    "box_score_threshold": 0.45,
     "dilation_radius": 1,
     "min_box_size": 6,
     "box_padding": 4

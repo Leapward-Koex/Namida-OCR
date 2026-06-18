@@ -1,8 +1,8 @@
 {
-  "model_name": "PP-OCRv5_mobile_rec",
+  "model_name": "PP-OCRv6_small_rec",
   "model_type": "recognition",
   "framework": "PaddleOCR",
-  "version": "PP-OCRv5",
+  "version": "PP-OCRv6",
   "language_group": "chinese",
   "supported_languages": [
     "Chinese (Simplified)",
@@ -11,8 +11,8 @@
     "English",
     "Japanese"
   ],
-  "source_repo": "PaddlePaddle/PP-OCRv5_mobile_rec",
-  "original_format": "PaddlePaddle",
+  "source_repo": "PaddlePaddle/PP-OCRv6_small_rec_onnx",
+  "original_format": "ONNX",
   "converted_format": "ONNX",
   "dictionary_file": "dict.txt",
   "input_shape": "dynamic (batch_size, 3, 48, dynamic_width)",

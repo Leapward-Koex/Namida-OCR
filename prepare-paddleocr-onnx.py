@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Download official PaddleOCR repos, export them to ONNX, and emit bundle metadata.
+"""Download official PP-OCRv6 ONNX repos and emit bundle metadata.
 
 This is a developer-only regeneration tool. Production runtime must use the committed
 assets under models/paddleocr and never download models at runtime.
@@ -9,32 +9,46 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
-import subprocess
 import sys
+import urllib.error
+import urllib.request
 from pathlib import Path
 
-try:
-    import onnx
-except ModuleNotFoundError as exc:  # pragma: no cover - developer environment guard
-    raise SystemExit(
-        "The 'onnx' Python package is required to normalize exported PaddleOCR models for ONNX Runtime Web. "
-        "Install it in your active Python environment before running this script."
-    ) from exc
 
+MODEL_VERSION = "PP-OCRv6"
+DETECTOR_OUTPUT_VERSION = "v6"
+HF_RESOLVE_BASE_URL = "https://huggingface.co"
 
 MODEL_VARIANTS = {
     "server": {
-        "det_repo": "PaddlePaddle/PP-OCRv5_server_det",
-        "rec_repo": "PaddlePaddle/PP-OCRv5_server_rec",
-        "det_model_name": "PP-OCRv5_server_det",
-        "rec_model_name": "PP-OCRv5_server_rec",
+        "description": "Chromium default: strongest PP-OCRv6 bundle that fits below the previous server bundle size.",
+        "det_repo": "PaddlePaddle/PP-OCRv6_medium_det_onnx",
+        "rec_repo": "PaddlePaddle/PP-OCRv6_medium_rec_onnx",
+        "det_model_name": "PP-OCRv6_medium_det",
+        "rec_model_name": "PP-OCRv6_medium_rec",
+    },
+    "mobile_det_server_rec": {
+        "description": "Firefox default: smaller detector with the strongest recognizer under the current add-on size budget.",
+        "det_repo": "PaddlePaddle/PP-OCRv6_small_det_onnx",
+        "rec_repo": "PaddlePaddle/PP-OCRv6_medium_rec_onnx",
+        "det_model_name": "PP-OCRv6_small_det",
+        "rec_model_name": "PP-OCRv6_medium_rec",
     },
     "mobile": {
-        "det_repo": "PaddlePaddle/PP-OCRv5_mobile_det",
-        "rec_repo": "PaddlePaddle/PP-OCRv5_mobile_rec",
-        "det_model_name": "PP-OCRv5_mobile_det",
-        "rec_model_name": "PP-OCRv5_mobile_rec",
+        "description": "Compact override bundle for constrained packaging and manual testing.",
+        "det_repo": "PaddlePaddle/PP-OCRv6_tiny_det_onnx",
+        "rec_repo": "PaddlePaddle/PP-OCRv6_small_rec_onnx",
+        "det_model_name": "PP-OCRv6_tiny_det",
+        "rec_model_name": "PP-OCRv6_small_rec",
+    },
+    "server_det_mobile_rec": {
+        "description": "Mixed override bundle with the strongest detector and a smaller recognizer.",
+        "det_repo": "PaddlePaddle/PP-OCRv6_medium_det_onnx",
+        "rec_repo": "PaddlePaddle/PP-OCRv6_small_rec_onnx",
+        "det_model_name": "PP-OCRv6_medium_det",
+        "rec_model_name": "PP-OCRv6_small_rec",
     },
 }
 
@@ -46,51 +60,53 @@ def main() -> int:
     parser.add_argument("--work-dir", type=Path, default=Path(".cache/paddleocr-onnx"))
     parser.add_argument("--det-repo")
     parser.add_argument("--rec-repo")
+    parser.add_argument("--det-model-name")
+    parser.add_argument("--rec-model-name")
     parser.add_argument("--skip-download", action="store_true")
-    parser.add_argument("--skip-convert", action="store_true")
     args = parser.parse_args()
 
     variant = MODEL_VARIANTS[args.variant]
     det_repo = args.det_repo or variant["det_repo"]
     rec_repo = args.rec_repo or variant["rec_repo"]
+    det_model_name = args.det_model_name or variant["det_model_name"]
+    rec_model_name = args.rec_model_name or variant["rec_model_name"]
+
     output_dir = (args.output_dir or (Path("models/paddleocr") / args.variant)).resolve()
     work_dir = args.work_dir.resolve()
-    det_source_dir = work_dir / args.variant / "det-source"
-    rec_source_dir = work_dir / args.variant / "rec-source"
-    det_output_dir = output_dir / "detection" / "v5"
+    det_source_dir = work_dir / repo_cache_key(det_repo)
+    rec_source_dir = work_dir / repo_cache_key(rec_repo)
+    det_output_dir = output_dir / "detection" / DETECTOR_OUTPUT_VERSION
     rec_output_dir = output_dir / "languages" / "chinese"
 
     if not args.skip_download:
-        require_command("hf")
-        download_repo(det_repo, det_source_dir)
-        download_repo(rec_repo, rec_source_dir)
+        download_onnx_repo(det_repo, det_source_dir)
+        download_onnx_repo(rec_repo, rec_source_dir)
 
-    det_model_dir = find_model_dir(det_source_dir)
-    rec_model_dir = find_model_dir(rec_source_dir)
-    dict_path = find_dictionary_file(rec_source_dir)
+    det_model_path = require_file(det_source_dir / "inference.onnx")
+    det_yaml_path = require_file(det_source_dir / "inference.yml")
+    rec_model_path = require_file(rec_source_dir / "inference.onnx")
+    rec_yaml_path = require_file(rec_source_dir / "inference.yml")
 
-    output_dir.mkdir(parents=True, exist_ok=True)
-    det_output_dir.mkdir(parents=True, exist_ok=True)
-    rec_output_dir.mkdir(parents=True, exist_ok=True)
+    reset_directory(det_output_dir)
+    reset_directory(rec_output_dir)
+    remove_stale_detector_versions(output_dir / "detection", det_output_dir)
 
-    if args.skip_convert:
-        print("Skipping conversion; only refreshing metadata and dictionary.")
-    else:
-        require_command("paddlex")
-        run(["paddlex", "--install", "paddle2onnx"])
-        convert_model(det_model_dir, det_output_dir)
-        convert_model(rec_model_dir, rec_output_dir)
+    shutil.copy2(det_model_path, det_output_dir / "det.onnx")
+    shutil.copy2(rec_model_path, rec_output_dir / "rec.onnx")
+    write_dictionary_file(rec_yaml_path, rec_output_dir / "dict.txt")
 
-    shutil.copy2(dict_path, rec_output_dir / "dict.txt")
+    det_threshold = extract_yaml_number(det_yaml_path, "thresh", 0.3)
+    det_box_threshold = extract_yaml_number(det_yaml_path, "box_thresh", 0.6)
+
     write_json(
         det_output_dir / "config.json",
         {
-            "model_name": variant["det_model_name"],
+            "model_name": det_model_name,
             "model_type": "detection",
             "framework": "PaddleOCR",
-            "version": "PP-OCRv5",
+            "version": MODEL_VERSION,
             "source_repo": det_repo,
-            "original_format": "PaddlePaddle",
+            "original_format": "ONNX",
             "converted_format": "ONNX",
             "input_shape": "dynamic (batch_size, 3, height, width)",
             "output_shape": "dynamic",
@@ -99,10 +115,10 @@ def main() -> int:
     write_json(
         rec_output_dir / "config.json",
         {
-            "model_name": variant["rec_model_name"],
+            "model_name": rec_model_name,
             "model_type": "recognition",
             "framework": "PaddleOCR",
-            "version": "PP-OCRv5",
+            "version": MODEL_VERSION,
             "language_group": "chinese",
             "supported_languages": [
                 "Chinese (Simplified)",
@@ -112,7 +128,7 @@ def main() -> int:
                 "Japanese",
             ],
             "source_repo": rec_repo,
-            "original_format": "PaddlePaddle",
+            "original_format": "ONNX",
             "converted_format": "ONNX",
             "dictionary_file": "dict.txt",
             "input_shape": "dynamic (batch_size, 3, 48, dynamic_width)",
@@ -122,18 +138,21 @@ def main() -> int:
     write_json(
         output_dir / "manifest.json",
         {
-            "version": "generated",
-            "source_repo": rec_repo,
+            "version": "2026-06-12",
+            "model_version": MODEL_VERSION,
+            "variant": args.variant,
+            "description": variant["description"],
+            "source_repo": f"{det_repo} + {rec_repo}",
             "detector": {
-                "model_path": "detection/v5/det.onnx",
-                "config_path": "detection/v5/config.json",
+                "model_path": f"detection/{DETECTOR_OUTPUT_VERSION}/det.onnx",
+                "config_path": f"detection/{DETECTOR_OUTPUT_VERSION}/config.json",
                 "limit_side_len": 736,
                 "limit_type": "min",
                 "max_side_len": 1536,
                 "mean": [0.485, 0.456, 0.406],
                 "std": [0.229, 0.224, 0.225],
-                "threshold": 0.3,
-                "box_score_threshold": 0.55,
+                "threshold": det_threshold,
+                "box_score_threshold": det_box_threshold,
                 "dilation_radius": 1,
                 "min_box_size": 6,
                 "box_padding": 4,
@@ -152,109 +171,112 @@ def main() -> int:
         },
     )
 
-    print(f"Prepared PaddleOCR ONNX {args.variant} bundle at {output_dir}")
+    print(f"Prepared {MODEL_VERSION} ONNX {args.variant} bundle at {output_dir}")
     return 0
 
 
-def download_repo(repo_id: str, target_dir: Path) -> None:
-    target_dir.parent.mkdir(parents=True, exist_ok=True)
-    run(["hf", "download", repo_id, "--local-dir", str(target_dir), "--quiet"])
+def download_onnx_repo(repo_id: str, target_dir: Path) -> None:
+    target_dir.mkdir(parents=True, exist_ok=True)
+    for file_name in ["inference.onnx", "inference.yml", "README.md"]:
+        required = file_name != "README.md"
+        download_file(repo_id, file_name, target_dir / file_name, required=required)
 
 
-def convert_model(source_dir: Path, target_dir: Path) -> None:
-    run(
-        [
-            "paddlex",
-            "--paddle2onnx",
-            "--paddle_model_dir",
-            str(source_dir),
-            "--onnx_model_dir",
-            str(target_dir),
-            "--opset_version",
-            "11",
-        ]
-    )
+def download_file(repo_id: str, file_name: str, target_path: Path, *, required: bool) -> None:
+    url = f"{HF_RESOLVE_BASE_URL}/{repo_id}/resolve/main/{file_name}"
+    print(f"+ download {url}")
+    request = urllib.request.Request(url, headers={"User-Agent": "namida-ocr-model-prep"})
 
-    onnx_files = sorted(target_dir.glob("*.onnx"))
-    if not onnx_files:
-        raise SystemExit(f"No ONNX file was produced in {target_dir}")
-
-    canonical_name = target_dir / ("det.onnx" if "detection" in str(target_dir) else "rec.onnx")
-    if onnx_files[0] != canonical_name:
-        shutil.move(str(onnx_files[0]), canonical_name)
-
-    normalized_nodes = normalize_maxpool_ceil_mode(canonical_name)
-    if normalized_nodes:
-        print(
-            f"Normalized MaxPool ceil_mode to 0 in {canonical_name}: "
-            + ", ".join(normalized_nodes)
-        )
+    try:
+        with urllib.request.urlopen(request) as response, target_path.open("wb") as file:
+            shutil.copyfileobj(response, file)
+    except urllib.error.HTTPError as exc:
+        if not required and exc.code == 404:
+            return
+        raise
 
 
-def find_model_dir(root: Path) -> Path:
-    pdmodel_files = sorted(root.rglob("*.pdmodel"))
-    if pdmodel_files:
-        return pdmodel_files[0].parent
+def write_dictionary_file(yaml_path: Path, target_path: Path) -> None:
+    characters = extract_character_dictionary(yaml_path)
+    if not characters:
+        raise SystemExit(f"Could not find PostProcess.character_dict in {yaml_path}")
 
-    pir_model_files = sorted(root.rglob("inference.json"))
-    if pir_model_files:
-        return pir_model_files[0].parent
+    if extract_yaml_boolean(yaml_path, "use_space_char", False) and " " not in characters:
+        characters.append(" ")
 
-    raise SystemExit(
-        f"Could not find a Paddle inference model under {root}. "
-        "Expected either a legacy *.pdmodel export or a PIR inference.json export. "
-        "Download the official repo first or pass --skip-download only when the work dir is already populated."
-    )
+    target_path.write_text("\n".join(characters) + "\n", encoding="utf-8")
 
 
-def find_dictionary_file(root: Path) -> Path:
-    candidates = sorted(root.rglob("*dict*.txt"))
-    if not candidates:
-        bundled_candidates = sorted((Path("models/paddleocr") / "server").rglob("*dict*.txt"))
-        if bundled_candidates:
-            return bundled_candidates[0]
+def extract_character_dictionary(yaml_path: Path) -> list[str]:
+    characters: list[str] = []
+    in_dictionary = False
 
-        raise SystemExit(f"Could not find a recognition dictionary file under {root}")
-
-    return candidates[0]
-
-
-def normalize_maxpool_ceil_mode(model_path: Path) -> list[str]:
-    model = onnx.load(model_path)
-    normalized_nodes: list[str] = []
-
-    for node in model.graph.node:
-        if node.op_type != "MaxPool":
+    for line in yaml_path.read_text(encoding="utf-8").splitlines():
+        if not in_dictionary:
+            if line.strip() == "character_dict:":
+                in_dictionary = True
             continue
 
-        for attr in node.attribute:
-            if attr.name == "ceil_mode" and attr.i != 0:
-                attr.i = 0
-                normalized_nodes.append(node.name or "<unnamed MaxPool>")
+        item_match = re.match(r"^\s*-\x20?(.*)$", line)
+        if item_match:
+            value = item_match.group(1)
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+                value = value[1:-1]
+            characters.append(value)
+            continue
 
-    if normalized_nodes:
-        onnx.save(model, model_path)
+        if line.strip():
+            break
 
-    return normalized_nodes
+    return characters
 
 
-def require_command(command: str) -> None:
-    if shutil.which(command):
+def extract_yaml_number(yaml_path: Path, key: str, fallback: float) -> float:
+    key_pattern = re.compile(rf"^\s*{re.escape(key)}:\s*([-+]?\d+(?:\.\d+)?)\s*$")
+    for line in yaml_path.read_text(encoding="utf-8").splitlines():
+        match = key_pattern.match(line)
+        if match:
+            return float(match.group(1))
+    return fallback
+
+
+def extract_yaml_boolean(yaml_path: Path, key: str, fallback: bool) -> bool:
+    key_pattern = re.compile(rf"^\s*{re.escape(key)}:\s*(true|false)\s*$", re.IGNORECASE)
+    for line in yaml_path.read_text(encoding="utf-8").splitlines():
+        match = key_pattern.match(line)
+        if match:
+            return match.group(1).lower() == "true"
+    return fallback
+
+
+def require_file(path: Path) -> Path:
+    if path.exists():
+        return path
+    raise SystemExit(f"Required model file was not found: {path}")
+
+
+def reset_directory(path: Path) -> None:
+    if path.exists():
+        shutil.rmtree(path)
+    path.mkdir(parents=True, exist_ok=True)
+
+
+def remove_stale_detector_versions(detection_root: Path, active_output_dir: Path) -> None:
+    if not detection_root.exists():
         return
 
-    raise SystemExit(
-        f"Required command '{command}' was not found.\n"
-        "Install the Hugging Face CLI for downloads and PaddleX for Paddle -> ONNX conversion before running this script."
-    )
+    active_output_dir = active_output_dir.resolve()
+    for entry in detection_root.iterdir():
+        if entry.is_dir() and entry.resolve() != active_output_dir:
+            shutil.rmtree(entry)
+
+
+def repo_cache_key(repo_id: str) -> str:
+    return repo_id.replace("/", "__")
 
 
 def write_json(path: Path, payload: object) -> None:
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-
-
-def run(command: list[str]) -> None:
-    print("+", " ".join(command))
-    subprocess.run(command, check=True)
 
 
 if __name__ == "__main__":

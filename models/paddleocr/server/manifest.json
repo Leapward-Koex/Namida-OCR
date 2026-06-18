@@ -1,16 +1,27 @@
 {
-  "version": "2026-04-06",
-  "source_repo": "monkt/paddleocr-onnx",
+  "version": "2026-06-12",
+  "model_version": "PP-OCRv6",
+  "variant": "server",
+  "description": "Chromium default: strongest PP-OCRv6 bundle that fits below the previous server bundle size.",
+  "source_repo": "PaddlePaddle/PP-OCRv6_medium_det_onnx + PaddlePaddle/PP-OCRv6_medium_rec_onnx",
   "detector": {
-    "model_path": "detection/v5/det.onnx",
-    "config_path": "detection/v5/config.json",
+    "model_path": "detection/v6/det.onnx",
+    "config_path": "detection/v6/config.json",
     "limit_side_len": 736,
     "limit_type": "min",
     "max_side_len": 1536,
-    "mean": [0.485, 0.456, 0.406],
-    "std": [0.229, 0.224, 0.225],
-    "threshold": 0.3,
-    "box_score_threshold": 0.55,
+    "mean": [
+      0.485,
+      0.456,
+      0.406
+    ],
+    "std": [
+      0.229,
+      0.224,
+      0.225
+    ],
+    "threshold": 0.2,
+    "box_score_threshold": 0.45,
     "dilation_radius": 1,
     "min_box_size": 6,
     "box_padding": 4
@@ -22,8 +33,16 @@
     "image_height": 48,
     "min_image_width": 48,
     "max_image_width": 320,
-    "mean": [0.5, 0.5, 0.5],
-    "std": [0.5, 0.5, 0.5],
+    "mean": [
+      0.5,
+      0.5,
+      0.5
+    ],
+    "std": [
+      0.5,
+      0.5,
+      0.5
+    ],
     "rotation_aspect_threshold": 1.5
   }
 }

@@ -1,0 +1,11 @@
+{
+  "model_name": "PP-OCRv6_small_det",
+  "model_type": "detection",
+  "framework": "PaddleOCR",
+  "version": "PP-OCRv6",
+  "source_repo": "PaddlePaddle/PP-OCRv6_small_det_onnx",
+  "original_format": "ONNX",
+  "converted_format": "ONNX",
+  "input_shape": "dynamic (batch_size, 3, height, width)",
+  "output_shape": "dynamic"
+}

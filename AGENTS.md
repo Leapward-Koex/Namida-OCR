@@ -44,8 +44,9 @@ When changing permissions, background execution, popup behavior, or shortcut flo
 
 - `npm run build:chrome`
 - `npm run build:firefox`
-- `npm run prepare:paddleocr-onnx`: downloads the official PP-OCRv5 server repos, converts them to ONNX, normalizes unsupported `MaxPool ceil_mode` attributes for ONNX Runtime Web acceleration, and refreshes the committed server PaddleOCR bundle metadata for the experimental `paddleonnx` backend.
-- `npm run prepare:paddleocr-onnx:mobile`: downloads the official PP-OCRv5 mobile repos, converts them to ONNX, normalizes unsupported `MaxPool ceil_mode` attributes for ONNX Runtime Web acceleration, and refreshes the committed Firefox/mobile PaddleOCR bundle metadata for the experimental `paddleonnx` backend.
+- `npm run prepare:paddleocr-onnx`: downloads the official PP-OCRv6 medium detector/recognizer ONNX repos, extracts the recognition dictionary from `inference.yml`, and refreshes the committed Chromium/server PaddleOCR bundle metadata for the experimental `paddleonnx` backend.
+- `npm run prepare:paddleocr-onnx:firefox`: downloads the official PP-OCRv6 small detector plus medium recognizer ONNX repos, extracts the recognition dictionary from `inference.yml`, and refreshes the committed Firefox default mixed PaddleOCR bundle metadata for the experimental `paddleonnx` backend.
+- `npm run prepare:paddleocr-onnx:mobile`: downloads the compact PP-OCRv6 tiny detector plus small recognizer ONNX repos, extracts the recognition dictionary from `inference.yml`, and refreshes the compact override PaddleOCR bundle metadata for the experimental `paddleonnx` backend.
 - `npm run test:e2e`: builds the Chromium extension with the default OCR model and runs the Playwright suite.
 - `npm run test:e2e:tesseract`: runs the Chromium Playwright OCR suite with the bundled `tesseract` backend.
 - `npm run test:e2e:scribejs`: runs the Chromium Playwright OCR suite with the experimental `scribejs` backend.
@@ -58,7 +59,7 @@ When running Playwright from this repo, always use at least 5 workers/runners so
 
 The default OCR backend is `tesseract`. Normal builds expose popup settings that let users switch between bundled `tesseract` and experimental `paddleonnx` at runtime, while `NAMIDA_OCR_BACKEND` / `--env ocr_backend=...` still choose the build-time default backend.
 
-Firefox builds should package the smaller `mobile_det_server_rec` mixed PaddleOCR bundle by default to stay within Firefox add-on size limits. Chromium builds should continue to package the PP-OCRv5 server detector/recognizer bundle by default unless `NAMIDA_PADDLE_ONNX_MODEL_VARIANT` / `--env paddleonnx_model_variant=...` explicitly overrides that selection.
+Firefox builds should package the smaller PP-OCRv6 `mobile_det_server_rec` mixed PaddleOCR bundle (`small_det` + `medium_rec`) by default to stay within Firefox add-on size limits. Chromium builds should continue to package the PP-OCRv6 `server` bundle (`medium_det` + `medium_rec`) by default unless `NAMIDA_PADDLE_ONNX_MODEL_VARIANT` / `--env paddleonnx_model_variant=...` explicitly overrides that selection.
 
 Playwright currently exercises the Chromium extension harness. Firefox and Edge changes still need build validation and targeted manual verification.
 

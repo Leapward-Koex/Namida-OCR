@@ -43,7 +43,7 @@
                 "/libs/tesseract-lang/*",
                 "/libs/onnxruntime/*",
                 "/libs/paddleocr/paddleocr-manifest.json",
-                "/libs/paddleocr/detection/v5/*",
+                "/libs/paddleocr/detection/v6/*",
                 "/libs/paddleocr/languages/chinese/*",
                 "/libs/tensorflow/x2/model.json",
                 "/libs/tensorflow/x2/group1-shard1of1.bin"
