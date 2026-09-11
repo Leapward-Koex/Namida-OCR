@@ -19,6 +19,7 @@ const combinedResultsPath = path.join(testResultsDir, 'ocr-case-results.json');
 const playwrightCli = path.resolve(process.cwd(), 'node_modules', '@playwright', 'test', 'cli.js');
 
 await fs.rm(caseResultsDir, { recursive: true, force: true });
+await fs.rm(path.join(testResultsDir, 'ocr-fixture-inputs'), { recursive: true, force: true });
 await fs.rm(summaryPath, { force: true });
 await fs.rm(combinedResultsPath, { force: true });
 

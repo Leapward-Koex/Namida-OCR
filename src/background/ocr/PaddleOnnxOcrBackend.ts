@@ -2,6 +2,8 @@ import { runtime } from 'webextension-polyfill';
 import * as ort from 'onnxruntime-web';
 import { PSM } from 'tesseract.js';
 import type { OcrBackend } from './OcrBackend';
+import { PaddleOnnxRuntime } from './PaddleOnnxRuntime';
+import { assertDetectionTensor, assertRecognitionTensor } from './PaddleOnnxModelContract';
 import { DEFAULT_OCR_MODEL } from '../../interfaces/Storage';
 import { buildOcrRecognitionCandidate, serializeOcrCandidate, type OcrRecognitionCandidate } from './OcrTextScoring';
 import type { OcrDebugCandidateSnapshot, OcrDebugCropSnapshot, OcrDebugSnapshot } from './OcrDebugSnapshot';
@@ -95,19 +97,6 @@ type PaddleOnnxManifest = {
     recognizer: RecognizerConfig;
 };
 
-type SessionBundle = {
-    promise: Promise<ort.InferenceSession>;
-    providerNames: string[];
-    session: ort.InferenceSession | null;
-    usesAcceleratedProvider: boolean;
-};
-
-type CreatedSession = {
-    providerNames: string[];
-    session: ort.InferenceSession;
-    usesAcceleratedProvider: boolean;
-};
-
 type PreparedCanvas = {
     canvas: WorkingCanvas;
     inverted: boolean;
@@ -155,26 +144,13 @@ type RecognizedSegment = {
     index: number;
 };
 
-type NavigatorWithHardwareAcceleration = Navigator & {
-    gpu?: unknown;
-    ml?: unknown;
-};
-
-const ACCELERATED_SESSION_INIT_TIMEOUT_MS = 20_000;
-const ACCELERATED_INFERENCE_TIMEOUT_MS = 15_000;
-const DISABLE_WASM_FALLBACK = __NAMIDA_PADDLE_ONNX_DISABLE_WASM_FALLBACK__;
-
 export class PaddleOnnxOcrBackend implements OcrBackend {
     private static readonly logTag = PADDLE_ONNX_LOG_TAG;
     private static readonly detectorSessionKey = 'detector';
     private static readonly recognizerSessionKey = 'recognizer';
-    private static readonly sessions = new Map<string, SessionBundle>();
+    private static readonly onnxRuntime = new PaddleOnnxRuntime();
     private static manifestPromise: Promise<PaddleOnnxManifest> | null = null;
     private static dictionaryPromise: Promise<string[]> | null = null;
-    private static ortConfigured = false;
-    private static readonly disableWasmFallback = DISABLE_WASM_FALLBACK;
-    private static forceWasmOnly = false;
-    private static gpuEnabled = true;
     private debugEnabled = false;
     private lastDebugSnapshot: OcrDebugSnapshot | null = null;
 
@@ -194,13 +170,7 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
     }
 
     public async setGpuEnabled(enabled: boolean): Promise<void> {
-        if (PaddleOnnxOcrBackend.gpuEnabled === enabled) {
-            return;
-        }
-
-        PaddleOnnxOcrBackend.gpuEnabled = enabled;
-        PaddleOnnxOcrBackend.forceWasmOnly = false;
-        PaddleOnnxOcrBackend.sessions.clear();
+        await PaddleOnnxOcrBackend.onnxRuntime.setGpuEnabled(enabled);
     }
 
     public async getLastDebugSnapshot(): Promise<OcrDebugSnapshot | null> {
@@ -416,7 +386,7 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
 
     public async terminate(): Promise<void> {
         this.lastDebugSnapshot = null;
-        PaddleOnnxOcrBackend.sessions.clear();
+        await PaddleOnnxOcrBackend.onnxRuntime.terminate();
     }
 
     private async recognizeCrop(
@@ -703,13 +673,13 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
         id: string,
     ): Promise<OcrRecognitionCandidate | null> {
         const tensor = prepareRecognitionTensor(sourceCanvas, recognizerConfig);
-        const result = await this.runSessionWithFallback(
+        const result = await PaddleOnnxOcrBackend.onnxRuntime.run(
             PaddleOnnxOcrBackend.recognizerSessionKey,
             recognizerSession,
-            () => this.ensureRecognizerSession(),
             (session) => session.run({ x: tensor }),
         );
         const outputTensor = result[recognizerSession.outputNames[0]];
+        assertRecognitionTensor(outputTensor, dictionary);
         return decodeRecognitionTensor(outputTensor, dictionary, id);
     }
 
@@ -719,13 +689,13 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
         config: DetectorConfig,
     ): Promise<DetectedBox[]> {
         const detectionInput = prepareDetectionTensor(sourceCanvas, config);
-        const detectionOutput = await this.runSessionWithFallback(
+        const detectionOutput = await PaddleOnnxOcrBackend.onnxRuntime.run(
             PaddleOnnxOcrBackend.detectorSessionKey,
             detectorSession,
-            () => this.ensureDetectorSession(),
             (session) => session.run({ x: detectionInput.tensor }),
         );
         const probabilityTensor = detectionOutput[detectorSession.outputNames[0]];
+        assertDetectionTensor(probabilityTensor);
         return extractDetectedBoxes(
             probabilityTensor,
             config,
@@ -737,210 +707,17 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
     }
 
     private async ensureDetectorSession(): Promise<ort.InferenceSession> {
-        return this.ensureSession(
-            PaddleOnnxOcrBackend.detectorSessionKey,
-            async () => {
-                const manifest = await this.getManifest();
-                const sessionUrl = runtime.getURL(`libs/paddleocr/${manifest.detector.model_path}`);
-                return this.createSession(sessionUrl);
-            },
+        const manifest = await this.getManifest();
+        return PaddleOnnxOcrBackend.onnxRuntime.ensureSession(
+            PaddleOnnxOcrBackend.detectorSessionKey, manifest.detector.model_path,
         );
     }
 
     private async ensureRecognizerSession(): Promise<ort.InferenceSession> {
-        return this.ensureSession(
-            PaddleOnnxOcrBackend.recognizerSessionKey,
-            async () => {
-                const manifest = await this.getManifest();
-                const sessionUrl = runtime.getURL(`libs/paddleocr/${manifest.recognizer.model_path}`);
-                return this.createSession(sessionUrl);
-            },
+        const manifest = await this.getManifest();
+        return PaddleOnnxOcrBackend.onnxRuntime.ensureSession(
+            PaddleOnnxOcrBackend.recognizerSessionKey, manifest.recognizer.model_path,
         );
-    }
-
-    private async createSession(sessionUrl: string): Promise<CreatedSession> {
-        let lastError: unknown;
-        const sessionOptionCandidates = getSessionOptionCandidates(
-            PaddleOnnxOcrBackend.forceWasmOnly,
-            PaddleOnnxOcrBackend.disableWasmFallback,
-            PaddleOnnxOcrBackend.gpuEnabled,
-        );
-
-        if (sessionOptionCandidates.length === 0) {
-            throw new Error('No accelerated ONNX execution provider is available and Paddle ONNX WASM fallback is disabled for this build.');
-        }
-
-        for (const sessionOptions of sessionOptionCandidates) {
-            const providerNames = getExecutionProviderNames(sessionOptions.executionProviders);
-
-            try {
-                const session = await withTimeout(
-                    ort.InferenceSession.create(sessionUrl, sessionOptions),
-                    includesAcceleratedProvider(sessionOptions.executionProviders)
-                        ? ACCELERATED_SESSION_INIT_TIMEOUT_MS
-                        : 0,
-                    () => new Error(`Timed out creating ONNX session with providers: ${providerNames.join(', ')}`),
-                );
-
-                return {
-                    providerNames,
-                    session,
-                    usesAcceleratedProvider: includesAcceleratedProvider(sessionOptions.executionProviders),
-                };
-            } catch (error) {
-                lastError = error;
-                console.warn(
-                    PaddleOnnxOcrBackend.logTag,
-                    'Failed to create ONNX session',
-                    {
-                        error,
-                        providers: providerNames,
-                        sessionUrl,
-                    },
-                );
-            }
-        }
-
-        throw lastError ?? new Error(`Failed to create ONNX session for ${sessionUrl}`);
-    }
-
-    private async runSessionWithFallback<T>(
-        sessionKey: string,
-        session: ort.InferenceSession,
-        ensureSession: () => Promise<ort.InferenceSession>,
-        runInference: (activeSession: ort.InferenceSession) => Promise<T>,
-    ): Promise<T> {
-        let activeSession = await this.resolveActiveSession(sessionKey, session, ensureSession);
-        let hasRetriedWithWasm = false;
-
-        while (true) {
-            try {
-                return await withTimeout(
-                    runInference(activeSession),
-                    this.getInferenceTimeoutMs(sessionKey, activeSession),
-                    () => new Error(`Timed out running ONNX inference with accelerated provider for ${sessionKey}`),
-                );
-            } catch (error) {
-                if (
-                    PaddleOnnxOcrBackend.disableWasmFallback
-                    || !shouldFallbackToWasm(error)
-                    || hasRetriedWithWasm
-                    || !this.isAcceleratedSession(sessionKey, activeSession)
-                ) {
-                    throw error;
-                }
-
-                console.warn(
-                    PaddleOnnxOcrBackend.logTag,
-                    'Disabling accelerated execution provider after runtime failure',
-                    {
-                        error,
-                        sessionKey,
-                    },
-                );
-
-                PaddleOnnxOcrBackend.forceWasmOnly = true;
-                PaddleOnnxOcrBackend.sessions.clear();
-                activeSession = await ensureSession();
-                hasRetriedWithWasm = true;
-            }
-        }
-    }
-
-    private async ensureSession(
-        key: string,
-        createSession: () => Promise<CreatedSession>,
-    ): Promise<ort.InferenceSession> {
-        this.configureOnnxRuntime();
-
-        const existingBundle = PaddleOnnxOcrBackend.sessions.get(key);
-        if (existingBundle) {
-            return existingBundle.session ?? existingBundle.promise;
-        }
-
-        const bundle: SessionBundle = {
-            providerNames: [],
-            session: null,
-            usesAcceleratedProvider: false,
-            promise: createSession().then((createdSession) => {
-                bundle.providerNames = createdSession.providerNames;
-                bundle.session = createdSession.session;
-                bundle.usesAcceleratedProvider = createdSession.usesAcceleratedProvider;
-                console.info(
-                    PaddleOnnxOcrBackend.logTag,
-                    'Initialized ONNX session',
-                    {
-                        accelerated: createdSession.usesAcceleratedProvider,
-                        providers: createdSession.providerNames,
-                        sessionKey: key,
-                        wasmFallbackDisabled: PaddleOnnxOcrBackend.disableWasmFallback,
-                        wasmOnly: PaddleOnnxOcrBackend.forceWasmOnly,
-                    },
-                );
-                return createdSession.session;
-            }).catch((error) => {
-                PaddleOnnxOcrBackend.sessions.delete(key);
-                throw error;
-            }),
-        };
-
-        PaddleOnnxOcrBackend.sessions.set(key, bundle);
-        return bundle.promise;
-    }
-
-    private configureOnnxRuntime() {
-        if (PaddleOnnxOcrBackend.ortConfigured) {
-            return;
-        }
-
-        if (PaddleOnnxOcrBackend.disableWasmFallback) {
-            console.info(
-                PaddleOnnxOcrBackend.logTag,
-                'Paddle ONNX WASM fallback is disabled for this build; accelerated provider failures will be fatal.',
-            );
-        }
-
-        ort.env.wasm.proxy = false;
-        ort.env.wasm.wasmPaths = {
-            mjs: runtime.getURL('libs/onnxruntime/ort-wasm-simd-threaded.jsep.mjs'),
-            wasm: runtime.getURL('libs/onnxruntime/ort-wasm-simd-threaded.jsep.wasm'),
-        };
-
-        PaddleOnnxOcrBackend.ortConfigured = true;
-    }
-
-    private getInferenceTimeoutMs(sessionKey: string, session: ort.InferenceSession): number {
-        return this.isAcceleratedSession(sessionKey, session)
-            ? ACCELERATED_INFERENCE_TIMEOUT_MS
-            : 0;
-    }
-
-    private async resolveActiveSession(
-        sessionKey: string,
-        session: ort.InferenceSession,
-        ensureSession: () => Promise<ort.InferenceSession>,
-    ): Promise<ort.InferenceSession> {
-        const bundle = PaddleOnnxOcrBackend.sessions.get(sessionKey);
-
-        if (bundle?.session) {
-            return bundle.session;
-        }
-
-        if (PaddleOnnxOcrBackend.forceWasmOnly) {
-            return ensureSession();
-        }
-
-        return session;
-    }
-
-    private isAcceleratedSession(sessionKey: string, session: ort.InferenceSession): boolean {
-        const bundle = PaddleOnnxOcrBackend.sessions.get(sessionKey);
-
-        if (!bundle || bundle.session !== session) {
-            return true;
-        }
-
-        return bundle.usesAcceleratedProvider;
     }
 
     private async getManifest(): Promise<PaddleOnnxManifest> {
@@ -980,113 +757,6 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
 
 }
 
-function getSessionOptionCandidates(
-    forceWasmOnly: boolean,
-    disableWasmFallback: boolean,
-    gpuEnabled: boolean,
-): ort.InferenceSession.SessionOptions[] {
-    if (!gpuEnabled) {
-        return disableWasmFallback
-            ? []
-            : [
-                buildSessionOptions([{ name: 'wasm' }]),
-            ];
-    }
-
-    if (forceWasmOnly && !disableWasmFallback) {
-        return [
-            buildSessionOptions([{ name: 'wasm' }]),
-        ];
-    }
-
-    const browserNavigator = getNavigatorWithHardwareAcceleration();
-    const candidates: ort.InferenceSession.SessionOptions[] = [];
-
-    if (browserNavigator?.gpu) {
-        candidates.push(buildSessionOptions([{ name: 'webgpu' }]));
-    }
-
-    if (browserNavigator?.ml) {
-        candidates.push(buildSessionOptions([{ 
-            deviceType: 'gpu',
-            name: 'webnn',
-            powerPreference: 'high-performance',
-        }]));
-    }
-
-    if (!disableWasmFallback) {
-        candidates.push(buildSessionOptions([{ name: 'wasm' }]));
-    }
-
-    return candidates;
-}
-
-function buildSessionOptions(
-    executionProviders: readonly ort.InferenceSession.ExecutionProviderConfig[],
-): ort.InferenceSession.SessionOptions {
-    return {
-        executionProviders,
-        graphOptimizationLevel: 'all',
-    };
-}
-
-function includesAcceleratedProvider(
-    executionProviders: readonly ort.InferenceSession.ExecutionProviderConfig[] | undefined,
-): boolean {
-    return getExecutionProviderNames(executionProviders).some((providerName) => providerName !== 'wasm');
-}
-
-function getExecutionProviderNames(
-    executionProviders: readonly ort.InferenceSession.ExecutionProviderConfig[] | undefined,
-): string[] {
-    return (executionProviders ?? []).map((provider) => typeof provider === 'string' ? provider : provider.name);
-}
-
-function getNavigatorWithHardwareAcceleration(): NavigatorWithHardwareAcceleration | null {
-    if (typeof navigator === 'undefined') {
-        return null;
-    }
-
-    return navigator as NavigatorWithHardwareAcceleration;
-}
-
-function withTimeout<T>(
-    promise: Promise<T>,
-    timeoutMs: number,
-    createError: () => Error,
-): Promise<T> {
-    if (timeoutMs <= 0) {
-        return promise;
-    }
-
-    return new Promise<T>((resolve, reject) => {
-        const timeoutId = globalThis.setTimeout(() => {
-            reject(createError());
-        }, timeoutMs);
-
-        promise.then(
-            (value) => {
-                globalThis.clearTimeout(timeoutId);
-                resolve(value);
-            },
-            (error) => {
-                globalThis.clearTimeout(timeoutId);
-                reject(error);
-            },
-        );
-    });
-}
-
-function shouldFallbackToWasm(error: unknown): boolean {
-    const errorText = error instanceof Error
-        ? `${error.message}\n${error.stack ?? ''}`
-        : String(error);
-
-    return errorText.includes('Timed out running ONNX inference with accelerated provider')
-        || errorText.includes('using ceil() in shape computation is not yet supported for MaxPool')
-        || (errorText.includes('MaxPool') && errorText.includes('not yet supported'));
-}
-
 function prepareDetectionTensor(sourceCanvas: WorkingCanvas, config: DetectorConfig) {
     const resizeInfo = computeDetectionSize(
         sourceCanvas.width,
@@ -1108,6 +778,8 @@ function prepareDetectionTensor(sourceCanvas: WorkingCanvas, config: DetectorCon
 }
 
 function prepareRecognitionTensor(sourceCanvas: WorkingCanvas, config: RecognizerConfig) {
+    // Compatibility geometry for the existing manga recovery strategy, not the
+    // PaddleX reference resize/padding contract. See reports/paddleocr-v6-upstream-audit.md.
     const aspectRatio = sourceCanvas.width / Math.max(sourceCanvas.height, 1);
     const unclampedWidth = Math.max(
         config.min_image_width,
@@ -1407,12 +1079,12 @@ function decodeRecognitionTensor(
     for (let step = 0; step < sequenceLength; step += 1) {
         const offset = step * classCount;
         let maxIndex = 0;
-        let maxLogit = Number.NEGATIVE_INFINITY;
+        let maxProbability = Number.NEGATIVE_INFINITY;
 
         for (let classIndex = 0; classIndex < classCount; classIndex += 1) {
             const value = outputData[offset + classIndex] ?? Number.NEGATIVE_INFINITY;
-            if (value > maxLogit) {
-                maxLogit = value;
+            if (value > maxProbability) {
+                maxProbability = value;
                 maxIndex = classIndex;
             }
         }
@@ -1428,9 +1100,13 @@ function decodeRecognitionTensor(
             continue;
         }
 
-        const confidence = computeSoftmaxConfidence(outputData, offset, classCount, maxLogit);
+        const confidence = computeLegacyRankingConfidence(outputData, offset, classCount, maxProbability);
         text += character;
-        symbolConfidences.push(confidence * 100);
+        // Ranking uses visible text. Decoding the formerly missing space class must
+        // not change confidence averages for otherwise identical Japanese text.
+        if (character.trim()) {
+            symbolConfidences.push(confidence * 100);
+        }
         previousIndex = maxIndex;
     }
 
@@ -1446,16 +1122,19 @@ function decodeRecognitionTensor(
     );
 }
 
-function computeSoftmaxConfidence(
+// The bundled output already contains probabilities. This second softmax is a
+// legacy ranking weight, NOT calibrated model confidence. Replacing it in isolation
+// changes recovery winners; migrate it together with crop selection (see the audit).
+function computeLegacyRankingConfidence(
     outputData: Float32Array,
     offset: number,
     classCount: number,
-    maxLogit: number,
+    maxProbability: number,
 ) {
     let sum = 0;
 
     for (let classIndex = 0; classIndex < classCount; classIndex += 1) {
-        sum += Math.exp((outputData[offset + classIndex] ?? Number.NEGATIVE_INFINITY) - maxLogit);
+        sum += Math.exp((outputData[offset + classIndex] ?? Number.NEGATIVE_INFINITY) - maxProbability);
     }
 
     return 1 / Math.max(sum, 1);

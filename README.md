@@ -119,3 +119,29 @@
 - The `scribejs` backend is experimental, must keep using bundled local assets only, and the published `scribe.js-ocr` package is AGPL-3.0 licensed.
 - The `paddleonnx` backend is experimental, uses bundled local ONNX models only, currently targets the bundled Chinese/Japanese PaddleOCR recognition model with a bundled detection model for full-crop OCR, and does not fall back to Tesseract.
 
+### PaddleOCR implementation
+
+[`PaddleOnnxOcrBackend.ts`](src/background/ocr/PaddleOnnxOcrBackend.ts) handles image preparation, text layout recovery, recognition, and candidate selection. [`PaddleOnnxRuntime.ts`](src/background/ocr/PaddleOnnxRuntime.ts) owns local ONNX sessions, provider fallback, and safe cleanup after pending work settles. [`PaddleOnnxModelContract.ts`](src/background/ocr/PaddleOnnxModelContract.ts) checks output types, shapes, lengths, and dictionary class counts so model integration errors are reported explicitly.
+
+Dictionary preparation preserves YAML apostrophe escaping and the appended space class. Each bundled recognizer has 18,708 exported characters plus space and CTC blank, matching its 18,710 output classes.
+
+The [PP-OCRv6 upstream audit](reports/paddleocr-v6-upstream-audit.md) explains the remaining differences from PaddleOCR. RGB channel order, recognition width/padding, and applying softmax twice remain known issues pending a coordinated preprocessing and candidate-ranking migration. Extracting session management and fixing dictionaries does not by itself establish better OCR accuracy or a fully standard PaddleOCR pipeline.
+
+### Checking OCR regressions
+
+Run `npm run test:paddle:unit` for session lifecycle, model-contract, and regression-checker tests. Dictionary checks use Python 3: `python -m unittest discover -s tests -p test_paddle_dictionary.py`.
+
+The [recorded performance report](reports/ocr-performance.md) remains the historical reference. `npm run test:ocr:regression -- --actual <summary.json>` compares against it; the underlying command is `node scripts/check-ocr-regression.mjs`. The guard checks original cases individually as well as aggregate accuracy and exact matches, so added cases cannot hide a regression. Supply `--baseline <before-summary.json>` for a controlled comparison.
+
+The normal capture benchmark also exercises screenshot behavior. Its OCR input can include the snipping overlay; differing captured before/after images were confirmed during the audit. Compare actual inputs before attributing a score change to the OCR model. Keep the recorded reports and use preserved runs to distinguish capture differences from model changes.
+
+For deterministic backend inputs, set `NAMIDA_TEST_OCR_INPUT_MODE=fixture`. This uses the same 20 cases and scoring format, drawing fixed fixture images through canvas and bypassing screen capture. The per-case `result.input` records the mode and SHA-256 of the PNG bytes, and `--results-subdir` preserves the images in `ocr-fixture-inputs/`. Use matching modes and input hashes from the same browser environment for before/after model comparisons, and run capture tests separately to validate the screenshot flow. The [audit results](reports/paddleocr-v6-upstream-audit.md#controlled-results) include the original and retained implementation's complete comparison.
+
+```powershell
+$env:NAMIDA_TEST_OCR_INPUT_MODE = 'fixture'
+npm run test:e2e:paddleonnx -- --workers 5 --results-subdir onnx-fixture-before
+# After making the change:
+npm run test:e2e:paddleonnx -- --workers 5 --results-subdir onnx-fixture-after
+npm run test:ocr:regression -- --baseline test-results/onnx-fixture-before/ocr-accuracy-summary.json --actual test-results/onnx-fixture-after/ocr-accuracy-summary.json
+Remove-Item Env:NAMIDA_TEST_OCR_INPUT_MODE
+```

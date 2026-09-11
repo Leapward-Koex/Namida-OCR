@@ -22,7 +22,9 @@ When changing permissions, background execution, popup behavior, or shortcut flo
 - `src/background/ocr/OcrService.ts`: OCR backend selection and lifecycle management for offscreen/background OCR.
 - `src/background/ocr/TesseractOcrBackend.ts`: bundled Tesseract worker creation and OCR cleanup/scoring behavior.
 - `src/background/ocr/ScribeOcrBackend.ts`: experimental `scribe.js-ocr` backend wired for local extension assets only.
-- `src/background/ocr/PaddleOnnxOcrBackend.ts`: experimental PaddleOCR ONNX backend using bundled local ONNX assets plus `onnxruntime-web`, preferring bundled WebGPU-capable JSEP runtime assets when available.
+- `src/background/ocr/PaddleOnnxOcrBackend.ts`: experimental PaddleOCR ONNX image preparation, layout recovery, recognition, and candidate selection using bundled local models.
+- `src/background/ocr/PaddleOnnxRuntime.ts`: owns extension-local ONNX sessions, WebGPU/WebNN selection, WASM fallback, and safe release after pending initialization/inference settles.
+- `src/background/ocr/PaddleOnnxModelContract.ts`: validates float32 detector/recognizer output shapes, buffer lengths, and recognition dictionary cardinality; malformed outputs are integration errors.
 - `src/offscreen/index.ts`: Chromium offscreen document entrypoint for OCR and furigana work when the background context cannot host workers directly.
 - `src/content/index.ts`: content-side snipping, OCR flow, clipboard, overlay, and floating window behavior.
 - `src/ui/index.ts`: popup settings UI, browser-specific shortcut UX, and speech voice availability messaging.
@@ -54,6 +56,9 @@ When changing permissions, background execution, popup behavior, or shortcut flo
 - `npm run test:e2e:paddleonnx:no-fallback`: runs the Chromium Playwright OCR suite with the experimental `paddleonnx` backend and disables the WASM fallback so accelerated-provider failures surface directly.
 - `npm run test:e2e:compare-backends`: builds and runs the Playwright OCR dataset against the `tesseract`, experimental `scribejs`, and experimental `paddleonnx` backends, then writes a comparison summary to `test-results/`.
 - `npm run test:e2e:compare-models`: runs the OCR dataset against the bundled `jpn*` models and writes comparison output to `test-results/`.
+- `npm run test:paddle:unit`: runs the regression-guard, ONNX session lifecycle, and output-contract unit tests without loading OCR models.
+- `npm run test:ocr:regression -- --actual <summary.json>`: runs `node scripts/check-ocr-regression.mjs` against `reports/ocr-performance.md` by default. Use `--baseline <before-summary.json>` for a controlled before/after comparison. It checks each original case plus aggregate character accuracy and exact matches; extra cases cannot offset a regression.
+- `python -m unittest discover -s tests -p test_paddle_dictionary.py`: validates dictionary extraction and the committed PP-OCRv6 vocabulary. Use a Python 3 interpreter.
 
 When running Playwright from this repo, always use at least 5 workers/runners so failures surface quickly. The local runner wrappers clamp lower worker values up to `5`.
 
@@ -79,15 +84,30 @@ Playwright currently exercises the Chromium extension harness. Firefox and Edge 
 - Do not assume every OCR case will be an exact text match, and do not treat every OCR miss as a pure application bug.
 - Some E2E or model-comparison runs may remain non-perfect because OCR quality is a model limitation, not necessarily a regression in extension code.
 - When assessing OCR changes, look at the generated summaries in `test-results/` and compare accuracy/regression trends instead of expecting perfect recognition.
+- PP-OCRv6 dictionaries contain 18,708 exported entries plus an appended space, with CTC blank supplied separately by the decoder: 18,710 output classes in total. Preserve YAML apostrophe escaping when regenerating dictionaries; a quoted apostrophe must decode to one character.
+- The upstream audit at [reports/paddleocr-v6-upstream-audit.md](reports/paddleocr-v6-upstream-audit.md) identifies retained RGB input, recognition width/padding, and double-softmax confidence problems. Their migration must include candidate-ranking validation; the runtime extraction and dictionary corrections do not make the image pipeline fully upstream-compatible.
 
 ## Paddle ONNX Reliability Workflow
 
-- Use `reports/ocr-performance.md` as the current ONNX baseline. It is the source of truth for backend-level timing/accuracy and per-case accuracy before you claim an improvement or a regression.
+- Preserve `reports/ocr-performance.md` as the recorded ONNX baseline for backend-level timing/accuracy and per-case accuracy. Supplement it with controlled before/after results rather than replacing recorded scores to make a new run pass.
 - When improving one `paddleonnx` OCR case, do not rerun the whole ONNX suite on every edit. Rebuild once, then run only the target case until it reaches the task's target pass rate. After the focused case is stable, run the full ONNX suite and confirm that the other cases did not regress.
 - If you are fixing a regression introduced by a prior `paddleonnx` case-specific change, do not close the task when the focused case recovers. Finish by rerunning the full ONNX suite, comparing it with `reports/ocr-performance.md`, and verifying that no other OCR cases regressed.
 - For this workflow, define "pass" up front for the task. In practice that usually means either exact match or hitting a chosen `characterAccuracy` threshold for the case. The current Playwright OCR dataset mostly records metrics instead of enforcing per-case Paddle thresholds, so use the generated JSON results for pass-rate tracking instead of relying only on Playwright's green/red status.
 - Keep Playwright at `5` workers or more even for filtered runs. The local wrappers clamp worker counts up to `5`, and direct Playwright invocations should do the same.
 - Preserve before/after data when useful with `--results-subdir ...` on the wrapper runs so you can compare summaries instead of relying on memory.
+- Verify the OCR input itself before attributing a score change to the model. The capture benchmark can include a snipping overlay, and differing before/after input images have been confirmed. Uncontrolled screen captures are not sufficient evidence of a model regression; inspect `working-crop.png` and recorded input metadata.
+- Set `NAMIDA_TEST_OCR_INPUT_MODE=fixture` for deterministic input preparation: the same 20 cases and metrics use fixed fixture images drawn through canvas, bypassing screen capture. Each case records its input mode and SHA-256 in `result.input`. Compare matching input modes and hashes; continue using capture mode separately to exercise the screenshot flow.
+
+PowerShell example for controlled backend comparison (run the `before` sweep before editing):
+
+```powershell
+$env:NAMIDA_TEST_OCR_INPUT_MODE = 'fixture'
+npm run test:e2e:paddleonnx -- --workers 5 --results-subdir onnx-fixture-before
+# Apply the change, then rebuild and run the same cases through the wrapper.
+npm run test:e2e:paddleonnx -- --workers 5 --results-subdir onnx-fixture-after
+npm run test:ocr:regression -- --baseline test-results/onnx-fixture-before/ocr-accuracy-summary.json --actual test-results/onnx-fixture-after/ocr-accuracy-summary.json
+Remove-Item Env:NAMIDA_TEST_OCR_INPUT_MODE
+```
 
 PowerShell example for a focused single-case pass-rate loop:
 
@@ -125,11 +145,11 @@ npm run test:e2e:paddleonnx -- --workers 5 --results-subdir onnx-full-after
 - `snapshot.json` tells you which source won: `candidates.fullCrop`, `candidates.detected`, `candidates.projected`, and `candidates.selected`.
 - `working-crop.png` is the padded crop sent into Paddle preprocessing.
 - `full-crop-*.png`, `detected-*.png`, and `projected-*.png` show the actual crops and recognition attempts. Each attempt records `normalized`, `rotated`, `selected`, and the candidate text/score.
-- Empty `projectedGroups` is currently expected in the extension E2E ONNX path. `src/background/index.ts` forces `paddleonnx` requests to `PSM.AUTO`, and `PaddleOnnxOcrBackend.recognize()` skips projection extraction when the page segmentation mode is `AUTO`.
+- `src/background/index.ts` requests `PSM.AUTO` for `paddleonnx`, but AUTO does not always skip projections. `resolveProjectedPageSegMode()` infers vertical projection when height is at least `round(width * 1.6)`, horizontal projection for the symmetric width condition, and otherwise returns no projection mode. Inspect the crop geometry before treating empty or populated `projectedGroups` as a failure.
 - If the right text exists in one attempt image but loses selection, inspect scoring/ranking code first instead of detection code. The relevant logic lives in `src/background/ocr/OcrTextScoring.ts`, `refineRecognitionCandidate()`, `rankRecognitionAttempt()`, and `chooseFinalCandidate()` in `src/background/ocr/PaddleOnnxOcrBackend.ts`.
 - If the detector misses lines or merges them badly, inspect `detectTextBoxes()`, detector thresholds/padding from the Paddle manifest, `mergeBoxesForPageSegMode()`, and the crop geometry in `snapshot.json`.
 - If a tall vertical crop should split into multiple lines but does not, inspect `recognizeVerticalColumnCrop()` and `extractVerticalTextColumns()`.
-- If runs vary because of runtime/provider behavior instead of OCR quality, inspect ONNX provider logs and fallback behavior in `PaddleOnnxOcrBackend.ts`. Search for messages such as `Initialized ONNX session`, `Failed to create ONNX session`, and `Disabling accelerated execution provider after runtime failure`.
+- If runs vary because of runtime/provider behavior instead of OCR quality, inspect ONNX provider logs and fallback behavior in `PaddleOnnxRuntime.ts`. Search for messages such as `Initialized ONNX session`, `Failed to create ONNX session`, and `Disabling accelerated execution provider after runtime failure`.
 
 ## Change Guidance
 

@@ -201,7 +201,10 @@ def write_dictionary_file(yaml_path: Path, target_path: Path) -> None:
     if not characters:
         raise SystemExit(f"Could not find PostProcess.character_dict in {yaml_path}")
 
-    if extract_yaml_boolean(yaml_path, "use_space_char", False) and " " not in characters:
+    # PaddleX's CTCLabelDecode defaults use_space_char to True, including when
+    # the exported inference.yml omits it. Blank is class 0 in the runtime;
+    # the final space is an additional class after the exported dictionary.
+    if extract_yaml_boolean(yaml_path, "use_space_char", True):
         characters.append(" ")
 
     target_path.write_text("\n".join(characters) + "\n", encoding="utf-8")
@@ -219,16 +222,36 @@ def extract_character_dictionary(yaml_path: Path) -> list[str]:
 
         item_match = re.match(r"^\s*-\x20?(.*)$", line)
         if item_match:
-            value = item_match.group(1)
-            if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
-                value = value[1:-1]
-            characters.append(value)
+            characters.append(decode_dictionary_scalar(item_match.group(1)))
             continue
 
         if line.strip():
             break
 
     return characters
+
+
+def decode_dictionary_scalar(value: str) -> str:
+    """Decode the one-line YAML scalars used by exported character_dict lists.
+
+    In YAML, a literal apostrophe is written as four single quotes. Removing
+    just the outer quotes silently turns that one model class into two chars.
+    Reject unsupported scalar forms rather than silently corrupting indices.
+    """
+    if value.startswith("'"):
+        if re.fullmatch(r"'(?:[^']|'')*'", value) is None:
+            raise ValueError(f"Invalid single-quoted dictionary scalar: {value!r}")
+        value = value[1:-1].replace("''", "'")
+    elif value.startswith('"'):
+        # The model exports use JSON-compatible double-quoted escapes.
+        # json.loads correctly decodes escaped quotes, slashes and Unicode.
+        value = json.loads(value)
+    elif value in ("|", ">") or value.startswith(("&", "*", "!")):
+        raise ValueError(f"Unsupported dictionary scalar: {value!r}")
+
+    if not value or "\n" in value or "\r" in value:
+        raise ValueError(f"Dictionary entries must fit on one nonempty line: {value!r}")
+    return value
 
 
 def extract_yaml_number(yaml_path: Path, key: str, fallback: float) -> float:

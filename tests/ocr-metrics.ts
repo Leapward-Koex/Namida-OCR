@@ -11,6 +11,10 @@ export type OcrCaseResult = {
     exactMatch: boolean;
     editDistance: number;
     characterAccuracy: number;
+    input?: {
+        mode: string;
+        sha256?: string;
+    };
 };
 
 export function normalizeOcrText(text: string | null | undefined): string {
