@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import type { Page, TestInfo, Worker } from '@playwright/test';
 import { expect, test } from './extension.fixtures';
 import type { OcrDebugAttemptSnapshot, OcrDebugCropSnapshot, OcrDebugSnapshot } from '../src/background/ocr/OcrDebugSnapshot';
@@ -13,6 +14,15 @@ const GET_LAST_OCR_DEBUG_SNAPSHOT_ACTION = NamidaMessageAction.GetLastOcrDebugSn
 const GET_LAST_OCR_DEBUG_SNAPSHOT_OFFSCREEN_ACTION = NamidaMessageAction.GetLastOcrDebugSnapshotOffscreen;
 const TEST_OCR_BACKEND = normalizeTestOcrBackend(process.env.NAMIDA_TEST_OCR_BACKEND);
 const TEST_OCR_MODEL = process.env.NAMIDA_TEST_OCR_MODEL?.trim() || 'jpn_vert';
+const TEST_PADDLE_GPU_ENABLED = process.env.NAMIDA_TEST_PADDLE_GPU_ENABLED !== '0';
+const REQUIRE_WEBGPU = process.env.NAMIDA_TEST_REQUIRE_WEBGPU === '1';
+if (TEST_OCR_BACKEND === 'paddleonnx' && !TEST_PADDLE_GPU_ENABLED && REQUIRE_WEBGPU) {
+    throw new Error('A CPU-only OCR run cannot also require WebGPU.');
+}
+const OCR_INPUT_MODE = process.env.NAMIDA_TEST_OCR_INPUT_MODE || 'snip';
+if (OCR_INPUT_MODE !== 'fixture' && OCR_INPUT_MODE !== 'snip') {
+    throw new Error(`Unknown NAMIDA_TEST_OCR_INPUT_MODE: ${OCR_INPUT_MODE}`);
+}
 const OCR_RESULT_TIMEOUT_MS = process.env.CI ? 240_000 : 120_000;
 
 test.describe('OCR accuracy dataset', () => {
@@ -28,14 +38,29 @@ test.describe('OCR accuracy dataset', () => {
                 TEST_OCR_MODEL,
             );
 
-            const actualText = await runOcrCase(page, serviceWorker, ocrCase);
+            const run = await runOcrCase(page, serviceWorker, ocrCase);
             const debugSnapshot = await fetchLastOcrDebugSnapshot(serviceWorker);
-            const result = scoreOcrCase(ocrCase, actualText, caseIndex);
+            const result = { ...scoreOcrCase(ocrCase, run.actualText, caseIndex), input: run.input };
+            if (run.input.mode === 'snip' && debugSnapshot?.workingImageDataUrl) {
+                // Diagnostic hash of the backend's working image, not the full screen capture.
+                result.input.sha256 = createHash('sha256').update(dataUrlToBuffer(debugSnapshot.workingImageDataUrl)).digest('hex');
+            }
 
             await attachCaseResult(testInfo, result);
             await persistCaseResult(result);
             await attachDebugSnapshot(testInfo, ocrCase.name, debugSnapshot);
             await persistDebugSnapshot(ocrCase.name, debugSnapshot);
+
+            if (TEST_OCR_BACKEND === 'paddleonnx') {
+                const acceleration = debugSnapshot?.pipeline?.acceleration;
+                if (!TEST_PADDLE_GPU_ENABLED) {
+                    expect(acceleration?.provider, JSON.stringify(acceleration)).toBe('wasm');
+                    expect(acceleration?.requestedGpu).toBe(false);
+                } else if (REQUIRE_WEBGPU) {
+                    expect(acceleration?.provider, JSON.stringify(acceleration)).toBe('webgpu');
+                    expect(acceleration?.successfulInferences).toBeGreaterThan(0);
+                }
+            }
 
             if (ocrCase.minimumCharacterAccuracy !== undefined) {
                 expect(
@@ -62,6 +87,10 @@ async function runOcrCase(page: Page, serviceWorker: Worker, ocrCase: OcrCase) {
             return img.complete && img.naturalWidth > 0;
         });
     }).toBe(true);
+
+    if (OCR_INPUT_MODE === 'fixture') {
+        return runFixedFixture(page, serviceWorker, ocrCase);
+    }
 
     await page.bringToFront();
     await page.waitForTimeout(250);
@@ -105,7 +134,56 @@ async function runOcrCase(page: Page, serviceWorker: Worker, ocrCase: OcrCase) {
 
     const result = page.getByTestId('namida-floating-window-text');
     await expect(result).toBeVisible({ timeout: OCR_RESULT_TIMEOUT_MS });
-    return result.textContent();
+    return { actualText: await result.textContent(), input: { mode: 'snip', sha256: undefined as string | undefined } };
+}
+
+async function runFixedFixture(page: Page, serviceWorker: Worker, ocrCase: OcrCase) {
+    const upscale = ocrCase.upscalingMode ?? 'canvas';
+    if (upscale === 'tensorflow') {
+        throw new Error('Fixed fixture mode supports canvas and none upscaling only.');
+    }
+    // Match display size, inset and the selection box's 2px border on both sides.
+    // Pixels outside the fixture image are fixed white instead of page decoration.
+    const dataUrl = await page.locator('#ocr-sample').evaluate((element, settings) => {
+        const image = element as HTMLImageElement;
+        const bounds = image.getBoundingClientRect();
+        const ratio = window.devicePixelRatio;
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.floor((bounds.width - 2 * settings.inset + 4) * ratio));
+        canvas.height = Math.max(1, Math.floor((bounds.height - 2 * settings.inset + 4) * ratio));
+        const context = canvas.getContext('2d')!;
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.drawImage(image, -settings.inset * ratio, -settings.inset * ratio, bounds.width * ratio, bounds.height * ratio);
+        if (settings.upscale === 'none') return canvas.toDataURL('image/png');
+        const scaled = document.createElement('canvas');
+        scaled.width = canvas.width * 4;
+        scaled.height = canvas.height * 4;
+        const scaledContext = scaled.getContext('2d')!;
+        scaledContext.imageSmoothingEnabled = true;
+        scaledContext.imageSmoothingQuality = 'high';
+        scaledContext.drawImage(canvas, 0, 0, scaled.width, scaled.height);
+        return scaled.toDataURL('image/png');
+    }, { inset: ocrCase.selectionInset ?? 0, upscale });
+    const bytes = dataUrlToBuffer(dataUrl);
+    const input = { mode: 'fixture', sha256: createHash('sha256').update(bytes).digest('hex') };
+    const inputDir = path.resolve('test-results', 'ocr-fixture-inputs');
+    await fs.mkdir(inputDir, { recursive: true });
+    await fs.writeFile(path.join(inputDir, `${ocrCase.name}.png`), bytes);
+    // Send from an extension page so the ordinary background message listener runs.
+    const extensionPage = await page.context().newPage();
+    try {
+        await extensionPage.goto(new URL('/ui/popup.html', serviceWorker.url()).href);
+        const actualText = await extensionPage.evaluate(async ({ action, data }) => {
+            return await chrome.runtime.sendMessage({ action, data }) as string | undefined;
+        }, { action: NamidaMessageAction.RecognizeImage, data: dataUrl });
+        if (typeof actualText !== 'string') {
+            throw new Error(`The OCR request did not return a text result for fixed fixture ${ocrCase.name}.`);
+        }
+        return { actualText, input };
+    } finally {
+        await extensionPage.close();
+    }
 }
 
 async function seedExtensionSettings(
@@ -120,6 +198,7 @@ async function seedExtensionSettings(
         configuredUpscalingMode,
         configuredOcrBackend,
         configuredOcrModel,
+        configuredPaddleGpuEnabled,
     }) => {
         await chrome.storage.sync.clear();
         await chrome.storage.sync.set({
@@ -128,7 +207,7 @@ async function seedExtensionSettings(
             OcrDebugArtifacts: true,
             OcrModel: configuredOcrModel,
             PageSegMode: configuredPageSegMode,
-            PaddleOnnxGpuEnabled: true,
+            PaddleOnnxGpuEnabled: configuredPaddleGpuEnabled,
             SaveOcrCrop: false,
             ShowSpeakButton: false,
             UpscalingMode: configuredUpscalingMode,
@@ -139,6 +218,7 @@ async function seedExtensionSettings(
         configuredUpscalingMode: upscalingMode,
         configuredOcrBackend: ocrBackend,
         configuredOcrModel: ocrModel,
+        configuredPaddleGpuEnabled: TEST_PADDLE_GPU_ENABLED,
     });
 }
 

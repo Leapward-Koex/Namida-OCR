@@ -87,11 +87,17 @@
       <div id="paddle-settings" hidden>
         <div class="inline-setting">
           <input id="enable-paddle-gpu" type="checkbox" />
-          <label for="enable-paddle-gpu">Enable GPU support</label>
+          <label for="enable-paddle-gpu">Enable GPU for PaddleOCR</label>
         </div>
         <p class="setting-description">
-          Uses WebGPU or WebNN when the browser exposes them, otherwise PaddleOCR falls back to local WASM.
+          Tries WebGPU for OCR, with local CPU (WASM) fallback. AI upscaling selects acceleration separately.
         </p>
+        <p id="paddle-gpu-status" class="setting-description" role="status" aria-live="polite">Checking OCR status…</p>
+        <details id="paddle-gpu-details" class="setting-description" hidden>
+          <summary>Acceleration details</summary>
+          <p id="paddle-gpu-detail-text"></p>
+        </details>
+        <button id="retry-paddle-gpu" type="button" hidden>Retry GPU</button>
       </div>
     </div>
 
@@ -103,6 +109,8 @@
       </div>
     </div>
   </div>
+
+  <footer id="build-version" aria-label="Build version"></footer>
 
   <!-- Your compiled JS (transpiled from TypeScript) -->
   <script src="index.js"></script>

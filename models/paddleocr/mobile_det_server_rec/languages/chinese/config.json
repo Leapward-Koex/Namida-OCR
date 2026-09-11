@@ -12,6 +12,10 @@
     "Japanese"
   ],
   "source_repo": "PaddlePaddle/PP-OCRv6_medium_rec_onnx",
+  "source_revision": "50c7eacafc52fa7bcf4194e8cd08e46f8558504b",
+  "model_sha256": "9c09abf0957f7968c7586464b7397b84ad2387a0497a351af40e9acc71b673ba",
+  "inference_config_path": "inference.yml",
+  "inference_config_sha256": "991b700facf5b50a7de193468207d5f4255b538dde0d312ae3b7c7a9b6873129",
   "original_format": "ONNX",
   "converted_format": "ONNX",
   "dictionary_file": "dict.txt",

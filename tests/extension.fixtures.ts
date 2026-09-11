@@ -28,8 +28,19 @@ export const test = base.extend<ExtensionFixtures>({
             ],
         });
 
-        await use(context);
-        await context.close();
+        try {
+            await use(context);
+        } finally {
+            await context.close();
+            // Models and browser profiles are large. Debug/trace files live outside
+            // these temporary directories and remain available after the test.
+            for (const temporaryPath of [extensionPath, userDataDir]) {
+                if (!path.resolve(temporaryPath).startsWith(path.resolve(testInfo.outputDir) + path.sep)) {
+                    throw new Error('Refusing to remove a path outside the test output directory.');
+                }
+                await fs.rm(temporaryPath, { recursive: true, force: true, maxRetries: 3 });
+            }
+        }
     },
 
     page: async ({ context }, use) => {
@@ -53,7 +64,8 @@ export const test = base.extend<ExtensionFixtures>({
 });
 
 async function prepareExtensionForTest(targetPath: string): Promise<void> {
-    const sourcePath = path.resolve(process.cwd(), 'dist');
+    // Allows a preserved before-build to run against the same expanded dataset.
+    const sourcePath = path.resolve(process.env.NAMIDA_TEST_BUILD_DIR || path.join(process.cwd(), 'dist'));
     const manifestPath = path.join(targetPath, 'manifest.json');
 
     await fs.rm(targetPath, { recursive: true, force: true });

@@ -18,11 +18,13 @@ const {
 } = parseArgs(args);
 const defaultPlaywrightWorkers = backend === 'paddleonnx' ? String(MIN_PLAYWRIGHT_WORKERS) : '';
 const rootCaseResultsDir = path.join(baseResultsDir, 'ocr-case-results');
+const rootFixtureInputsDir = path.join(baseResultsDir, 'ocr-fixture-inputs');
 const rootSummaryPath = path.join(baseResultsDir, 'ocr-accuracy-summary.json');
 const rootCombinedResultsPath = path.join(baseResultsDir, 'ocr-case-results.json');
 const rootRunMetadataPath = path.join(baseResultsDir, 'ocr-run-metadata.json');
 
 await fs.rm(rootCaseResultsDir, { recursive: true, force: true });
+await fs.rm(rootFixtureInputsDir, { recursive: true, force: true });
 await fs.rm(rootSummaryPath, { force: true });
 await fs.rm(rootCombinedResultsPath, { force: true });
 await fs.rm(rootRunMetadataPath, { force: true });
@@ -108,6 +110,7 @@ const exitCode = buildExitCode === 0 ? (testExitCode ?? 1) : (buildExitCode ?? 1
 const runCompletedAtMs = Date.now();
 const runMetadata = {
     backend,
+    inputMode: process.env.NAMIDA_TEST_OCR_INPUT_MODE || 'snip',
     model,
     paddleOnnxModelVariant: backend === 'paddleonnx' ? paddleOnnxModelVariant : null,
     disablePaddleOnnxWasmFallback: Boolean(disablePaddleOnnxWasmFallback && backend === 'paddleonnx'),
@@ -163,6 +166,7 @@ async function mirrorResults(
     await fs.mkdir(targetResultsDir, { recursive: true });
 
     await copyIfPresent(rootCaseResultsDir, path.join(targetResultsDir, 'ocr-case-results'));
+    await copyIfPresent(rootFixtureInputsDir, path.join(targetResultsDir, 'ocr-fixture-inputs'));
     await copyIfPresent(rootCombinedResultsPath, path.join(targetResultsDir, 'ocr-case-results.json'));
     await copyIfPresent(rootSummaryPath, path.join(targetResultsDir, 'ocr-accuracy-summary.json'));
     await copyIfPresent(rootRunMetadataPath, path.join(targetResultsDir, 'ocr-run-metadata.json'));

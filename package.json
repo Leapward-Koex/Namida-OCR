@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "test:build": "node --test tests/build-version.test.mjs",
     "build:chrome": "webpack --env browser=chrome --mode production",
     "build:firefox": "webpack --env browser=firefox --mode production",
     "prepare:paddleocr-onnx": "python ./prepare-paddleocr-onnx.py --variant server",
@@ -18,6 +19,8 @@
     "test:e2e:compare-backends": "node ./compare-ocr-backends.mjs",
     "test:e2e:compare-models": "node ./compare-ocr-models.mjs",
     "test:e2e:headed": "node ./run-playwright-e2e.mjs --headed",
+    "test:ocr:regression": "node scripts/check-ocr-regression.mjs",
+    "test:paddle:unit": "node --test tests/check-ocr-regression.test.mjs tests/paddle-*.test.mjs tests/capture-flow.test.mjs tests/upscaler.test.mjs",
     "watch:firefox": "webpack --env browser=firefox --watch --mode development --devtool source-map",
     "watch:chrome": "webpack --env browser=chrome --watch --mode development --devtool source-map"
   },
@@ -27,6 +30,7 @@
   "devDependencies": {
     "@playwright/test": "^1.59.1",
     "@types/chrome": "^0.0.287",
+    "@types/clipper-lib": "6.4.0",
     "@types/webextension-polyfill": "^0.12.1",
     "copy-webpack-plugin": "^12.0.2",
     "path-browserify": "^1.0.1",
@@ -42,6 +46,7 @@
     "@upscalerjs/default-model": "^1.0.0-beta.17",
     "@upscalerjs/esrgan-medium": "^1.0.0-beta.13",
     "@upscalerjs/esrgan-thick": "^1.0.0-beta.16",
+    "clipper-lib": "6.4.2",
     "onnxruntime-web": "^1.24.3",
     "scribe.js-ocr": "^0.10.1",
     "tesseract.js": "^5.1.1",

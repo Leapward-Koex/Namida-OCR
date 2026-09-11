@@ -9,7 +9,11 @@ export enum NamidaMessageAction {
     GenerateFurigana,
     GenerateFuriganaOffscreen,
     GetLastOcrDebugSnapshot,
-    GetLastOcrDebugSnapshotOffscreen
+    GetLastOcrDebugSnapshotOffscreen,
+    GetOcrAccelerationStatus,
+    GetOcrAccelerationStatusOffscreen,
+    RetryOcrGpu,
+    RetryOcrGpuOffscreen,
 }
 
 export interface NamidaMessage {

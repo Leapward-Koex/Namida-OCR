@@ -1,12 +1,14 @@
 import type { PSM } from 'tesseract.js';
+import type { PaddleAccelerationStatus } from './PaddleWorkerProtocol';
 
 export type OcrDebugCandidateSnapshot = {
-    artifactCount: number;
-    averageSymbolConfidence: number;
+    /** Legacy heuristic fields are absent in the reference Paddle pipeline. */
+    artifactCount?: number;
+    averageSymbolConfidence?: number;
     confidence: number;
     id: string;
-    japaneseRatio: number;
-    score: number;
+    japaneseRatio?: number;
+    score?: number;
     text: string;
 };
 
@@ -18,6 +20,7 @@ export type OcrDebugBoxSnapshot = {
     right: number;
     top: number;
     width: number;
+    points?: readonly { x: number; y: number }[];
 };
 
 export type OcrDebugAttemptSnapshot = {
@@ -28,6 +31,10 @@ export type OcrDebugAttemptSnapshot = {
     normalized: boolean;
     rotated: boolean;
     selected: boolean;
+    tokens?: readonly { text: string; confidence: number; timestep: number; classIndex: number }[];
+    inputShape?: readonly number[];
+    contentWidth?: number;
+    widthClamped?: boolean;
 };
 
 export type OcrDebugCropSnapshot = {
@@ -41,6 +48,7 @@ export type OcrDebugCropSnapshot = {
 };
 
 export type OcrDebugSnapshot = {
+    schemaVersion?: number;
     backend: string;
     candidates: {
         detected: OcrDebugCandidateSnapshot | null;
@@ -55,4 +63,16 @@ export type OcrDebugSnapshot = {
     projectedGroups: OcrDebugCropSnapshot[];
     workingImagePath?: string;
     workingImageDataUrl: string;
+    pipeline?: {
+        modelVariant: string;
+        direction: 'horizontal' | 'vertical';
+        detectorInputShape: readonly number[];
+        detectorParameters: Record<string, unknown>;
+        recognitionParameters: Record<string, unknown>;
+        detectorRuns: number;
+        recognitionRuns: number;
+        elapsedMs: number;
+        recovery: string[];
+        acceleration?: PaddleAccelerationStatus;
+    };
 };

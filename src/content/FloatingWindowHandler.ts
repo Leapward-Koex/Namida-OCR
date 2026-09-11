@@ -24,10 +24,25 @@ export class FloatingWindow {
     private static isLoading = false;
     private static renderToken = 0;
     private static currentText: string | undefined;
+    private static captureDepth = 0;
+    private static captureVisibility = '';
     private static readonly speechHandler = new SpeechSynthesisHandler("ja-JP");
 
     constructor(config: FloatingWindowConfig) {
         FloatingWindow.showResult(config);
+    }
+
+    public static hideForCapture(): () => void {
+        if (this.captureDepth++ === 0) this.captureVisibility = this.floatingMessageEl?.style.visibility ?? '';
+        if (this.floatingMessageEl) this.floatingMessageEl.style.visibility = 'hidden';
+        let restored = false;
+        return () => {
+            if (restored) return;
+            restored = true;
+            if (--this.captureDepth === 0 && this.floatingMessageEl) {
+                this.floatingMessageEl.style.visibility = this.captureVisibility;
+            }
+        };
     }
 
     public static showStatus(message = "Scanning text...") {
@@ -215,6 +230,7 @@ export class FloatingWindow {
         });
 
         this.floatingMessageEl = floatingDiv;
+        if (this.captureDepth > 0) floatingDiv.style.visibility = 'hidden';
         this.titleEl = titleEl;
         this.textContainerEl = textContainer;
         this.buttonRowEl = buttonRow;

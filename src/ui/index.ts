@@ -14,8 +14,17 @@ import { SpeechSynthesisHandler } from "../content/SpeechHandler";
 import { NamidaVoice, TTSWrapper } from "../content/TTSWrapper";
 import { BrowserType, getCurrentBrowser, isWindows } from "../interfaces/browserInfo";
 import { FuriganaType } from "../background/FuriganaHandler";
+import { NamidaMessageAction } from "../interfaces/message";
+import type { PaddleAccelerationStatus } from "../background/ocr/PaddleWorkerProtocol";
+import { describePaddleAcceleration } from "./OcrAccelerationStatus";
 
 document.addEventListener('DOMContentLoaded', () => {
+    const manifest = runtime.getManifest();
+    const buildVersion = document.getElementById('build-version');
+    if (buildVersion) {
+        buildVersion.textContent = manifest.version_name || manifest.version;
+        buildVersion.title = `Extension version ${manifest.version}`;
+    }
     const windowTimeoutSelect = document.getElementById("window-timeout") as HTMLSelectElement;
     const furiganaTypeSelect = document.getElementById("furigana-type") as HTMLSelectElement;
     const ocrBackendSelect = document.getElementById("ocr-backend") as HTMLSelectElement;
@@ -24,12 +33,43 @@ document.addEventListener('DOMContentLoaded', () => {
     const tesseractSettings = document.getElementById("tesseract-settings") as HTMLDivElement;
     const paddleSettings = document.getElementById("paddle-settings") as HTMLDivElement;
     const paddleGpuCheckbox = document.getElementById("enable-paddle-gpu") as HTMLInputElement;
+    const paddleGpuStatus = document.getElementById("paddle-gpu-status") as HTMLParagraphElement;
+    const paddleGpuDetails = document.getElementById("paddle-gpu-details") as HTMLDetailsElement;
+    const paddleGpuDetailText = document.getElementById("paddle-gpu-detail-text") as HTMLParagraphElement;
+    const retryPaddleGpu = document.getElementById("retry-paddle-gpu") as HTMLButtonElement;
     const voiceSelect = document.getElementById("voice-selection") as HTMLSelectElement;
     const saveOcrCropCheckbox = document.getElementById("save-ocr-crop") as HTMLInputElement;
     const showSpeakButtonCheckbox = document.getElementById("show-speak-button") as HTMLInputElement;
     const speechStatus = document.getElementById("speech-status") as HTMLSpanElement;
     const speakeDemoButton = document.getElementById("voice-demo-button") as HTMLButtonElement;
     const changeShortcut = document.getElementById("change-shortcut") as HTMLButtonElement;
+    let statusRevision = 0;
+
+    async function refreshPaddleStatus() {
+        const revision = ++statusRevision;
+        retryPaddleGpu.hidden = true;
+        paddleGpuDetails.hidden = true;
+        if (ocrBackendSelect.value !== 'paddleonnx') return;
+        try {
+            const status = await runtime.sendMessage({ action: NamidaMessageAction.GetOcrAccelerationStatus }) as PaddleAccelerationStatus | null;
+            if (revision !== statusRevision) return;
+            const description = describePaddleAcceleration(status ?? null, paddleGpuCheckbox.checked);
+            paddleGpuStatus.textContent = description.text;
+            paddleGpuStatus.title = description.detail;
+            const adapter = status?.adapter;
+            const adapterName = adapter && [adapter.description, adapter.vendor, adapter.architecture, adapter.device].filter(Boolean).join(' / ');
+            const detail = [
+                adapterName ? `Browser adapter: ${adapterName}.` : '',
+                status?.provider === 'webgpu' ? 'WebGPU sessions may still use the CPU for some operations.' : '',
+                description.detail,
+            ].filter(Boolean).join(' ');
+            paddleGpuDetailText.textContent = detail;
+            paddleGpuDetails.hidden = !detail;
+            retryPaddleGpu.hidden = !description.retryAvailable;
+        } catch {
+            if (revision === statusRevision) paddleGpuStatus.textContent = 'OCR status is temporarily unavailable.';
+        }
+    }
 
     loadSettings(
         windowTimeoutSelect,
@@ -42,6 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showSpeakButtonCheckbox,
     ).then(() => {
         updateBackendSettingsVisibility(ocrBackendSelect.value as OcrBackendKind, tesseractSettings, paddleSettings);
+        return refreshPaddleStatus();
     });
 
     // Attach listeners to save new values
@@ -58,11 +99,16 @@ document.addEventListener('DOMContentLoaded', () => {
         storage.sync.set(record);
     });
 
-    ocrBackendSelect.addEventListener("change", () => {
+    ocrBackendSelect.addEventListener("change", async () => {
         const record: Record<string, unknown> = {};
         record[StorageKey.OcrBackend] = ocrBackendSelect.value;
         updateBackendSettingsVisibility(ocrBackendSelect.value as OcrBackendKind, tesseractSettings, paddleSettings);
-        storage.sync.set(record);
+        try {
+            await storage.sync.set(record);
+            await refreshPaddleStatus();
+        } catch {
+            paddleGpuStatus.textContent = 'Could not save the OCR backend preference.';
+        }
     });
 
     upscalingSelect.addEventListener("change", () => {
@@ -93,10 +139,29 @@ document.addEventListener('DOMContentLoaded', () => {
         storage.sync.set(record);
     });
 
-    paddleGpuCheckbox.addEventListener("change", () => {
+    paddleGpuCheckbox.addEventListener("change", async () => {
         const record: Record<string, unknown> = {};
         record[StorageKey.PaddleOnnxGpuEnabled] = paddleGpuCheckbox.checked;
-        storage.sync.set(record);
+        try {
+            await storage.sync.set(record);
+            await refreshPaddleStatus();
+        } catch {
+            paddleGpuStatus.textContent = 'Could not save the GPU preference.';
+        }
+    });
+
+    retryPaddleGpu.addEventListener('click', async () => {
+        retryPaddleGpu.disabled = true;
+        ++statusRevision;
+        paddleGpuStatus.textContent = 'Preparing a GPU retry…';
+        try {
+            await runtime.sendMessage({ action: NamidaMessageAction.RetryOcrGpu });
+            await refreshPaddleStatus();
+        } catch {
+            paddleGpuStatus.textContent = 'Could not prepare a GPU retry. Try again after the current scan.';
+        } finally {
+            retryPaddleGpu.disabled = false;
+        }
     });
 
     showSpeakButtonCheckbox.addEventListener("change", () => {

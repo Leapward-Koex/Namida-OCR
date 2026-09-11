@@ -1,0 +1,124 @@
+{
+  "generator": "generate-general-ocr-fixtures.py",
+  "pillow_version": "12.3.0",
+  "cases": [
+    {
+      "name": "general-001-horizontal-japanese",
+      "text": "本日は晴天です。",
+      "size": 34,
+      "image": "images/ocr-general-001.png",
+      "width": 320,
+      "height": 114,
+      "sha256": "3ae361e655c33c89e4bc397a0648c4517f5c0f31f15c4690ccc8b9d924e43dc9",
+      "font": "meiryo.ttc",
+      "font_sha256": "457b306f719a002f1d037b2a3942f2abfa8a55d7bb109bf8950341a3129adb46"
+    },
+    {
+      "name": "general-002-mixed-japanese-latin-digits",
+      "text": "日本語 OCR Test 2026",
+      "size": 34,
+      "image": "images/ocr-general-002.png",
+      "width": 409,
+      "height": 114,
+      "sha256": "af8ff77cdce2e537f05bba65895a464912f9e94a4d3c4ad302d2def5025a88cf",
+      "font": "meiryo.ttc",
+      "font_sha256": "457b306f719a002f1d037b2a3942f2abfa8a55d7bb109bf8950341a3129adb46"
+    },
+    {
+      "name": "general-003-apostrophe-date",
+      "text": "It's 2026年9月11日",
+      "size": 34,
+      "image": "images/ocr-general-003.png",
+      "width": 362,
+      "height": 114,
+      "sha256": "704a6430d3cc02a040d2c5f253f4d47acc524d499f9f075ad12da154d5e116e8",
+      "font": "meiryo.ttc",
+      "font_sha256": "457b306f719a002f1d037b2a3942f2abfa8a55d7bb109bf8950341a3129adb46"
+    },
+    {
+      "name": "general-004-long-horizontal",
+      "text": "日本語の長い文章を省略せず読み取り、数字1234567890と英語ABCも正確に表示します。",
+      "size": 24,
+      "image": "images/ocr-general-004.png",
+      "width": 1038,
+      "height": 99,
+      "sha256": "64d6700ab9badcb92e1d96ed6982e154a269f338ae62d5cc1eca9fb00e6215dc",
+      "font": "meiryo.ttc",
+      "font_sha256": "457b306f719a002f1d037b2a3942f2abfa8a55d7bb109bf8950341a3129adb46"
+    },
+    {
+      "name": "general-005-colored-text",
+      "text": "青い文字と赤い数字 123",
+      "size": 34,
+      "background": "#fff2cc",
+      "foreground": "#124bcc",
+      "accent": "123",
+      "image": "images/ocr-general-005.png",
+      "width": 429,
+      "height": 114,
+      "sha256": "c75940d98bd57e659688e80c33a25f376ce240af550dbabe9014da04dff1f335",
+      "font": "meiryo.ttc",
+      "font_sha256": "457b306f719a002f1d037b2a3942f2abfa8a55d7bb109bf8950341a3129adb46"
+    },
+    {
+      "name": "general-006-white-on-dark",
+      "text": "夜間モードでも読めます 2026",
+      "size": 32,
+      "background": "#172033",
+      "foreground": "#ffffff",
+      "image": "images/ocr-general-006.png",
+      "width": 491,
+      "height": 111,
+      "sha256": "63b69eeb44871b9ccd0a486a417b587286a091b01e35a13091ac50cbac41b3d6",
+      "font": "meiryo.ttc",
+      "font_sha256": "457b306f719a002f1d037b2a3942f2abfa8a55d7bb109bf8950341a3129adb46"
+    },
+    {
+      "name": "general-007-rotated-horizontal",
+      "text": "少し傾いた日本語の文章です",
+      "size": 32,
+      "angle": 8,
+      "image": "images/ocr-general-007.png",
+      "width": 476,
+      "height": 175,
+      "sha256": "a2cd114e5bef14e39ca2cbc3422df82c65cc9633d9941189e2f3faf5867470a2",
+      "font": "meiryo.ttc",
+      "font_sha256": "457b306f719a002f1d037b2a3942f2abfa8a55d7bb109bf8950341a3129adb46"
+    },
+    {
+      "name": "general-008-vertical-three-columns",
+      "text": "明日の予定\n図書館へ行く\n本を三冊借りる",
+      "size": 34,
+      "vertical": true,
+      "image": "images/ocr-general-008.png",
+      "width": 238,
+      "height": 325,
+      "sha256": "cb14e82c55a3628fa7f83d5fc7b73545f53cdae602ed1def156a1de98f79ef66",
+      "font": "meiryo.ttc",
+      "font_sha256": "457b306f719a002f1d037b2a3942f2abfa8a55d7bb109bf8950341a3129adb46"
+    },
+    {
+      "name": "general-009-horizontal-three-lines",
+      "text": "受付時間は午前九時です\n予約番号は12345です\n入口で名前を伝えてください",
+      "size": 30,
+      "image": "images/ocr-general-009.png",
+      "width": 438,
+      "height": 228,
+      "sha256": "4f45a9e194737ca7406cab5f500226b379c710fc9fec17e80fa62ac6603bcd54",
+      "font": "meiryo.ttc",
+      "font_sha256": "457b306f719a002f1d037b2a3942f2abfa8a55d7bb109bf8950341a3129adb46"
+    },
+    {
+      "name": "general-010-serif-japanese",
+      "text": "図書館で新しい本を読みました。",
+      "size": 34,
+      "serif": true,
+      "image": "images/ocr-general-010.png",
+      "width": 558,
+      "height": 100,
+      "sha256": "58c2400ccbca803fe5cbb18b0d771c69d5e3b8168579e2b60a9dc647aa8eac6b",
+      "font": "yumin.ttf",
+      "font_sha256": "6d16c4f4f33f42f2d427857c207f732c5cd56bad43e31ad435b18758dc4758d7"
+    }
+  ]
+}

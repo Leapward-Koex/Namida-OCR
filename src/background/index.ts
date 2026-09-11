@@ -35,17 +35,23 @@ if (globalThis.Worker) {
         await BackgroundOcrService.init();
     })().catch(console.error);
 }
-async function ensureOffscreenDocument() {
-    const offscreenUrl = runtime.getURL('offscreen/offscreen.html');
-    // Check if offscreen is already created
-    const existingDocs = await chrome.offscreen.hasDocument?.();
-    if (!existingDocs) {
-        await chrome.offscreen.createDocument({
-            url: offscreenUrl,
-            reasons: [chrome.offscreen.Reason.WORKERS],
-            justification: 'Perform background OCR with bundled local assets'
-        });
+let offscreenCreation: Promise<void> | null = null;
+
+function ensureOffscreenDocument(): Promise<void> {
+    // Share both the existence check and creation: simultaneous first snips
+    // would otherwise each try to create Chrome's single offscreen document.
+    if (!offscreenCreation) {
+        offscreenCreation = (async () => {
+            if (!await chrome.offscreen.hasDocument?.()) {
+                await chrome.offscreen.createDocument({
+                    url: runtime.getURL('offscreen/offscreen.html'),
+                    reasons: [chrome.offscreen.Reason.WORKERS],
+                    justification: 'Perform background OCR with bundled local assets'
+                });
+            }
+        })().finally(() => { offscreenCreation = null; });
     }
+    return offscreenCreation;
 }
 
 commands.onCommand.addListener((command) => {
@@ -108,18 +114,15 @@ runtime.onMessage.addListener((message, sender) => {
                 } as const;
 
                 if (globalThis.Worker) {
-                    return BackgroundOcrService.setDebugEnabled(debugArtifactsEnabled).then(async () => {
-                        await BackgroundOcrService.setRuntimeSettings(runtimeSettings);
-                        const recognizedText = await BackgroundOcrService.recognize(
-                            namidaMessage.data,
-                            resolvedPageSegMode,
-                            ocrModel,
-                            runtimeSettings,
-                        );
-                        lastOcrDebugSnapshot = debugArtifactsEnabled
-                            ? await BackgroundOcrService.getLastDebugSnapshot()
-                            : null;
-                        return recognizedText;
+                    return BackgroundOcrService.recognizeWithDebug(
+                        namidaMessage.data,
+                        resolvedPageSegMode,
+                        ocrModel,
+                        runtimeSettings,
+                        debugArtifactsEnabled,
+                    ).then((result) => {
+                        lastOcrDebugSnapshot = result.debugSnapshot;
+                        return result.recognizedText;
                     });
                 }
                 else {
@@ -153,6 +156,23 @@ runtime.onMessage.addListener((message, sender) => {
 
         case NamidaMessageAction.GetLastOcrDebugSnapshot: {
             return Promise.resolve(lastOcrDebugSnapshot);
+        }
+
+        case NamidaMessageAction.GetOcrAccelerationStatus:
+        case NamidaMessageAction.RetryOcrGpu: {
+            const retry = namidaMessage.action === NamidaMessageAction.RetryOcrGpu;
+            return (async () => {
+                if (globalThis.Worker) {
+                    if (retry) await BackgroundOcrService.retryGpu();
+                    return BackgroundOcrService.getAccelerationStatus();
+                }
+                // Merely opening the popup must not create the offscreen host or
+                // initialize a model. A later scan creates it through the normal path.
+                if (!await chrome.offscreen.hasDocument?.()) return null;
+                return runtime.sendMessage({
+                    action: retry ? NamidaMessageAction.RetryOcrGpuOffscreen : NamidaMessageAction.GetOcrAccelerationStatusOffscreen,
+                });
+            })();
         }
     }
 });

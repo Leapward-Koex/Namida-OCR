@@ -1,0 +1,5 @@
+# Preserve the exact export bytes verified against the pinned upstream SHA-256.
+models/paddleocr/**/inference.yml -text
+
+# Keep the upstream license text verbatim, including its existing line endings/spaces.
+third-party/JSBN-LICENSE.txt -text whitespace=-blank-at-eol

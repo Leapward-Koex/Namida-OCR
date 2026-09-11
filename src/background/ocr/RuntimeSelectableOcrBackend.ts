@@ -4,6 +4,7 @@ import type { OcrBackend, OcrBackendRuntimeSettings } from './OcrBackend';
 import { PaddleOnnxOcrBackend } from './PaddleOnnxOcrBackend';
 import { TesseractOcrBackend } from './TesseractOcrBackend';
 import type { OcrDebugSnapshot } from './OcrDebugSnapshot';
+import type { PaddleAccelerationStatus } from './PaddleWorkerProtocol';
 
 type SupportedRuntimeBackendKind = 'tesseract' | 'paddleonnx';
 
@@ -29,20 +30,35 @@ export class RuntimeSelectableOcrBackend implements OcrBackend {
     private activeBackendKey: string | null = null;
     private debugEnabled = false;
     private runtimeSettingsOverride: RuntimeBackendSettings | null = null;
+    private operationTail: Promise<unknown> = Promise.resolve();
+
+    private enqueue<T>(operation: () => Promise<T>): Promise<T> {
+        const result = this.operationTail.then(operation);
+        this.operationTail = result.catch(() => undefined);
+        return result;
+    }
 
     public async init(model?: string): Promise<void> {
-        const backend = await this.ensureBackend();
-        await backend.init(model);
+        const settings = this.runtimeSettingsOverride && { ...this.runtimeSettingsOverride };
+        return this.enqueue(async () => {
+            const backend = await this.ensureBackend(await this.getSettings(settings));
+            await backend.init(model);
+        });
     }
 
     public async recognize(dataUrl: string, pageSegMode: PSM, model?: string): Promise<string | undefined> {
-        const backend = await this.ensureBackend();
-        return backend.recognize(dataUrl, pageSegMode, model);
+        const settings = this.runtimeSettingsOverride && { ...this.runtimeSettingsOverride };
+        return this.enqueue(async () => {
+            const backend = await this.ensureBackend(await this.getSettings(settings));
+            return backend.recognize(dataUrl, pageSegMode, model);
+        });
     }
 
     public async setDebugEnabled(enabled: boolean): Promise<void> {
-        this.debugEnabled = enabled;
-        await this.activeBackend?.setDebugEnabled?.(enabled);
+        return this.enqueue(async () => {
+            this.debugEnabled = enabled;
+            await this.activeBackend?.setDebugEnabled?.(enabled);
+        });
     }
 
     public async setRuntimeSettings(settings: OcrBackendRuntimeSettings): Promise<void> {
@@ -56,27 +72,42 @@ export class RuntimeSelectableOcrBackend implements OcrBackend {
         return await this.activeBackend?.getLastDebugSnapshot?.() ?? null;
     }
 
+    public async getAccelerationStatus(): Promise<PaddleAccelerationStatus | null> {
+        return await this.activeBackend?.getAccelerationStatus?.() ?? null;
+    }
+
+    public retryGpu(): Promise<void> {
+        return this.enqueue(async () => { await this.activeBackend?.retryGpu?.(); });
+    }
+
     public async terminate(): Promise<void> {
+        return this.enqueue(() => this.terminateActiveBackend());
+    }
+
+    private async terminateActiveBackend(): Promise<void> {
         const backend = this.activeBackend;
         this.activeBackend = null;
         this.activeBackendKey = null;
         await backend?.terminate();
     }
 
-    private async ensureBackend(): Promise<RuntimeBackend> {
-        const settings = await this.getSettings();
+    private async ensureBackend(settings: RuntimeBackendSettings): Promise<RuntimeBackend> {
         const backendKey = this.getBackendKey(settings);
 
         if (this.activeBackend && this.activeBackendKey === backendKey) {
             return this.activeBackend;
         }
 
-        await this.terminate();
+        await this.terminateActiveBackend();
         const backend = this.createBackend(settings.backend);
-        await backend.setDebugEnabled?.(this.debugEnabled);
-
-        if (settings.backend === 'paddleonnx') {
-            await backend.setGpuEnabled?.(settings.paddleGpuEnabled);
+        try {
+            await backend.setDebugEnabled?.(this.debugEnabled);
+            if (settings.backend === 'paddleonnx') {
+                await backend.setGpuEnabled?.(settings.paddleGpuEnabled);
+            }
+        } catch (error) {
+            await backend.terminate().catch(() => undefined);
+            throw error;
         }
 
         this.activeBackend = backend;
@@ -100,9 +131,9 @@ export class RuntimeSelectableOcrBackend implements OcrBackend {
         return settings.backend;
     }
 
-    private async getSettings(): Promise<RuntimeBackendSettings> {
-        if (this.runtimeSettingsOverride) {
-            return this.runtimeSettingsOverride;
+    private async getSettings(captured: RuntimeBackendSettings | null): Promise<RuntimeBackendSettings> {
+        if (captured) {
+            return captured;
         }
 
         const [ocrBackend, paddleGpuEnabled] = await Promise.all([
