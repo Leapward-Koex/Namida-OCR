@@ -101,7 +101,6 @@
 - The default OCR backend is `tesseract`.
 - Tesseract keeps the original recognition as its baseline. Uncertain results get one local retry with a small white border and reduced image size for larger crops; a retry replaces the original only when confidence, text score, Japanese-character ratio, and text retention checks agree. Confident results use a single pass.
 - Tesseract worker requests and Chromium offscreen creation are serialized to handle simultaneous snips safely. `node --test tests/tesseract-backend.test.mjs` checks worker/retry behavior; `tests/tesseract.spec.ts` checks concurrent horizontal OCR with networking disabled.
-- See [the Tesseract audit](reports/tesseract-upstream-audit.md) for official guidance, measured accuracy changes, and regression evidence.
 - The OCR runtime and backend implementations live under `src/background/ocr/`.
 - The popup can switch between bundled `tesseract` and experimental `paddleonnx` at runtime in normal builds.
 - You can still choose the default OCR backend at build time with `NAMIDA_OCR_BACKEND` or `webpack --env ocr_backend=...`.
@@ -117,10 +116,10 @@
 - `npm run test:e2e:tesseract`, `npm run test:e2e:scribejs`, and `npm run test:e2e:paddleonnx` run the Chromium Playwright OCR suite against a single backend without needing an extra `--backend` flag.
 - `npm run test:e2e:paddleonnx:no-fallback` runs the Chromium Playwright OCR suite against `paddleonnx` with CPU retry disabled so WebGPU failures are surfaced directly.
 - `npm run test:e2e:compare-backends` runs the Chromium Playwright OCR dataset against the `tesseract`, experimental `scribejs`, and experimental `paddleonnx` backends and writes `test-results/ocr-backend-comparison.json`.
-- `.github/workflows/ocr-performance.yml` runs on every branch push, executes `npm run test:e2e:tesseract` and `npm run test:e2e:paddleonnx`, writes [reports/ocr-performance.md](/c:/Dev/Namida/reports/ocr-performance.md), and commits that Markdown report back with `GITHUB_TOKEN`.
+- `.github/workflows/ocr-performance.yml` runs on every branch push, executes `npm run test:e2e:tesseract` and `npm run test:e2e:paddleonnx`, writes [reports/ocr-performance.md](reports/ocr-performance.md), and commits that Markdown report back with `GITHUB_TOKEN`.
 - Playwright runs in this repo should use at least 5 workers. The local runner wrappers clamp lower worker counts up to `5`.
 - The `scribejs` backend is experimental, must keep using bundled local assets only, and the published `scribe.js-ocr` package is AGPL-3.0 licensed.
-- The `paddleonnx` backend is experimental and uses a bundled multilingual recognition model after text detection. Its model weights and browser bundle selection are unchanged by the reference-pipeline migration; there is no Tesseract fallback.
+- The `paddleonnx` backend is experimental and uses a bundled multilingual recognition model after text detection, with no Tesseract fallback.
 
 ### PaddleOCR implementation
 
@@ -141,15 +140,13 @@ The detector uses the pinned standalone PaddleX PP-OCRv6 policy of `960/max`, st
 
 Dictionary preparation preserves YAML apostrophe escaping and the appended space class: 18,708 exported characters plus space and CTC blank match 18,710 model classes. Geometry uses bundled `clipper-lib`; source attributions and redistribution terms in [PaddleGeometry-NOTICE.txt](third-party/PaddleGeometry-NOTICE.txt) accompany extension builds. Export YAML remains alongside the local model assets.
 
-The [reference implementation report](reports/paddleocr-reference-implementation.md) records the migration, reference checks, controlled scores, and known limitations. The [original upstream audit](reports/paddleocr-v6-upstream-audit.md) is retained as historical evidence. This migration was authorized to prioritize the reference pipeline with documented accuracy losses; it does not claim non-regression on every old manga case.
-
 ### Checking OCR regressions
 
 Run `npm run test:paddle:unit` for model preparation/decoding, geometry, layout, backend/runtime, capture-flow, and regression-checker tests. Dictionary checks use Python 3: `python -m unittest discover -s tests -p test_paddle_dictionary.py`.
 
-Preserve the [recorded performance report](reports/ocr-performance.md) and prior audit results. For future changes, supply `--baseline <before-summary.json>` to `npm run test:ocr:regression -- --actual <after-summary.json>` using a controlled run of the current implementation. Without that argument the guard compares against the historical report. It checks individual cases and aggregate scores; a green Playwright run or higher overall average alone does not establish non-regression. Report the original 20 cases and the added 10 general-text cases separately so one cohort cannot conceal losses in the other.
+The [recorded performance report](reports/ocr-performance.md) is maintained by CI. For changes, supply `--baseline <before-summary.json>` to `npm run test:ocr:regression -- --actual <after-summary.json>` using a controlled run of the current implementation. Without that argument the guard compares against the recorded report. It checks individual cases and aggregate scores; a green Playwright run or higher overall average alone does not establish non-regression. Report the original 20 cases and the added 10 general-text cases separately so one cohort cannot conceal losses in the other.
 
-The capture race found during the audit is addressed by removing the selection overlay, hiding existing floating UI, and waiting two animation frames before requesting a screenshot. OCR status appears after capture; hidden UI is restored even on failure. [capture.spec.ts](tests/capture.spec.ts) compares real browser-capture pixels across successive snips without running OCR. Inspect captured inputs whenever a snip-mode score changes.
+Screen capture removes the selection overlay, hides existing floating UI, and waits two animation frames before requesting a screenshot. OCR status appears after capture; hidden UI is restored even on failure. [capture.spec.ts](tests/capture.spec.ts) compares real browser-capture pixels across successive snips without running OCR. Inspect captured inputs whenever a snip-mode score changes.
 
 For deterministic backend inputs, set `NAMIDA_TEST_OCR_INPUT_MODE=fixture`. The 30-case dataset retains all 20 original labels and adds [10 synthetic general-text cases](tests/fixtures/GENERAL-OCR-PROVENANCE.md) covering mixed scripts, digits, apostrophes, long lines, color, dark backgrounds, rotation, and multiple lines/columns. Fixed images use each case's configured upscaling; this mode bypasses screen capture. Each `result.input` records its mode and PNG SHA-256, and `--results-subdir` preserves inputs in `ocr-fixture-inputs/`. Compare matching modes and hashes in the same browser environment and exercise the capture tests separately.
 

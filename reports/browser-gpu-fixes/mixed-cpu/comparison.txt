@@ -1,6 +1,0 @@
-Baseline: C:\Dev\Namida\reports\browser-gpu-fixes\mixed\summary.json
-Actual: C:\Dev\Namida\reports\browser-gpu-fixes\mixed-cpu\summary.json
-Compared 30 baseline cases (1e-9 tolerance).
-Average character accuracy: 90.11962819% -> 90.11962819%
-Exact matches: 20/30 -> 20/30
-PASS: no OCR accuracy regressions.

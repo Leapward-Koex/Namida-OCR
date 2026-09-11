@@ -133,3 +133,7 @@ test-results/
 .pnp.*
 
 .tmp
+
+# Task research and probe artifacts; retain the CI-maintained OCR baseline.
+/reports/*
+!/reports/ocr-performance.md

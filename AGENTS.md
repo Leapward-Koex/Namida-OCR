@@ -101,18 +101,16 @@ Playwright currently exercises the Chromium extension harness. Firefox and Edge 
 - Detector preprocessing follows pinned PaddleX standalone PP-OCRv6 `960/max` with stride 32. The separate 1536-pixel ceiling bounds explicit browser-policy overrides. Bundled export DB settings are threshold `0.2`, box score `0.45`, unclip ratio `1.4`, and 3000 contour candidates. Fast polygon scoring and no dilation follow the pinned PaddleX defaults.
 - Recognition uses height 48, base width 320 expanding to 3200, and zero padding after normalization. Overlong lines are resized completely to the 3200-pixel cap; they are not silently truncated. Width clamping is recorded in debug data.
 - Japanese right-to-left column ordering is an application layout policy in `PaddleReadingOrder.ts`, inferred from detected geometry when the background requests `PSM.AUTO`. Optional document/orientation/layout models are not bundled; mixed-orientation pages remain a limitation.
-- The migration changes preprocessing/postprocessing and adds bundled geometry code, notices, and export YAML. It leaves the ONNX weights and browser-specific model selections unchanged.
-- [reports/paddleocr-reference-implementation.md](reports/paddleocr-reference-implementation.md) records the current controlled comparison, implementation limits, and documented losses accepted for the explicitly authorized reference migration. [reports/paddleocr-v6-upstream-audit.md](reports/paddleocr-v6-upstream-audit.md) describes the preceding implementation and remains historical evidence.
 
 ## Paddle ONNX Reliability Workflow
 
-- Preserve `reports/ocr-performance.md` and the upstream audit as historical baselines. Use the reference implementation report and a preserved current-build run for new controlled comparisons; do not rewrite historical scores or labels to make a run pass.
+- Keep `reports/ocr-performance.md` as the CI-maintained performance baseline. Use a preserved current-build run for controlled comparisons; do not rewrite recorded scores or labels to make a run pass.
 - When improving one `paddleonnx` OCR case, do not rerun the whole ONNX suite on every edit. Rebuild once, then run only the target case until it reaches the task's target pass rate. After the focused case is stable, run the full ONNX suite and confirm that the other cases did not regress.
-- If fixing a regression introduced by a later `paddleonnx` change, rerun the full suite after the focused case recovers. Compare every case and both the original-20 and general-10 cohorts against matching current-baseline inputs. The accepted losses from the reference migration are not automatic authorization for further regressions.
+- If fixing a regression introduced by a `paddleonnx` change, rerun the full suite after the focused case recovers. Compare every case and both the original-20 and general-10 cohorts against matching current-baseline inputs.
 - For this workflow, define "pass" up front for the task. In practice that usually means either exact match or hitting a chosen `characterAccuracy` threshold for the case. The current Playwright OCR dataset mostly records metrics instead of enforcing per-case Paddle thresholds, so use the generated JSON results for pass-rate tracking instead of relying only on Playwright's green/red status.
 - Keep Playwright at `5` workers or more even for filtered runs. The local wrappers clamp worker counts up to `5`, and direct Playwright invocations should do the same.
 - Preserve before/after data when useful with `--results-subdir ...` on the wrapper runs so you can compare summaries instead of relying on memory.
-- Verify the OCR input before attributing a score change to the model. The historical overlay-capture race is fixed: hide the selection and floating UI, wait two animation frames before capture, restore UI in `finally`, then show OCR status. Preserve the nested/idempotent hide handling. `tests/capture.spec.ts` compares actual browser pixels over successive snips without OCR; `tests/capture-flow.test.mjs` covers ordering and failure restoration.
+- Verify the OCR input before attributing a score change to the model. Hide the selection and floating UI, wait two animation frames before capture, restore UI in `finally`, then show OCR status. Preserve the nested/idempotent hide handling. `tests/capture.spec.ts` compares actual browser pixels over successive snips without OCR; `tests/capture-flow.test.mjs` covers ordering and failure restoration.
 - Set `NAMIDA_TEST_OCR_INPUT_MODE=fixture` for deterministic input preparation: all 30 cases use fixed images, each case's configured upscaling, and the existing scoring format, bypassing capture. Each result records its mode and PNG SHA-256 in `result.input`. Compare matching modes and hashes from the same browser environment; exercise capture mode separately. Playwright success alone is not an accuracy gate, and a combined average can hide cohort or individual-case losses.
 
 PowerShell example for controlled backend comparison (run the `before` sweep before editing):
@@ -173,6 +171,7 @@ Remove-Item Env:NAMIDA_TEST_OCR_INPUT_MODE
 
 ## Change Guidance
 
+- Keep task-specific research, audit notes, probe results, and agent artifacts out of commits. Store temporary results in ignored `test-results/` or `.tmp/`; the CI-maintained `reports/ocr-performance.md` remains tracked. Retain reusable tests, fixture provenance, and required third-party notices.
 - Preserve the browser-extension-only architecture.
 - Preserve offline behavior and the no-server product boundary.
 - Keep Chrome/Edge and Firefox differences explicit in manifests and runtime code.
