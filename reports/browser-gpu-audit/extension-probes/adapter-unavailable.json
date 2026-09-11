@@ -1,0 +1,176 @@
+{
+  "scenario": "adapter-unavailable",
+  "browser": "147.0.7727.15",
+  "requests": [
+    {
+      "text": "日本語 OCR Test 2026",
+      "elapsedMs": 2214,
+      "diagnostics": {
+        "installed": true,
+        "scenario": "adapter-unavailable",
+        "gpuApi": true,
+        "mlApi": false,
+        "adapters": [
+          {
+            "options": {},
+            "available": false,
+            "info": null
+          }
+        ],
+        "deviceCount": 0,
+        "submits": 0,
+        "dispatches": 0,
+        "pipelines": 0,
+        "lost": [],
+        "logs": [
+          {
+            "level": "warn",
+            "args": [
+              "[PaddleOnnxOcrBackend]",
+              "Failed to create ONNX session",
+              {
+                "error": {},
+                "providers": [
+                  "webgpu"
+                ],
+                "sessionUrl": "chrome-extension://mongchhfnopebfbppfhijekaiacfaehg/libs/paddleocr/detection/v6/det.onnx"
+              }
+            ]
+          },
+          {
+            "level": "info",
+            "args": [
+              "[PaddleOnnxOcrBackend]",
+              "Initialized ONNX session",
+              {
+                "accelerated": false,
+                "providers": [
+                  "wasm"
+                ],
+                "sessionKey": "detector",
+                "wasmFallbackDisabled": false,
+                "wasmOnly": false
+              }
+            ]
+          },
+          {
+            "level": "warn",
+            "args": [
+              "[PaddleOnnxOcrBackend]",
+              "Failed to create ONNX session",
+              {
+                "error": {},
+                "providers": [
+                  "webgpu"
+                ],
+                "sessionUrl": "chrome-extension://mongchhfnopebfbppfhijekaiacfaehg/libs/paddleocr/languages/chinese/rec.onnx"
+              }
+            ]
+          },
+          {
+            "level": "info",
+            "args": [
+              "[PaddleOnnxOcrBackend]",
+              "Initialized ONNX session",
+              {
+                "accelerated": false,
+                "providers": [
+                  "wasm"
+                ],
+                "sessionKey": "recognizer",
+                "wasmFallbackDisabled": false,
+                "wasmOnly": false
+              }
+            ]
+          }
+        ],
+        "hookErrors": []
+      }
+    },
+    {
+      "text": "日本語 OCR Test 2026",
+      "elapsedMs": 848,
+      "diagnostics": {
+        "installed": true,
+        "scenario": "adapter-unavailable",
+        "gpuApi": true,
+        "mlApi": false,
+        "adapters": [
+          {
+            "options": {},
+            "available": false,
+            "info": null
+          }
+        ],
+        "deviceCount": 0,
+        "submits": 0,
+        "dispatches": 0,
+        "pipelines": 0,
+        "lost": [],
+        "logs": [
+          {
+            "level": "warn",
+            "args": [
+              "[PaddleOnnxOcrBackend]",
+              "Failed to create ONNX session",
+              {
+                "error": {},
+                "providers": [
+                  "webgpu"
+                ],
+                "sessionUrl": "chrome-extension://mongchhfnopebfbppfhijekaiacfaehg/libs/paddleocr/detection/v6/det.onnx"
+              }
+            ]
+          },
+          {
+            "level": "info",
+            "args": [
+              "[PaddleOnnxOcrBackend]",
+              "Initialized ONNX session",
+              {
+                "accelerated": false,
+                "providers": [
+                  "wasm"
+                ],
+                "sessionKey": "detector",
+                "wasmFallbackDisabled": false,
+                "wasmOnly": false
+              }
+            ]
+          },
+          {
+            "level": "warn",
+            "args": [
+              "[PaddleOnnxOcrBackend]",
+              "Failed to create ONNX session",
+              {
+                "error": {},
+                "providers": [
+                  "webgpu"
+                ],
+                "sessionUrl": "chrome-extension://mongchhfnopebfbppfhijekaiacfaehg/libs/paddleocr/languages/chinese/rec.onnx"
+              }
+            ]
+          },
+          {
+            "level": "info",
+            "args": [
+              "[PaddleOnnxOcrBackend]",
+              "Initialized ONNX session",
+              {
+                "accelerated": false,
+                "providers": [
+                  "wasm"
+                ],
+                "sessionKey": "recognizer",
+                "wasmFallbackDisabled": false,
+                "wasmOnly": false
+              }
+            ]
+          }
+        ],
+        "hookErrors": []
+      }
+    }
+  ]
+}

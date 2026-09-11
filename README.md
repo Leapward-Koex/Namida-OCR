@@ -75,7 +75,7 @@
   - The popup can switch between `tesseract` and experimental `paddleonnx`.
   - Tesseract also exposes a **Text direction** setting in the popup, which switches between `jpn` and `jpn_vert`.
   - Tesseract page segmentation is now chosen automatically from that text direction: vertical uses single-block vertical and horizontal uses single-block.
-  - **Enable GPU support** is only shown for PaddleOCR in the popup and controls whether Paddle attempts WebGPU/WebNN before local WASM fallback.
+  - **Enable GPU support** is only shown for PaddleOCR. It requests a hardware WebGPU adapter and falls back to local CPU (WASM) when unavailable or after a provider failure. The popup shows the current provider and fallback reason; **Retry GPU** creates a fresh runtime after a failure. The browser chooses which GPU to expose. Some ONNX operations can still execute on the CPU within a WebGPU session.
 
 - **Supported Languages**  
   - Japanese horizontal and vertical text (`jpn` / `jpn_vert` for Tesseract).
@@ -106,14 +106,16 @@
 - The popup can switch between bundled `tesseract` and experimental `paddleonnx` at runtime in normal builds.
 - You can still choose the default OCR backend at build time with `NAMIDA_OCR_BACKEND` or `webpack --env ocr_backend=...`.
 - Available build-time backends are `tesseract`, experimental `scribejs`, and experimental `paddleonnx`.
-- `paddleonnx` uses bundled local assets under `models/paddleocr/` plus bundled `onnxruntime-web` JSEP/WASM assets so it can prefer WebGPU when the browser exposes it and fall back to WASM locally.
+- `paddleonnx` uses bundled local assets under `models/paddleocr/` plus matching `onnxruntime-web` JSEP/WASM assets in a dedicated extension worker. WebGPU device loss, provider errors and timeouts terminate the entire worker before retrying once in a fresh CPU worker. This keeps hung ORT state out of the retry. WebNN is excluded because the bundled dynamic models are not validated for that provider.
+- Chromium/Edge create this worker from the offscreen document; Firefox creates it from its background document. ONNX proxy workers and WASM threads are disabled; the extension does not require cross-origin isolation. CPU inference remains off the hosting document's event loop. GPU initialization permits 20 seconds per requested model, GPU runs 15 seconds, and CPU commands 120 seconds before terminating their worker.
+- AI upscaling loads its local model only on the first AI request. Canvas/None and opening settings do not initialize it. Input/output tensors are disposed after each AI request; model weights remain cached for reuse.
 - Paddle source bundles keep their generated `manifest.json`, but builds publish it as `libs/paddleocr/paddleocr-manifest.json` so Chrome Web Store packages contain only the root extension `manifest.json`.
 - Chromium builds package the PP-OCRv6 `medium_det` + `medium_rec` bundle by default, while Firefox builds package the smaller PP-OCRv6 `small_det` + `medium_rec` `mobile_det_server_rec` mixed bundle by default to stay under Firefox add-on size limits.
 - Override the packaged Paddle bundle with `NAMIDA_PADDLE_ONNX_MODEL_VARIANT=<bundle-name>` or `webpack --env paddleonnx_model_variant=<bundle-name>` when you need a non-default browser/model combination such as `server`, `mobile`, `mobile_det_server_rec`, or `server_det_mobile_rec`.
-- Set `NAMIDA_PADDLE_ONNX_DISABLE_WASM_FALLBACK=1` or pass `--env paddleonnx_disable_wasm_fallback=true` to make accelerated provider failures fatal for no-fallback testing.
+- Set `NAMIDA_PADDLE_ONNX_DISABLE_WASM_FALLBACK=1` or pass `--env paddleonnx_disable_wasm_fallback=true` to make WebGPU failures fatal for no-fallback testing. Failed workers are still discarded. This disables Namida's CPU retry; it does not prohibit ORT from placing individual graph operations on the CPU.
 - `npm run prepare:paddleocr-onnx` regenerates the default `server` bundle, `npm run prepare:paddleocr-onnx:firefox` regenerates the Firefox mixed bundle, and `npm run prepare:paddleocr-onnx:mobile` regenerates the compact override. [prepare-paddleocr-onnx.py](prepare-paddleocr-onnx.py) uses pinned repository revisions and verifies ONNX/export-YAML hashes from [sources.json](models/paddleocr/sources.json), preserves `inference.yml`, and extracts the dictionary and model settings. These downloads are development preparation; extension use remains offline.
 - `npm run test:e2e:tesseract`, `npm run test:e2e:scribejs`, and `npm run test:e2e:paddleonnx` run the Chromium Playwright OCR suite against a single backend without needing an extra `--backend` flag.
-- `npm run test:e2e:paddleonnx:no-fallback` runs the Chromium Playwright OCR suite against `paddleonnx` with WASM fallback disabled so WebGPU/WebNN failures are surfaced directly.
+- `npm run test:e2e:paddleonnx:no-fallback` runs the Chromium Playwright OCR suite against `paddleonnx` with CPU retry disabled so WebGPU failures are surfaced directly.
 - `npm run test:e2e:compare-backends` runs the Chromium Playwright OCR dataset against the `tesseract`, experimental `scribejs`, and experimental `paddleonnx` backends and writes `test-results/ocr-backend-comparison.json`.
 - `.github/workflows/ocr-performance.yml` runs on every branch push, executes `npm run test:e2e:tesseract` and `npm run test:e2e:paddleonnx`, writes [reports/ocr-performance.md](/c:/Dev/Namida/reports/ocr-performance.md), and commits that Markdown report back with `GITHUB_TOKEN`.
 - Playwright runs in this repo should use at least 5 workers. The local runner wrappers clamp lower worker counts up to `5`.
@@ -133,7 +135,8 @@ The detector uses the pinned standalone PaddleX PP-OCRv6 policy of `960/max`, st
 | [PaddleDbPostProcess.ts](src/background/ocr/PaddleDbPostProcess.ts) | Contours, polygon scores, unclip, quadrilaterals |
 | [PaddleCropGeometry.ts](src/background/ocr/PaddleCropGeometry.ts) | Cubic perspective crops and vertical rotation |
 | [PaddleReadingOrder.ts](src/background/ocr/PaddleReadingOrder.ts) | Ordering detected regions |
-| [PaddleOnnxRuntime.ts](src/background/ocr/PaddleOnnxRuntime.ts) | Local sessions, provider fallback, safe cleanup |
+| [PaddleOnnxRuntime.ts](src/background/ocr/PaddleOnnxRuntime.ts) | Worker supervision, provider fallback, timeouts and local diagnostics |
+| [paddle-worker/worker.ts](src/paddle-worker/worker.ts) | Isolated ORT sessions, hardware adapter selection, device-loss observation and tensor cleanup |
 | [PaddleOnnxModelContract.ts](src/background/ocr/PaddleOnnxModelContract.ts) | Output shapes and dictionary cardinality |
 
 Dictionary preparation preserves YAML apostrophe escaping and the appended space class: 18,708 exported characters plus space and CTC blank match 18,710 model classes. Geometry uses bundled `clipper-lib`; source attributions and redistribution terms in [PaddleGeometry-NOTICE.txt](third-party/PaddleGeometry-NOTICE.txt) accompany extension builds. Export YAML remains alongside the local model assets.
@@ -149,6 +152,8 @@ Preserve the [recorded performance report](reports/ocr-performance.md) and prior
 The capture race found during the audit is addressed by removing the selection overlay, hiding existing floating UI, and waiting two animation frames before requesting a screenshot. OCR status appears after capture; hidden UI is restored even on failure. [capture.spec.ts](tests/capture.spec.ts) compares real browser-capture pixels across successive snips without running OCR. Inspect captured inputs whenever a snip-mode score changes.
 
 For deterministic backend inputs, set `NAMIDA_TEST_OCR_INPUT_MODE=fixture`. The 30-case dataset retains all 20 original labels and adds [10 synthetic general-text cases](tests/fixtures/GENERAL-OCR-PROVENANCE.md) covering mixed scripts, digits, apostrophes, long lines, color, dark backgrounds, rotation, and multiple lines/columns. Fixed images use each case's configured upscaling; this mode bypasses screen capture. Each `result.input` records its mode and PNG SHA-256, and `--results-subdir` preserves inputs in `ocr-fixture-inputs/`. Compare matching modes and hashes in the same browser environment and exercise the capture tests separately.
+
+Set `NAMIDA_TEST_PADDLE_GPU_ENABLED=0` to run this dataset on CPU and assert WASM execution. On a GPU test host, `NAMIDA_TEST_REQUIRE_WEBGPU=1` makes the dataset require WebGPU sessions and the acceleration integration tests require observed hardware compute dispatches. These are separate test lanes; successful CPU fallback does not count as GPU coverage. The fault tests patch disposable extension copies only. Use `NAMIDA_TEST_EXPECT_STRICT_GPU=1` with the no-fallback build to exercise strict timeout recovery in `tests/paddle-acceleration.spec.ts`.
 
 ```powershell
 $env:NAMIDA_TEST_OCR_INPUT_MODE = 'fixture'

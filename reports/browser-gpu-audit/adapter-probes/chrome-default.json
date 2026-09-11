@@ -1,0 +1,18 @@
+{
+  "channel": "chrome",
+  "version": "152.0.7977.83",
+  "powerPreference": "default",
+  "secureContext": true,
+  "gpu": true,
+  "webnn": false,
+  "adapters": [],
+  "available": true,
+  "info": {
+    "vendor": "nvidia",
+    "architecture": "blackwell",
+    "device": "",
+    "description": "",
+    "isFallbackAdapter": false
+  },
+  "deviceCreated": true
+}

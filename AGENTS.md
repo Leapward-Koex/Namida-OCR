@@ -28,7 +28,8 @@ When changing permissions, background execution, popup behavior, or shortcut flo
 - `src/background/ocr/PaddleCropGeometry.ts`: cubic perspective rectification and counterclockwise rotation of tall text lines.
 - `src/background/ocr/PaddleReadingOrder.ts`: geometry-based horizontal row or Japanese vertical column ordering, independent of recognized text.
 - `src/background/ocr/PaddleImage.ts`: local bitmap decoding and debug-image encoding.
-- `src/background/ocr/PaddleOnnxRuntime.ts`: owns extension-local ONNX sessions, WebGPU/WebNN selection, WASM fallback, and safe release after pending initialization/inference settles.
+- `src/background/ocr/PaddleOnnxRuntime.ts`: supervises the isolated extension worker, serializes commands, enforces deadlines, and retries provider failures once in a fresh CPU worker. Never reuse a timed-out ORT realm for fallback.
+- `src/paddle-worker/worker.ts`: owns the local JSEP runtime, model/session cache, hardware WebGPU adapter, device-loss listener, tensor disposal and copied output transfer. Automatic providers are WebGPU and WASM; WebNN is excluded for the bundled dynamic models.
 - `src/background/ocr/PaddleOnnxModelContract.ts`: validates float32 detector/recognizer output shapes, buffer lengths, and recognition dictionary cardinality; malformed outputs are integration errors.
 - `src/offscreen/index.ts`: Chromium offscreen document entrypoint for OCR and furigana work when the background context cannot host workers directly.
 - `src/content/index.ts`: content-side snipping, OCR flow, clipboard, overlay, and floating window behavior.
@@ -60,7 +61,7 @@ When changing permissions, background execution, popup behavior, or shortcut flo
 - `npm run test:e2e:tesseract`: runs the Chromium Playwright OCR suite with the bundled `tesseract` backend.
 - `npm run test:e2e:scribejs`: runs the Chromium Playwright OCR suite with the experimental `scribejs` backend.
 - `npm run test:e2e:paddleonnx`: runs the Chromium Playwright OCR suite with the experimental `paddleonnx` backend.
-- `npm run test:e2e:paddleonnx:no-fallback`: runs the Chromium Playwright OCR suite with the experimental `paddleonnx` backend and disables the WASM fallback so accelerated-provider failures surface directly.
+- `npm run test:e2e:paddleonnx:no-fallback`: disables Namida's CPU retry so WebGPU failures surface directly. It does not disable CPU operator placement inside an ORT WebGPU session. Failed workers must still be terminated.
 - `npm run test:e2e:compare-backends`: builds and runs the Playwright OCR dataset against the `tesseract`, experimental `scribejs`, and experimental `paddleonnx` backends, then writes a comparison summary to `test-results/`.
 - `npm run test:e2e:compare-models`: runs the OCR dataset against the bundled `jpn*` models and writes comparison output to `test-results/`.
 - `npm run test:paddle:unit`: runs preparation/CTC, geometry, reading-order, backend/runtime, capture-flow, and regression-guard tests without loading OCR models.
@@ -164,7 +165,11 @@ Remove-Item Env:NAMIDA_TEST_OCR_INPUT_MODE
 - `working-crop.png` is the input image before detector resizing. Each detected-group PNG is the rectified line actually recognized. Its single attempt records rotation, input shape/content width, width clamping, decoded tokens and probabilities, and acceptance.
 - Missing or merged regions require inspecting `PaddleModelPipeline.ts` detector resizing and `PaddleDbPostProcess.ts` thresholds/contours/unclip. Wrong crop geometry belongs in `PaddleCropGeometry.ts`; wrong line ordering belongs in `PaddleReadingOrder.ts`.
 - A wrong line with correct geometry requires inspecting recognition tensor preparation and `decodeCtcProbabilities()` in `PaddleModelPipeline.ts`, the dictionary, and token probabilities. There is no candidate-ranking or projection recovery path to tune.
-- If runs vary because of runtime/provider behavior instead of OCR quality, inspect ONNX provider logs and fallback behavior in `PaddleOnnxRuntime.ts`. Search for messages such as `Initialized ONNX session`, `Failed to create ONNX session`, and `Disabling accelerated execution provider after runtime failure`.
+- If runs vary because of runtime/provider behavior instead of OCR quality, inspect `snapshot.pipeline.acceleration` and the popup GPU status. They report requested GPU preference, current provider, adapter details when exposed, completed inference count, runtime generation and fallback reason. Provider names do not prove every operator ran on the GPU. Search logs for `Restarting OCR in a fresh CPU worker`.
+- `tests/paddle-acceleration.spec.ts` exercises the built Chromium extension with test-only GPU faults. Set `NAMIDA_TEST_REQUIRE_WEBGPU=1` on a GPU test host to require real hardware execution instead of skipping unavailable hardware. Always use at least five configured workers. `tests/upscaler.spec.ts` checks repeated offline AI requests with the bundled model.
+- Set `NAMIDA_TEST_PADDLE_GPU_ENABLED=0` for a CPU-only dataset run; it asserts WASM provider selection. Do not combine it with `NAMIDA_TEST_REQUIRE_WEBGPU=1`. Compare CPU/GPU results with matching fixture hashes. For the strict timeout test, combine the no-fallback build with `NAMIDA_TEST_EXPECT_STRICT_GPU=1`.
+- Keep runtime settings, backend selection, inference and the returned debug snapshot in one service queue operation. Reading acceleration status must not initialize a model or create an offscreen document. GPU retry joins the same lifecycle queue; changing GPU preference or terminating the backend clears the fallback state.
+- Upscaler libraries/model initialize only on AI requests. Keep the settings enum in `src/interfaces/UpscaleMethod.ts` free of model imports and dispose caller-owned TensorFlow tensors after asynchronous inference/data reads.
 
 ## Change Guidance
 

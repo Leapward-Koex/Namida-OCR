@@ -1,5 +1,5 @@
 import { runtime } from 'webextension-polyfill';
-import * as ort from 'onnxruntime-web';
+import type { PaddleAccelerationStatus, PaddleModelOutput } from './PaddleWorkerProtocol';
 import { PSM } from 'tesseract.js';
 import type { OcrBackend } from './OcrBackend';
 import { PaddleOnnxRuntime } from './PaddleOnnxRuntime';
@@ -33,8 +33,10 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
             const manifest = await this.getManifest();
             await Promise.all([
                 this.getDictionary(),
-                PaddleOnnxOcrBackend.onnx.ensureSession('detector', manifest.detector.model_path),
-                PaddleOnnxOcrBackend.onnx.ensureSession('recognizer', manifest.recognizer.model_path),
+                PaddleOnnxOcrBackend.onnx.initialize([
+                    { key: 'detector', path: manifest.detector.model_path },
+                    { key: 'recognizer', path: manifest.recognizer.model_path },
+                ]),
             ]);
         });
     }
@@ -49,6 +51,12 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
     }
 
     public getLastDebugSnapshot(): OcrDebugSnapshot | null { return this.lastDebugSnapshot; }
+
+    public getAccelerationStatus(): PaddleAccelerationStatus { return PaddleOnnxOcrBackend.onnx.getStatus(); }
+
+    public retryGpu(): Promise<void> {
+        return PaddleOnnxOcrBackend.enqueue(() => PaddleOnnxOcrBackend.onnx.retryGpu());
+    }
 
     public terminate(): Promise<void> {
         return PaddleOnnxOcrBackend.enqueue(() => PaddleOnnxOcrBackend.onnx.terminate());
@@ -124,6 +132,7 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
                     detectorParameters: { ...manifest.detector }, recognitionParameters: { ...manifest.recognizer },
                     detectorRuns: 1, recognitionRuns,
                     elapsedMs: performance.now() - startedAt, recovery: [],
+                    acceleration: this.getAccelerationStatus(),
                 },
             };
         }
@@ -154,21 +163,8 @@ export class PaddleOnnxOcrBackend implements OcrBackend {
         });
     }
 
-    private async runModel<T>(key: string, modelPath: string, input: PreparedModelInput, read: (output: ort.Tensor | undefined) => T): Promise<T> {
-        const initialSession = await PaddleOnnxOcrBackend.onnx.ensureSession(key, modelPath);
-        return PaddleOnnxOcrBackend.onnx.run(key, initialSession, async session => {
-            const tensor = new ort.Tensor('float32', input.data, input.dims);
-            let outputs: ort.InferenceSession.ReturnType | undefined;
-            try {
-                outputs = await session.run({ [session.inputNames[0]]: tensor });
-                return read(outputs[session.outputNames[0]]);
-            } finally {
-                // Dispose inside the actual operation: provider timeout does not
-                // cancel a run, so the outer timeout must not free its tensors.
-                for (const output of Object.values(outputs ?? {})) output.dispose();
-                tensor.dispose();
-            }
-        });
+    private async runModel<T>(key: string, modelPath: string, input: PreparedModelInput, read: (output: PaddleModelOutput) => T): Promise<T> {
+        return read(await PaddleOnnxOcrBackend.onnx.run(key, modelPath, input));
     }
 
     private getManifest(): Promise<PaddleModelManifest> {

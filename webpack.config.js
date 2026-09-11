@@ -148,6 +148,10 @@ module.exports = (env) => {
             content: './src/content/index.ts',
             ui: './src/ui/index.ts',
             offscreen: './src/offscreen/index.ts',
+            'paddle-worker': {
+                import: './src/paddle-worker/index.ts',
+                chunkLoading: 'import-scripts',
+            },
         },
         output: {
             path: path.resolve(__dirname, 'dist'),

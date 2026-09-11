@@ -114,18 +114,15 @@ runtime.onMessage.addListener((message, sender) => {
                 } as const;
 
                 if (globalThis.Worker) {
-                    return BackgroundOcrService.setDebugEnabled(debugArtifactsEnabled).then(async () => {
-                        await BackgroundOcrService.setRuntimeSettings(runtimeSettings);
-                        const recognizedText = await BackgroundOcrService.recognize(
-                            namidaMessage.data,
-                            resolvedPageSegMode,
-                            ocrModel,
-                            runtimeSettings,
-                        );
-                        lastOcrDebugSnapshot = debugArtifactsEnabled
-                            ? await BackgroundOcrService.getLastDebugSnapshot()
-                            : null;
-                        return recognizedText;
+                    return BackgroundOcrService.recognizeWithDebug(
+                        namidaMessage.data,
+                        resolvedPageSegMode,
+                        ocrModel,
+                        runtimeSettings,
+                        debugArtifactsEnabled,
+                    ).then((result) => {
+                        lastOcrDebugSnapshot = result.debugSnapshot;
+                        return result.recognizedText;
                     });
                 }
                 else {
@@ -159,6 +156,23 @@ runtime.onMessage.addListener((message, sender) => {
 
         case NamidaMessageAction.GetLastOcrDebugSnapshot: {
             return Promise.resolve(lastOcrDebugSnapshot);
+        }
+
+        case NamidaMessageAction.GetOcrAccelerationStatus:
+        case NamidaMessageAction.RetryOcrGpu: {
+            const retry = namidaMessage.action === NamidaMessageAction.RetryOcrGpu;
+            return (async () => {
+                if (globalThis.Worker) {
+                    if (retry) await BackgroundOcrService.retryGpu();
+                    return BackgroundOcrService.getAccelerationStatus();
+                }
+                // Merely opening the popup must not create the offscreen host or
+                // initialize a model. A later scan creates it through the normal path.
+                if (!await chrome.offscreen.hasDocument?.()) return null;
+                return runtime.sendMessage({
+                    action: retry ? NamidaMessageAction.RetryOcrGpuOffscreen : NamidaMessageAction.GetOcrAccelerationStatusOffscreen,
+                });
+            })();
         }
     }
 });

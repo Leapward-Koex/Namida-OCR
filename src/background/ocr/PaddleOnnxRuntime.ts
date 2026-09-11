@@ -1,275 +1,242 @@
 import { runtime } from 'webextension-polyfill';
-import * as ort from 'onnxruntime-web';
+import type {
+    PaddleAccelerationStatus, PaddleExecutionProvider, PaddleModelInput, PaddleModelOutput,
+    PaddleWorkerDiagnostics, PaddleWorkerError, PaddleWorkerModel, PaddleWorkerRequest, PaddleWorkerResponse,
+} from './PaddleWorkerProtocol';
 
-const LOG_TAG = '[PaddleOnnxOcrBackend]';
-const SESSION_INIT_TIMEOUT_MS = 20_000;
-const INFERENCE_TIMEOUT_MS = 15_000;
+const GPU_INIT_TIMEOUT_MS = 20_000;
+const GPU_RUN_TIMEOUT_MS = 15_000;
+const CPU_TIMEOUT_MS = 120_000;
 const DISABLE_WASM_FALLBACK = __NAMIDA_PADDLE_ONNX_DISABLE_WASM_FALLBACK__;
-
-type SessionBundle = {
-    promise: Promise<ort.InferenceSession>;
-    session: ort.InferenceSession | null;
-    accelerated: boolean;
-    retired: boolean;
-    inFlight: Set<Promise<unknown>>;
-    releasePromise: Promise<void> | null;
+type Command = PaddleWorkerRequest extends infer R ? R extends { id: number } ? Omit<R, 'id'> : never : never;
+type Reply = Exclude<PaddleWorkerResponse, { type: 'fatal' | 'error' }>;
+type WorkerContext = {
+    worker: Worker;
+    provider: PaddleExecutionProvider;
+    initialized: boolean;
+    pending: Map<number, { resolve: (reply: Reply) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>;
 };
 
-type NavigatorWithAcceleration = Navigator & { gpu?: unknown; ml?: unknown };
+class RuntimeFailure extends Error {
+    constructor(message: string, readonly kind: PaddleWorkerError['kind'], readonly provider: PaddleExecutionProvider) {
+        super(message);
+    }
+}
 
-/** Owns local ONNX sessions; retiring a session never releases an active inference. */
+/** Each worker owns an entire ORT module, device and session cache. Termination is
+ * the cancellation boundary: a hung JSEP run must never share ORT state with retry.
+ */
 export class PaddleOnnxRuntime {
-    private static configured = false;
-    private readonly sessions = new Map<string, SessionBundle>();
-    private readonly modelPaths = new Map<string, string>();
+    private context: WorkerContext | null = null;
+    private queue: Promise<void> = Promise.resolve();
+    private nextId = 0;
     private forceWasmOnly = false;
-    private gpuEnabled = true;
+    private readonly models = new Map<string, string>();
+    private status: PaddleAccelerationStatus = {
+        requestedGpu: true, state: 'idle', provider: null, generation: 0,
+        sessionKeys: [], successfulInferences: 0, wasmFallbackDisabled: DISABLE_WASM_FALLBACK,
+    };
 
-    public async ensureSession(key: string, localModelPath: string): Promise<ort.InferenceSession> {
-        this.configure();
-        const existing = this.sessions.get(key);
-        if (existing) {
-            if (this.modelPaths.get(key) !== localModelPath) {
-                throw new Error(`ONNX session ${key} already has a different model path.`);
-            }
-            return existing.promise;
-        }
+    public getStatus(): PaddleAccelerationStatus {
+        return { ...this.status, adapter: this.status.adapter ? { ...this.status.adapter } : undefined,
+            sessionKeys: [...this.status.sessionKeys] };
+    }
 
-        this.modelPaths.set(key, localModelPath);
-        const bundle: SessionBundle = {
-            promise: undefined as unknown as Promise<ort.InferenceSession>,
-            session: null,
-            accelerated: false,
-            retired: false,
-            inFlight: new Set(),
-            releasePromise: null,
-        };
-        bundle.promise = this.createSession(localModelPath).then(async (created) => {
-            bundle.session = created.session;
-            bundle.accelerated = created.accelerated;
-            if (bundle.retired) {
-                await this.releaseIfIdle(bundle);
-                throw new Error(`ONNX session ${key} was retired during initialization.`);
-            }
-            console.info(LOG_TAG, 'Initialized ONNX session', {
-                accelerated: created.accelerated,
-                providers: created.providers,
-                sessionKey: key,
-                wasmFallbackDisabled: DISABLE_WASM_FALLBACK,
-                wasmOnly: this.forceWasmOnly,
+    public initialize(models: PaddleWorkerModel[]): Promise<void> {
+        const snapshot = models.map(model => ({ ...model }));
+        return this.enqueue(async () => {
+            this.registerModels(snapshot);
+            await this.withRecovery(context => this.prepare(context, snapshot));
+        });
+    }
+
+    public run(key: string, modelPath: string, input: PaddleModelInput): Promise<PaddleModelOutput> {
+        const snapshot = { data: new Float32Array(input.data), dims: [...input.dims] };
+        return this.enqueue(async () => {
+            const models = [{ key, path: modelPath }];
+            this.registerModels(models);
+            return this.withRecovery(async context => {
+                await this.prepare(context, models);
+                this.status.state = 'running';
+                // Keep the input buffer here: a transfer would detach it before a CPU retry.
+                const reply = await this.rpc(context, { type: 'run', key, modelPath, input: snapshot });
+                if (reply.type !== 'result') throw new RuntimeFailure('Unexpected ONNX worker response.', 'provider', context.provider);
+                this.status.state = 'ready';
+                this.status.lastError = undefined;
+                return reply.output;
             });
-            return created.session;
-        }).catch((error) => {
-            // An older initialization must not evict a replacement created after a reset.
-            if (this.sessions.get(key) === bundle) {
-                this.sessions.delete(key);
-            }
-            throw error;
         });
-        this.sessions.set(key, bundle);
-        return bundle.promise;
     }
 
-    public async run<T>(
-        key: string,
-        session: ort.InferenceSession,
-        runInference: (activeSession: ort.InferenceSession) => Promise<T>,
-    ): Promise<T> {
-        let bundle = await this.resolveBundle(key, session);
-        let retriedWithWasm = false;
-        while (true) {
-            // The settings may have changed while resolveBundle was awaiting initialization.
-            if (bundle.retired || !bundle.session) {
-                throw new Error(`ONNX session ${key} was retired before inference.`);
+    public setGpuEnabled(enabled: boolean): Promise<void> {
+        return this.enqueue(async () => {
+            if (this.status.requestedGpu === enabled) return;
+            this.reset();
+            this.status.requestedGpu = enabled;
+        });
+    }
+
+    public retryGpu(): Promise<void> {
+        return this.enqueue(async () => {
+            if (!this.status.requestedGpu) throw new Error('Enable GPU acceleration before retrying it.');
+            this.reset();
+            await this.withRecovery(context => this.prepare(context,
+                [...this.models].map(([key, path]) => ({ key, path }))));
+        });
+    }
+
+    public terminate(): Promise<void> {
+        return this.enqueue(async () => { this.reset(); this.models.clear(); });
+    }
+
+    private enqueue<T>(operation: () => Promise<T>): Promise<T> {
+        const job = this.queue.then(operation);
+        this.queue = job.then(() => undefined, () => undefined);
+        return job;
+    }
+
+    private registerModels(models: PaddleWorkerModel[]): void {
+        for (const { key, path } of models) {
+            if (this.models.has(key) && this.models.get(key) !== path) {
+                throw new Error('ONNX session ' + key + ' already has a different model path.');
             }
-            const activeSession = bundle.session;
-            const activeBundle = bundle;
-            const inference = Promise.resolve().then(() => runInference(activeSession));
-            activeBundle.inFlight.add(inference);
-            const settled = () => {
-                activeBundle.inFlight.delete(inference);
-                void this.releaseIfIdle(activeBundle);
-            };
-            // Track the actual operation, not the timeout wrapper: timeout does not cancel ORT.
-            void inference.then(settled, settled);
+        }
+        for (const { key, path } of models) this.models.set(key, path);
+    }
+
+    private async withRecovery<T>(operation: (context: WorkerContext) => Promise<T>): Promise<T> {
+        for (let attempt = 0; ; attempt += 1) {
             try {
-                return await withTimeout(
-                    inference,
-                    activeBundle.accelerated ? INFERENCE_TIMEOUT_MS : 0,
-                    () => new Error(`Timed out running ONNX inference with accelerated provider for ${key}`),
-                );
+                return await operation(this.context ?? this.createWorker());
             } catch (error) {
-                if (DISABLE_WASM_FALLBACK || retriedWithWasm || !activeBundle.accelerated || !shouldFallbackToWasm(error)) {
-                    throw error;
-                }
-                console.warn(LOG_TAG, 'Disabling accelerated execution provider after runtime failure', {
-                    error,
-                    sessionKey: key,
-                });
-                if (!this.forceWasmOnly) {
+                this.status.lastError = error instanceof Error ? error.message : String(error);
+                const brokenProvider = error instanceof RuntimeFailure
+                    && (error.kind === 'provider' || error.kind === 'device-lost');
+                if (brokenProvider) this.retire(error);
+                if (brokenProvider && error.provider === 'webgpu' && !DISABLE_WASM_FALLBACK && attempt === 0) {
                     this.forceWasmOnly = true;
-                    await this.retireSessions();
+                    this.status.fallbackReason = error.message;
+                    console.warn('[PaddleOnnxRuntime]', 'Restarting OCR in a fresh CPU worker', { reason: error.message });
+                    continue;
                 }
-                bundle = await this.resolveBundle(key, activeSession);
-                retriedWithWasm = true;
+                this.status.state = 'failed';
+                throw error;
             }
         }
     }
 
-    public async setGpuEnabled(enabled: boolean): Promise<void> {
-        if (this.gpuEnabled === enabled) {
-            return;
+    private createWorker(): WorkerContext {
+        const provider = this.status.requestedGpu && !this.forceWasmOnly ? 'webgpu' : 'wasm';
+        if (provider === 'wasm' && DISABLE_WASM_FALLBACK) {
+            throw new Error('Paddle ONNX CPU fallback is disabled for this build. Enable GPU acceleration to run OCR.');
         }
-        this.gpuEnabled = enabled;
-        this.forceWasmOnly = false;
-        await this.retireSessions();
-    }
-
-    public async terminate(): Promise<void> {
-        this.modelPaths.clear();
-        await this.retireSessions();
-    }
-
-    private async resolveBundle(key: string, session: ort.InferenceSession): Promise<SessionBundle> {
-        const existing = this.sessions.get(key);
-        if (existing?.session === session && !existing.retired) {
-            return existing;
+        this.status = { ...this.status, state: 'initializing', provider: null, adapter: undefined,
+            generation: this.status.generation + 1, sessionKeys: [], successfulInferences: 0 };
+        let worker: Worker;
+        try {
+            worker = new Worker(runtime.getURL('paddle-worker/index.js'));
+        } catch (error) {
+            throw new RuntimeFailure('Could not start local ONNX worker: ' + String(error), 'provider', provider);
         }
-        const modelPath = this.modelPaths.get(key);
-        if (!modelPath) {
-            throw new Error(`ONNX session ${key} has no active model.`);
-        }
-        const activeSession = await this.ensureSession(key, modelPath);
-        const bundle = this.sessions.get(key);
-        if (!bundle || bundle.session !== activeSession || bundle.retired) {
-            throw new Error(`ONNX session ${key} was retired before inference.`);
-        }
-        return bundle;
-    }
-
-    private async retireSessions(): Promise<void> {
-        const retired = [...this.sessions.values()];
-        this.sessions.clear();
-        for (const bundle of retired) {
-            bundle.retired = true;
-        }
-        // Pending initialization/inference releases itself when it settles. Do not block
-        // WASM recovery forever on a hung accelerated operation.
-        await Promise.all(retired.map((bundle) => this.releaseIfIdle(bundle)));
-    }
-
-    private async releaseIfIdle(bundle: SessionBundle): Promise<void> {
-        if (!bundle.retired || !bundle.session || bundle.inFlight.size > 0) {
-            return;
-        }
-        bundle.releasePromise ??= releaseSession(bundle.session);
-        await bundle.releasePromise;
-    }
-
-    private async createSession(localModelPath: string) {
-        const sessionUrl = runtime.getURL(`libs/paddleocr/${localModelPath}`);
-        const candidates = getSessionOptions(this.forceWasmOnly, this.gpuEnabled);
-        if (candidates.length === 0) {
-            throw new Error('No accelerated ONNX execution provider is available and Paddle ONNX WASM fallback is disabled for this build.');
-        }
-        let lastError: unknown;
-        for (const options of candidates) {
-            const providers = (options.executionProviders ?? []).map((provider) => typeof provider === 'string' ? provider : provider.name);
-            const accelerated = providers.some((provider) => provider !== 'wasm');
-            try {
-                const session = await withTimeout(
-                    ort.InferenceSession.create(sessionUrl, options),
-                    accelerated ? SESSION_INIT_TIMEOUT_MS : 0,
-                    () => new Error(`Timed out creating ONNX session with providers: ${providers.join(', ')}`),
-                    (abandonedSession) => { void releaseSession(abandonedSession); },
-                );
-                return { session, providers, accelerated };
-            } catch (error) {
-                lastError = error;
-                console.warn(LOG_TAG, 'Failed to create ONNX session', { error, providers, sessionUrl });
+        const context: WorkerContext = { worker, provider, initialized: false, pending: new Map() };
+        this.context = context;
+        worker.onmessage = (event: MessageEvent<PaddleWorkerResponse>) => {
+            if (this.context !== context) return;
+            const reply = event.data;
+            if (reply.diagnostics) this.updateDiagnostics(reply.diagnostics);
+            if (reply.type === 'fatal') {
+                this.failWorker(context, new RuntimeFailure(reply.error.message, reply.error.kind, provider));
+                return;
             }
-        }
-        throw lastError ?? new Error(`Failed to create ONNX session for ${sessionUrl}`);
-    }
-
-    private configure(): void {
-        if (PaddleOnnxRuntime.configured) {
-            return;
-        }
-        if (DISABLE_WASM_FALLBACK) {
-            console.info(LOG_TAG, 'Paddle ONNX WASM fallback is disabled for this build; accelerated provider failures will be fatal.');
-        }
-        ort.env.wasm.proxy = false;
-        ort.env.wasm.wasmPaths = {
-            mjs: runtime.getURL('libs/onnxruntime/ort-wasm-simd-threaded.jsep.mjs'),
-            wasm: runtime.getURL('libs/onnxruntime/ort-wasm-simd-threaded.jsep.wasm'),
+            const pending = context.pending.get(reply.id);
+            if (!pending) return;
+            clearTimeout(pending.timer);
+            context.pending.delete(reply.id);
+            if (reply.type === 'error') pending.reject(new RuntimeFailure(reply.error.message, reply.error.kind, provider));
+            else pending.resolve(reply);
         };
-        PaddleOnnxRuntime.configured = true;
+        worker.onerror = event => {
+            event.preventDefault();
+            this.failWorker(context, new RuntimeFailure('ONNX worker failed: ' + event.message, 'provider', provider));
+        };
+        worker.onmessageerror = () => this.failWorker(context,
+            new RuntimeFailure('Could not read ONNX worker response.', 'provider', provider));
+        return context;
     }
-}
 
-async function releaseSession(session: ort.InferenceSession): Promise<void> {
-    try {
-        await session.release();
-    } catch (error) {
-        console.warn(LOG_TAG, 'Failed to release ONNX session', { error });
-    }
-}
-
-function getSessionOptions(forceWasmOnly: boolean, gpuEnabled: boolean): ort.InferenceSession.SessionOptions[] {
-    const options = (executionProviders: ort.InferenceSession.ExecutionProviderConfig[]): ort.InferenceSession.SessionOptions => ({
-        executionProviders,
-        graphOptimizationLevel: 'all',
-    });
-    if (!gpuEnabled || (forceWasmOnly && !DISABLE_WASM_FALLBACK)) {
-        return DISABLE_WASM_FALLBACK ? [] : [options([{ name: 'wasm' }])];
-    }
-    const browserNavigator = typeof navigator === 'undefined' ? null : navigator as NavigatorWithAcceleration;
-    const candidates: ort.InferenceSession.SessionOptions[] = [];
-    if (browserNavigator?.gpu) {
-        candidates.push(options([{ name: 'webgpu' }]));
-    }
-    if (browserNavigator?.ml) {
-        candidates.push(options([{ name: 'webnn', deviceType: 'gpu', powerPreference: 'high-performance' }]));
-    }
-    if (!DISABLE_WASM_FALLBACK) {
-        candidates.push(options([{ name: 'wasm' }]));
-    }
-    return candidates;
-}
-
-function shouldFallbackToWasm(error: unknown): boolean {
-    const text = error instanceof Error ? `${error.message}\n${error.stack ?? ''}` : String(error);
-    return text.includes('Timed out running ONNX inference with accelerated provider')
-        || text.includes('using ceil() in shape computation is not yet supported for MaxPool')
-        || (text.includes('MaxPool') && text.includes('not yet supported'));
-}
-
-function withTimeout<T>(
-    promise: Promise<T>,
-    timeoutMs: number,
-    createError: () => Error,
-    onLateValue?: (value: T) => void,
-): Promise<T> {
-    if (timeoutMs <= 0) {
-        return promise;
-    }
-    return new Promise<T>((resolve, reject) => {
-        let timedOut = false;
-        const timer = globalThis.setTimeout(() => {
-            timedOut = true;
-            reject(createError());
-        }, timeoutMs);
-        promise.then((value) => {
-            globalThis.clearTimeout(timer);
-            if (timedOut) {
-                onLateValue?.(value);
-            } else {
-                resolve(value);
-            }
-        }, (error) => {
-            globalThis.clearTimeout(timer);
-            reject(error);
+    private async prepare(context: WorkerContext, models: PaddleWorkerModel[]): Promise<void> {
+        const missing = models.filter(model => !this.status.sessionKeys.includes(model.key));
+        if (context.initialized && missing.length === 0) return;
+        this.status.state = 'initializing';
+        const reply = await this.rpc(context, {
+            type: 'init', provider: context.provider, models: missing,
+            runtimeBaseUrl: runtime.getURL('libs/onnxruntime/'), modelBaseUrl: runtime.getURL('libs/paddleocr/'),
         });
-    });
+        if (reply.type !== 'initialized') throw new RuntimeFailure('Unexpected ONNX initialization response.', 'provider', context.provider);
+        context.initialized = true;
+        this.status.state = 'ready';
+        this.status.lastError = undefined;
+    }
+
+    private rpc(context: WorkerContext, command: Command): Promise<Reply> {
+        if (this.context !== context) return Promise.reject(new RuntimeFailure('ONNX worker was retired.', 'provider', context.provider));
+        const id = ++this.nextId;
+        const timeout = context.provider === 'wasm' ? CPU_TIMEOUT_MS
+            : command.type === 'init' ? GPU_INIT_TIMEOUT_MS * Math.max(1, command.models?.length ?? 0) : GPU_RUN_TIMEOUT_MS;
+        return new Promise((resolve, reject) => {
+            const timer = setTimeout(() => this.failWorker(context, new RuntimeFailure(
+                'Timed out ' + (command.type === 'init' ? 'initializing' : 'running') + ' ONNX ' + context.provider + ' worker after ' + timeout + ' ms.',
+                'provider', context.provider)), timeout);
+            context.pending.set(id, { resolve, reject, timer });
+            try { context.worker.postMessage({ ...command, id }); }
+            catch (error) {
+                clearTimeout(timer);
+                context.pending.delete(id);
+                reject(new RuntimeFailure('Invalid ONNX worker request: ' + String(error), 'input', context.provider));
+            }
+        });
+    }
+
+    private updateDiagnostics(diagnostics: PaddleWorkerDiagnostics): void {
+        this.status.provider = diagnostics.provider;
+        this.status.adapter = diagnostics.adapter ? { ...diagnostics.adapter } : undefined;
+        this.status.sessionKeys = [...diagnostics.sessionKeys];
+        this.status.successfulInferences = diagnostics.successfulInferences;
+    }
+
+    private failWorker(context: WorkerContext, error: RuntimeFailure): void {
+        if (this.context !== context) return;
+        this.status.lastError = error.message;
+        this.status.state = 'failed';
+        if (context.provider === 'webgpu' && !DISABLE_WASM_FALLBACK) {
+            this.forceWasmOnly = true;
+            this.status.fallbackReason = error.message;
+        }
+        this.retire(error);
+    }
+
+    private retire(error = new Error('ONNX worker retired.')): void {
+        const context = this.context;
+        this.context = null;
+        if (context) {
+            context.worker.terminate();
+            for (const pending of context.pending.values()) {
+                clearTimeout(pending.timer);
+                pending.reject(error);
+            }
+            context.pending.clear();
+        }
+        this.status.provider = null;
+        this.status.adapter = undefined;
+        this.status.sessionKeys = [];
+        this.status.successfulInferences = 0;
+    }
+
+    private reset(): void {
+        this.retire();
+        this.forceWasmOnly = false;
+        this.status.state = 'idle';
+        this.status.fallbackReason = undefined;
+        this.status.lastError = undefined;
+    }
 }

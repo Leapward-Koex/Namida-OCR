@@ -2,12 +2,9 @@ import { runtime } from "webextension-polyfill";
 import { NamidaMessageAction } from "../interfaces/message";
 import { SelectionRect } from "./SnippingOverlay";
 import { Upscaler } from "../background/Upscaler";
+import { UpscaleMethod } from "../interfaces/UpscaleMethod";
 
-export enum UpscaleMethod {
-    None,
-    Canvas,
-    TensorFlow,
-}
+export { UpscaleMethod } from "../interfaces/UpscaleMethod";
 export class ScreenshotHandler {
     private static logTag = `[${ScreenshotHandler.name}]`;
     constructor(private selection: SelectionRect) { }

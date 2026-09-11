@@ -1,0 +1,131 @@
+{
+  "test": "a dropped real GPU run reply times out and retires the worker before CPU recovery",
+  "requireWebGpu": true,
+  "fault": "healthy",
+  "status": {
+    "requestedGpu": true,
+    "state": "ready",
+    "provider": "wasm",
+    "generation": 2,
+    "sessionKeys": [
+      "detector",
+      "recognizer"
+    ],
+    "successfulInferences": 4,
+    "wasmFallbackDisabled": false,
+    "fallbackReason": "Timed out running ONNX webgpu worker after 15000 ms."
+  },
+  "scans": [
+    {
+      "text": "日本語 OCR Test 2026",
+      "elapsedMs": 3971,
+      "status": {
+        "requestedGpu": true,
+        "state": "ready",
+        "provider": "webgpu",
+        "generation": 1,
+        "sessionKeys": [
+          "detector",
+          "recognizer"
+        ],
+        "successfulInferences": 2,
+        "wasmFallbackDisabled": false,
+        "adapter": {
+          "vendor": "nvidia",
+          "architecture": "blackwell",
+          "device": "",
+          "description": "",
+          "isFallbackAdapter": false
+        }
+      }
+    },
+    {
+      "text": "日本語 OCR Test 2026",
+      "elapsedMs": 16211,
+      "status": {
+        "requestedGpu": true,
+        "state": "ready",
+        "provider": "wasm",
+        "generation": 2,
+        "sessionKeys": [
+          "detector",
+          "recognizer"
+        ],
+        "successfulInferences": 2,
+        "wasmFallbackDisabled": false,
+        "fallbackReason": "Timed out running ONNX webgpu worker after 15000 ms."
+      }
+    },
+    {
+      "text": "日本語 OCR Test 2026",
+      "elapsedMs": 650,
+      "status": {
+        "requestedGpu": true,
+        "state": "ready",
+        "provider": "wasm",
+        "generation": 2,
+        "sessionKeys": [
+          "detector",
+          "recognizer"
+        ],
+        "successfulInferences": 4,
+        "wasmFallbackDisabled": false,
+        "fallbackReason": "Timed out running ONNX webgpu worker after 15000 ms."
+      }
+    }
+  ],
+  "observations": {
+    "fault": "healthy",
+    "droppedInitializations": 0,
+    "workers": [
+      {
+        "id": 1,
+        "terminated": true,
+        "provider": "webgpu",
+        "state": {
+          "adapterRequests": 1,
+          "devices": 1,
+          "submits": 449,
+          "dispatches": 1021,
+          "droppedResults": 1,
+          "lost": [],
+          "hookErrors": []
+        }
+      },
+      {
+        "id": 2,
+        "terminated": false,
+        "provider": "wasm",
+        "state": {
+          "adapterRequests": 0,
+          "devices": 0,
+          "submits": 0,
+          "dispatches": 0,
+          "droppedResults": 0,
+          "lost": [],
+          "hookErrors": []
+        }
+      }
+    ]
+  },
+  "logs": [
+    {
+      "type": "log",
+      "text": "Background script loaded",
+      "location": {
+        "url": "chrome-extension://ngmammagpnojkokafjjeckjfijnomlgd/background/index.js",
+        "lineNumber": 1,
+        "columnNumber": 1310780
+      }
+    },
+    {
+      "type": "warning",
+      "text": "[A] No voices available for language: ja-JP",
+      "location": {
+        "url": "chrome-extension://ngmammagpnojkokafjjeckjfijnomlgd/ui/index.js",
+        "lineNumber": 0,
+        "columnNumber": 112580
+      }
+    }
+  ]
+}

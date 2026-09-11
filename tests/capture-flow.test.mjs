@@ -63,6 +63,7 @@ test('does not request a screenshot before two animation frames have elapsed', a
         require(name) {
             if (name === 'webextension-polyfill') return { runtime: { async sendMessage(message) { requests.push(message); return 'data:image/png;base64,screen'; } } };
             if (name === '../interfaces/message') return { NamidaMessageAction: actions };
+            if (name === '../interfaces/UpscaleMethod') return { UpscaleMethod: { None: 0, Canvas: 1, TensorFlow: 2 } };
             if (name === '../background/Upscaler') return { Upscaler: {} };
             throw new Error(`Unexpected import ${name}`);
         },

@@ -1,83 +1,113 @@
 import { PSM } from 'tesseract.js';
-import { OcrBackend, type OcrBackendRuntimeSettings } from './OcrBackend';
+import type { OcrBackend, OcrBackendRuntimeSettings } from './OcrBackend';
 import type { OcrDebugSnapshot } from './OcrDebugSnapshot';
+import type { PaddleAccelerationStatus } from './PaddleWorkerProtocol';
 
-type OcrBackendModule = {
-    ConfiguredOcrBackend: new () => OcrBackend;
+type OcrBackendModule = { ConfiguredOcrBackend: new () => OcrBackend };
+export type OcrRecognitionResult = {
+    recognizedText: string | undefined;
+    debugSnapshot: OcrDebugSnapshot | null;
 };
 
 export class OcrService {
     private static backend: OcrBackend | null = null;
-    private static backendPromise: Promise<OcrBackend> | null = null;
     private static debugEnabled = false;
+    private static lastDebugSnapshot: OcrDebugSnapshot | null = null;
+    private static operationTail: Promise<unknown> = Promise.resolve();
+
+    // A request owns settings, backend selection, inference and its snapshot until
+    // it completes. Lifecycle changes join this queue; failures do not poison it.
+    private static enqueue<T>(operation: () => Promise<T>): Promise<T> {
+        const result = this.operationTail.then(operation);
+        this.operationTail = result.catch(() => undefined);
+        return result;
+    }
 
     private static async getBackend(): Promise<OcrBackend> {
-        if (this.backend) {
-            return this.backend;
+        if (!this.backend) {
+            const module = await import('namida-ocr-backend') as OcrBackendModule;
+            const backend = new module.ConfiguredOcrBackend();
+            await backend.setDebugEnabled?.(this.debugEnabled);
+            this.backend = backend;
         }
-
-        if (!this.backendPromise) {
-            this.backendPromise = import('namida-ocr-backend').then(async (module) => {
-                const backendModule = module as OcrBackendModule;
-                const backend = new backendModule.ConfiguredOcrBackend();
-                await backend.setDebugEnabled?.(this.debugEnabled);
-                this.backend = backend;
-                return backend;
-            }).catch((error) => {
-                this.backendPromise = null;
-                throw error;
-            });
-        }
-
-        return this.backendPromise;
+        return this.backend;
     }
 
-    public static async init(model?: string, runtimeSettings?: OcrBackendRuntimeSettings): Promise<void> {
-        const backend = await this.getBackend();
-        if (runtimeSettings) {
-            await backend.setRuntimeSettings?.(runtimeSettings);
-        }
-        await backend.init(model);
+    public static init(model?: string, runtimeSettings?: OcrBackendRuntimeSettings): Promise<void> {
+        const settings = runtimeSettings && { ...runtimeSettings };
+        return this.enqueue(async () => {
+            const backend = await this.getBackend();
+            if (settings) await backend.setRuntimeSettings?.(settings);
+            await backend.init(model);
+        });
     }
 
-    public static async recognize(
+    public static recognize(
         dataUrl: string,
         pageSegMode: PSM,
         model?: string,
         runtimeSettings?: OcrBackendRuntimeSettings,
     ): Promise<string | undefined> {
-        const backend = await this.getBackend();
-        if (runtimeSettings) {
-            await backend.setRuntimeSettings?.(runtimeSettings);
-        }
-        return backend.recognize(dataUrl, pageSegMode, model);
+        return this.recognizeWithDebug(dataUrl, pageSegMode, model, runtimeSettings)
+            .then((result) => result.recognizedText);
     }
 
-    public static async setDebugEnabled(enabled: boolean): Promise<void> {
-        this.debugEnabled = enabled;
-        const backend = await this.getBackend();
-        await backend.setDebugEnabled?.(enabled);
+    public static recognizeWithDebug(
+        dataUrl: string,
+        pageSegMode: PSM,
+        model?: string,
+        runtimeSettings?: OcrBackendRuntimeSettings,
+        debugEnabled?: boolean,
+    ): Promise<OcrRecognitionResult> {
+        const settings = runtimeSettings && { ...runtimeSettings };
+        return this.enqueue(async () => {
+            this.lastDebugSnapshot = null;
+            const backend = await this.getBackend();
+            if (settings) await backend.setRuntimeSettings?.(settings);
+            const captureDebug = debugEnabled ?? this.debugEnabled;
+            await backend.setDebugEnabled?.(captureDebug);
+            const recognizedText = await backend.recognize(dataUrl, pageSegMode, model);
+            const debugSnapshot = captureDebug ? await backend.getLastDebugSnapshot?.() ?? null : null;
+            this.lastDebugSnapshot = debugSnapshot;
+            return { recognizedText, debugSnapshot };
+        });
     }
 
-    public static async setRuntimeSettings(runtimeSettings: OcrBackendRuntimeSettings): Promise<void> {
-        const backend = await this.getBackend();
-        await backend.setRuntimeSettings?.(runtimeSettings);
+    public static setDebugEnabled(enabled: boolean): Promise<void> {
+        return this.enqueue(async () => {
+            this.debugEnabled = enabled;
+            if (!enabled) this.lastDebugSnapshot = null;
+            await this.backend?.setDebugEnabled?.(enabled);
+        });
+    }
+
+    public static setRuntimeSettings(runtimeSettings: OcrBackendRuntimeSettings): Promise<void> {
+        const settings = { ...runtimeSettings };
+        return this.enqueue(async () => {
+            const backend = await this.getBackend();
+            await backend.setRuntimeSettings?.(settings);
+        });
+    }
+
+    // Status reads must not select a backend, load models, or wait behind a scan.
+    public static async getAccelerationStatus(): Promise<PaddleAccelerationStatus | null> {
+        return await this.backend?.getAccelerationStatus?.() ?? null;
+    }
+
+    public static retryGpu(): Promise<void> {
+        return this.enqueue(async () => { await this.backend?.retryGpu?.(); });
     }
 
     public static async getLastDebugSnapshot(): Promise<OcrDebugSnapshot | null> {
-        const backend = await this.getBackend();
-        return await backend.getLastDebugSnapshot?.() ?? null;
+        return this.lastDebugSnapshot;
     }
 
-    public static async terminate(): Promise<void> {
-        if (!this.backend && !this.backendPromise) {
-            return;
-        }
-
-        this.backend = null;
-        const pendingBackend = this.backendPromise;
-        this.backendPromise = null;
-        const backend = pendingBackend ? await pendingBackend : null;
-        await backend?.terminate();
+    public static terminate(): Promise<void> {
+        return this.enqueue(async () => {
+            const backend = this.backend;
+            this.backend = null;
+            this.lastDebugSnapshot = null;
+            await backend?.terminate();
+        });
     }
 }

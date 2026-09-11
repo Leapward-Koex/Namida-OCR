@@ -1,0 +1,16 @@
+{
+  "caseIndex": 21,
+  "name": "general-002-mixed-japanese-latin-digits",
+  "image": "images/ocr-general-002.png",
+  "expectedText": "日本語 OCR Test 2026",
+  "actualText": "日本語 OCR Test 2026",
+  "normalizedExpectedText": "日本語OCRTest2026",
+  "normalizedActualText": "日本語OCRTest2026",
+  "exactMatch": true,
+  "editDistance": 0,
+  "characterAccuracy": 1,
+  "input": {
+    "mode": "snip",
+    "sha256": "ca730e1138b4f32052d3d6e9fd3e570232448a21cd8165f13a3cf5e09bd3077c"
+  }
+}

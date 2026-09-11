@@ -1,5 +1,5 @@
 import { PSM } from "tesseract.js";
-import { UpscaleMethod } from "../content/ScreenshotHandler";
+import { UpscaleMethod } from "./UpscaleMethod";
 import { FuriganaType } from "../background/FuriganaHandler";
 
 export enum StorageKey {

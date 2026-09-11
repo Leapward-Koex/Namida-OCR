@@ -14,26 +14,22 @@ runtime.onMessage.addListener((message) => {
             paddleGpuEnabled: namidaOcrMessage.data.runtimeSettings.paddleGpuEnabled,
         } as const;
 
-        return OcrService.setDebugEnabled(namidaOcrMessage.data.debugArtifactsEnabled).then(() => {
-            return OcrService.recognize(
-                namidaOcrMessage.data.imageData,
-                namidaOcrMessage.data.pageSegMode,
-                namidaOcrMessage.data.ocrModel,
-                runtimeSettings,
-            ).then(async (recognizedText) => {
-                const debugSnapshot = namidaOcrMessage.data.debugArtifactsEnabled
-                    ? await OcrService.getLastDebugSnapshot()
-                    : null;
-
-                return {
-                    debugSnapshot,
-                    recognizedText,
-                } satisfies NamidaOcrFromOffscreenResult;
-            });
-        });
+        return OcrService.recognizeWithDebug(
+            namidaOcrMessage.data.imageData,
+            namidaOcrMessage.data.pageSegMode,
+            namidaOcrMessage.data.ocrModel,
+            runtimeSettings,
+            namidaOcrMessage.data.debugArtifactsEnabled,
+        ) satisfies Promise<NamidaOcrFromOffscreenResult>;
     }
     if (namidaMessage.action === NamidaMessageAction.GetLastOcrDebugSnapshotOffscreen) {
         return OcrService.getLastDebugSnapshot();
+    }
+    if (namidaMessage.action === NamidaMessageAction.GetOcrAccelerationStatusOffscreen) {
+        return OcrService.getAccelerationStatus();
+    }
+    if (namidaMessage.action === NamidaMessageAction.RetryOcrGpuOffscreen) {
+        return OcrService.retryGpu().then(() => OcrService.getAccelerationStatus());
     }
     if (namidaMessage.action === NamidaMessageAction.GenerateFuriganaOffscreen) {
         return FuriganaHandler.generateFurigana(namidaMessage.data);

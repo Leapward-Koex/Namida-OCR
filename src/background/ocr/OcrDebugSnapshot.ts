@@ -1,4 +1,5 @@
 import type { PSM } from 'tesseract.js';
+import type { PaddleAccelerationStatus } from './PaddleWorkerProtocol';
 
 export type OcrDebugCandidateSnapshot = {
     /** Legacy heuristic fields are absent in the reference Paddle pipeline. */
@@ -72,5 +73,6 @@ export type OcrDebugSnapshot = {
         recognitionRuns: number;
         elapsedMs: number;
         recovery: string[];
+        acceleration?: PaddleAccelerationStatus;
     };
 };

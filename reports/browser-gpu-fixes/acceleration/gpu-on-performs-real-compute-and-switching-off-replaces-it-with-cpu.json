@@ -1,0 +1,113 @@
+{
+  "test": "GPU on performs real compute and switching off replaces it with CPU",
+  "requireWebGpu": true,
+  "expectStrictGpu": false,
+  "fault": "healthy",
+  "status": {
+    "requestedGpu": false,
+    "state": "ready",
+    "provider": "wasm",
+    "generation": 2,
+    "sessionKeys": [
+      "detector",
+      "recognizer"
+    ],
+    "successfulInferences": 2,
+    "wasmFallbackDisabled": false
+  },
+  "scans": [
+    {
+      "text": "日本語 OCR Test 2026",
+      "elapsedMs": 3881,
+      "status": {
+        "requestedGpu": true,
+        "state": "ready",
+        "provider": "webgpu",
+        "generation": 1,
+        "sessionKeys": [
+          "detector",
+          "recognizer"
+        ],
+        "successfulInferences": 2,
+        "wasmFallbackDisabled": false,
+        "adapter": {
+          "vendor": "nvidia",
+          "architecture": "blackwell",
+          "device": "",
+          "description": "",
+          "isFallbackAdapter": false
+        }
+      }
+    },
+    {
+      "text": "日本語 OCR Test 2026",
+      "elapsedMs": 2176,
+      "status": {
+        "requestedGpu": false,
+        "state": "ready",
+        "provider": "wasm",
+        "generation": 2,
+        "sessionKeys": [
+          "detector",
+          "recognizer"
+        ],
+        "successfulInferences": 2,
+        "wasmFallbackDisabled": false
+      }
+    }
+  ],
+  "observations": {
+    "fault": "healthy",
+    "droppedInitializations": 0,
+    "workers": [
+      {
+        "id": 1,
+        "terminated": true,
+        "provider": "webgpu",
+        "state": {
+          "adapterRequests": 1,
+          "devices": 1,
+          "submits": 430,
+          "dispatches": 747,
+          "droppedResults": 0,
+          "lost": [],
+          "hookErrors": []
+        }
+      },
+      {
+        "id": 2,
+        "terminated": false,
+        "provider": "wasm",
+        "state": {
+          "adapterRequests": 0,
+          "devices": 0,
+          "submits": 0,
+          "dispatches": 0,
+          "droppedResults": 0,
+          "lost": [],
+          "hookErrors": []
+        }
+      }
+    ]
+  },
+  "logs": [
+    {
+      "type": "log",
+      "text": "Background script loaded",
+      "location": {
+        "url": "chrome-extension://hoknpeiblnakelgiefaakdkhoikibjjp/background/index.js",
+        "lineNumber": 1,
+        "columnNumber": 1310780
+      }
+    },
+    {
+      "type": "warning",
+      "text": "[A] No voices available for language: ja-JP",
+      "location": {
+        "url": "chrome-extension://hoknpeiblnakelgiefaakdkhoikibjjp/ui/index.js",
+        "lineNumber": 0,
+        "columnNumber": 112580
+      }
+    }
+  ]
+}

@@ -14,6 +14,11 @@ const GET_LAST_OCR_DEBUG_SNAPSHOT_ACTION = NamidaMessageAction.GetLastOcrDebugSn
 const GET_LAST_OCR_DEBUG_SNAPSHOT_OFFSCREEN_ACTION = NamidaMessageAction.GetLastOcrDebugSnapshotOffscreen;
 const TEST_OCR_BACKEND = normalizeTestOcrBackend(process.env.NAMIDA_TEST_OCR_BACKEND);
 const TEST_OCR_MODEL = process.env.NAMIDA_TEST_OCR_MODEL?.trim() || 'jpn_vert';
+const TEST_PADDLE_GPU_ENABLED = process.env.NAMIDA_TEST_PADDLE_GPU_ENABLED !== '0';
+const REQUIRE_WEBGPU = process.env.NAMIDA_TEST_REQUIRE_WEBGPU === '1';
+if (TEST_OCR_BACKEND === 'paddleonnx' && !TEST_PADDLE_GPU_ENABLED && REQUIRE_WEBGPU) {
+    throw new Error('A CPU-only OCR run cannot also require WebGPU.');
+}
 const OCR_INPUT_MODE = process.env.NAMIDA_TEST_OCR_INPUT_MODE || 'snip';
 if (OCR_INPUT_MODE !== 'fixture' && OCR_INPUT_MODE !== 'snip') {
     throw new Error(`Unknown NAMIDA_TEST_OCR_INPUT_MODE: ${OCR_INPUT_MODE}`);
@@ -45,6 +50,17 @@ test.describe('OCR accuracy dataset', () => {
             await persistCaseResult(result);
             await attachDebugSnapshot(testInfo, ocrCase.name, debugSnapshot);
             await persistDebugSnapshot(ocrCase.name, debugSnapshot);
+
+            if (TEST_OCR_BACKEND === 'paddleonnx') {
+                const acceleration = debugSnapshot?.pipeline?.acceleration;
+                if (!TEST_PADDLE_GPU_ENABLED) {
+                    expect(acceleration?.provider, JSON.stringify(acceleration)).toBe('wasm');
+                    expect(acceleration?.requestedGpu).toBe(false);
+                } else if (REQUIRE_WEBGPU) {
+                    expect(acceleration?.provider, JSON.stringify(acceleration)).toBe('webgpu');
+                    expect(acceleration?.successfulInferences).toBeGreaterThan(0);
+                }
+            }
 
             if (ocrCase.minimumCharacterAccuracy !== undefined) {
                 expect(
@@ -182,6 +198,7 @@ async function seedExtensionSettings(
         configuredUpscalingMode,
         configuredOcrBackend,
         configuredOcrModel,
+        configuredPaddleGpuEnabled,
     }) => {
         await chrome.storage.sync.clear();
         await chrome.storage.sync.set({
@@ -190,7 +207,7 @@ async function seedExtensionSettings(
             OcrDebugArtifacts: true,
             OcrModel: configuredOcrModel,
             PageSegMode: configuredPageSegMode,
-            PaddleOnnxGpuEnabled: true,
+            PaddleOnnxGpuEnabled: configuredPaddleGpuEnabled,
             SaveOcrCrop: false,
             ShowSpeakButton: false,
             UpscalingMode: configuredUpscalingMode,
@@ -201,6 +218,7 @@ async function seedExtensionSettings(
         configuredUpscalingMode: upscalingMode,
         configuredOcrBackend: ocrBackend,
         configuredOcrModel: ocrModel,
+        configuredPaddleGpuEnabled: TEST_PADDLE_GPU_ENABLED,
     });
 }
 

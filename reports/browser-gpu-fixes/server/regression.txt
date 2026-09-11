@@ -1,0 +1,6 @@
+Baseline: C:\Dev\Namida\reports\paddleocr-reference\after\summary.json
+Actual: C:\Dev\Namida\reports\browser-gpu-fixes\server\summary.json
+Compared 30 baseline cases (1e-9 tolerance).
+Average character accuracy: 89.28472034% -> 89.28472034%
+Exact matches: 20/30 -> 20/30
+PASS: no OCR accuracy regressions.

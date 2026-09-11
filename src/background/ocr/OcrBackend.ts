@@ -1,5 +1,6 @@
 import { PSM } from 'tesseract.js';
 import type { OcrDebugSnapshot } from './OcrDebugSnapshot';
+import type { PaddleAccelerationStatus } from './PaddleWorkerProtocol';
 
 export type OcrBackendRuntimeSettings = {
     backend: 'tesseract' | 'paddleonnx';
@@ -13,5 +14,7 @@ export interface OcrBackend {
     setGpuEnabled?(enabled: boolean): Promise<void> | void;
     setRuntimeSettings?(settings: OcrBackendRuntimeSettings): Promise<void> | void;
     getLastDebugSnapshot?(): Promise<OcrDebugSnapshot | null> | OcrDebugSnapshot | null;
+    getAccelerationStatus?(): Promise<PaddleAccelerationStatus | null> | PaddleAccelerationStatus | null;
+    retryGpu?(): Promise<void>;
     terminate(): Promise<void>;
 }

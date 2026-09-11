@@ -61,21 +61,15 @@ function harness() {
     manifest.recognizer.output_classes = dictionary.length + 1;
     const h = {
         manifest, dictionary, events: [], fetches: [], inputs: [], outputs: [], geometryCalls: [], cropCalls: [],
-        detectorPlans: [], recognizerPlans: [], runtimePlans: [], pendingOperations: [],
+        detectorPlans: [], recognizerPlans: [], initializations: [],
         detections: [box()], image: pixels(), crop: { ...pixels(32, 16), rotated: false },
         fetchFailures: [],
+        status: { requestedGpu: true, state: 'ready', provider: 'webgpu', generation: 1,
+            sessionKeys: [], successfulInferences: 0, wasmFallbackDisabled: false },
     };
 
-    class Tensor {
-        constructor(type, data, dims) {
-            Object.assign(this, { type, data, dims, disposals: 0 });
-            h.inputs.push(this);
-        }
-        dispose() { this.disposals += 1; }
-    }
-
     h.output = (dims, data = new Float32Array(dims.reduce((product, value) => product * value, 1))) => {
-        const output = { type: 'float32', dims, data, disposals: 0, dispose() { this.disposals += 1; } };
+        const output = { type: 'float32', dims, data };
         h.outputs.push(output);
         return output;
     };
@@ -88,44 +82,38 @@ function harness() {
         indices.forEach((selected, timestep) => {
             for (let index = 0; index < classes; index += 1) data[timestep * classes + index] = index === selected ? confidence : (1 - confidence) / (classes - 1);
         });
-        return { output: h.output([1, indices.length, classes], data) };
+        return h.output([1, indices.length, classes], data);
     };
 
-    const sessions = new Map();
     class FakeRuntime {
-        async ensureSession(key, path) {
-            h.events.push(`ensure:${key}`);
-            assert.equal(path, manifest[key].model_path);
-            if (!sessions.has(key)) {
-                sessions.set(key, {
-                    inputNames: ['image'], outputNames: ['output'],
-                    async run(feeds) {
-                        const input = feeds.image;
-                        assert.equal(input.disposals, 0);
-                        h.events.push(`inference:${key}`);
-                        const plan = h[`${key}Plans`].shift();
-                        if (plan) return plan(input);
-                        return key === 'detector'
-                            ? { output: h.output([1, 1, 4, 8], new Float32Array(32).fill(0.9)) }
-                            : h.recognizedOutput();
-                    },
-                });
+        async initialize(models) {
+            h.initializations.push(plain(models));
+            for (const { key, path } of models) {
+                h.events.push(`initialize:${key}`);
+                assert.equal(path, manifest[key].model_path);
+                if (!h.status.sessionKeys.includes(key)) h.status.sessionKeys.push(key);
             }
-            return sessions.get(key);
         }
-        async run(key, session, callback) {
-            const operation = callback(session);
-            h.pendingOperations.push(operation);
-            const plan = h.runtimePlans.shift();
-            return plan ? plan(operation, key) : operation;
+        async run(key, path, input) {
+            assert.equal(path, manifest[key].model_path);
+            h.inputs.push(input);
+            h.events.push(`inference:${key}`);
+            h.status.state = 'running';
+            const plan = h[`${key}Plans`].shift();
+            const result = await (plan ? plan(input) : key === 'detector'
+                ? h.output([1, 1, 4, 8], new Float32Array(32).fill(0.9)) : h.recognizedOutput());
+            h.status.successfulInferences += 1;
+            h.status.state = 'ready';
+            return result;
         }
-        async setGpuEnabled(enabled) { h.events.push(`gpu:${enabled}`); }
-        async terminate() { h.events.push('terminate'); sessions.clear(); }
+        getStatus() { return plain(h.status); }
+        async retryGpu() { h.events.push('retryGpu'); h.status.generation += 1; }
+        async setGpuEnabled(enabled) { h.events.push(`gpu:${enabled}`); h.status.requestedGpu = enabled; }
+        async terminate() { h.events.push('terminate'); h.status.sessionKeys = []; }
     }
 
     const backendModule = loadModule('PaddleOnnxOcrBackend.ts', {
         'webextension-polyfill': { runtime: { getURL: path => `chrome-extension://local/${path}` } },
-        'onnxruntime-web': { Tensor },
         'tesseract.js': { PSM },
         './PaddleOnnxRuntime': { PaddleOnnxRuntime: FakeRuntime },
         './PaddleOnnxModelContract': contracts,
@@ -133,8 +121,7 @@ function harness() {
         './PaddleDbPostProcess': {
             postProcessDb(...args) {
                 h.geometryCalls.push(args);
-                assert.equal(h.outputs.find(output => output.data === args[0]).disposals, 0,
-                    'output must remain live while DB postprocessing reads it');
+                assert.ok(h.outputs.some(output => output.data === args[0]), 'DB receives the worker output buffer');
                 return h.detections;
             },
         },
@@ -177,8 +164,6 @@ test('runs one detector and one recognizer per detected line using real BGR/CTC 
     assert.equal(h.inputs[1].dims[3], 320);
     assert.equal(h.inputs[1].data[0], Math.fround(64 / 127.5 - 1));
     assert.equal(h.inputs[1].data[96], 0, 'recognition padding must be normalized zero');
-    assert.ok(h.inputs.every(input => input.disposals === 1));
-    assert.ok(h.outputs.every(output => output.disposals === 1));
     assert.ok(!h.events.includes('encode'), 'debug image encoding is optional');
     assert.ok(h.fetches.every(url => url.startsWith('chrome-extension://local/libs/paddleocr/')));
 });
@@ -222,6 +207,8 @@ test('debug records quadrilaterals and calibrated confidence with raw multilingu
     assert.equal(group.attempts[0].tokens[0].text, ' ');
     assert.ok(Math.abs(group.attempts[0].tokens[0].confidence - 0.8) < 1e-6);
     assert.deepEqual(plain(group.attempts[0].inputShape), [1, 3, 48, 320]);
+    assert.equal(snapshot.pipeline.acceleration.provider, 'webgpu');
+    assert.equal(snapshot.pipeline.acceleration.successfulInferences, 2);
     h.backend.setDebugEnabled(false);
     assert.equal(h.backend.getLastDebugSnapshot(), null);
 });
@@ -247,7 +234,7 @@ test('explicit horizontal/vertical segmentation affects ordering but never adds 
     }
 });
 
-test('requests across instances own the sessions until complete; GPU changes and termination are queued', async () => {
+test('requests across instances complete in order before queued GPU changes and termination', async () => {
     const h = harness();
     const pending = deferred();
     h.detectorPlans.push(() => pending.promise);
@@ -259,8 +246,7 @@ test('requests across instances own the sessions until complete; GPU changes and
     assert.equal(h.events.filter(event => event.startsWith('decode:')).length, 1);
     assert.ok(!h.events.includes('gpu:false'));
     assert.ok(!h.events.includes('terminate'));
-    assert.equal(h.inputs[0].disposals, 0);
-    pending.resolve({ output: h.output([1, 1, 4, 8]) });
+    pending.resolve(h.output([1, 1, 4, 8]));
     assert.equal(await first, 'A 日');
     assert.equal(await second, 'A 日');
     await Promise.all([gpu, termination]);
@@ -268,46 +254,40 @@ test('requests across instances own the sessions until complete; GPU changes and
     assert.ok(h.events.indexOf('terminate') > h.events.indexOf('gpu:false'));
 });
 
-test('a failed inference disposes its input and does not poison subsequent queued requests', async () => {
+test('a failed worker inference does not poison subsequent queued requests', async () => {
     const h = harness();
     h.detectorPlans.push(async () => { throw new Error('inference failed'); });
     const failed = h.backend.recognize('data:image/png;base64,broken', PSM.AUTO);
     const next = h.backend.recognize('data:image/png;base64,valid', PSM.AUTO);
     await assert.rejects(failed, /inference failed/);
     assert.equal(await next, 'A 日');
-    assert.ok(h.inputs.every(input => input.disposals === 1));
 });
 
-test('malformed model output fails explicitly and disposes all outputs before the next request', async () => {
+test('malformed worker output fails explicitly before cropping and the next request still runs', async () => {
     const h = harness();
-    h.detectorPlans.push(() => ({ output: h.output([1, 2, 4, 8]), auxiliary: h.output([1]) }));
+    h.detectorPlans.push(() => h.output([1, 2, 4, 8]));
     await assert.rejects(h.backend.recognize('data:image/png;base64,bad-shape', PSM.AUTO), /model contract mismatch/);
-    assert.equal(h.inputs[0].disposals, 1);
-    assert.ok(h.outputs.every(output => output.disposals === 1));
     assert.equal(h.cropCalls.length, 0);
     assert.equal(await h.backend.recognize('data:image/png;base64,valid', PSM.AUTO), 'A 日');
 });
 
-test('timeout wrappers never dispose tensors while the actual session inference is still running', async () => {
+test('acceleration status is readable during OCR and retry waits for accepted requests', async () => {
     const h = harness();
     const inference = deferred();
-    const timeout = deferred();
     h.detectorPlans.push(() => inference.promise);
-    h.runtimePlans.push((operation) => {
-        // This is the runtime's timeout boundary; the real operation remains alive.
-        operation.catch(() => {});
-        return timeout.promise;
-    });
     const request = h.backend.recognize('data:image/png;base64,slow', PSM.AUTO);
+    const retry = h.backend.retryGpu();
     await flush();
-    timeout.reject(new Error('accelerated inference timed out'));
-    await assert.rejects(request, /timed out/);
-    assert.equal(h.inputs[0].disposals, 0);
-    const lateOutput = h.output([1, 1, 4, 8]);
-    inference.resolve({ output: lateOutput });
-    await h.pendingOperations[0];
-    assert.equal(h.inputs[0].disposals, 1);
-    assert.equal(lateOutput.disposals, 1);
+    const status = h.backend.getAccelerationStatus();
+    assert.equal(status.state, 'running');
+    assert.equal(status.provider, 'webgpu');
+    assert.ok(!h.events.includes('retryGpu'));
+    inference.resolve(h.output([1, 1, 4, 8]));
+    assert.equal(await request, 'A 日');
+    await retry;
+    assert.ok(h.events.indexOf('retryGpu') > h.events.lastIndexOf('inference:recognizer'));
+    assert.equal(h.backend.getAccelerationStatus().generation, 2);
+    assert.equal(status.generation, 1, 'previous status is an independent snapshot');
 });
 
 test('failed local asset loading is retryable and init shares the subsequent cached assets', async () => {
@@ -319,8 +299,10 @@ test('failed local asset loading is retryable and init shares the subsequent cac
     await h.backend.init();
     assert.equal(h.fetches.length, fetchCount);
     assert.equal(h.inputs.length, 0);
-    assert.ok(h.events.includes('ensure:detector'));
-    assert.ok(h.events.includes('ensure:recognizer'));
+    assert.deepEqual(h.initializations[0], [
+        { key: 'detector', path: h.manifest.detector.model_path },
+        { key: 'recognizer', path: h.manifest.recognizer.model_path },
+    ]);
 });
 
 test('old RGB metadata is rejected before inference rather than silently using an incompatible contract', async () => {

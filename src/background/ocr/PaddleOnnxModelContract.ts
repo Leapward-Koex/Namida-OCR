@@ -1,7 +1,8 @@
-import type * as ort from 'onnxruntime-web';
+type TensorData = { type: string; dims: readonly number[]; readonly data: unknown };
+type Float32TensorData = TensorData & { type: 'float32'; readonly data: Float32Array };
 
 /** The bundled DB detector emits one float32 probability map per image. */
-export function assertDetectionTensor(tensor: ort.Tensor | undefined): asserts tensor is ort.Tensor {
+export function assertDetectionTensor(tensor: TensorData | undefined): asserts tensor is Float32TensorData {
     assertFloat32Tensor(tensor, 'detector', 4);
     if (tensor.dims[0] !== 1 || tensor.dims[1] !== 1) {
         throw contractError('detector', `expected shape [1, 1, H, W], received [${tensor.dims.join(', ')}]`);
@@ -10,9 +11,9 @@ export function assertDetectionTensor(tensor: ort.Tensor | undefined): asserts t
 
 /** CTC class zero is blank; every other output class must have a dictionary entry. */
 export function assertRecognitionTensor(
-    tensor: ort.Tensor | undefined,
+    tensor: TensorData | undefined,
     dictionary: readonly string[],
-): asserts tensor is ort.Tensor {
+): asserts tensor is Float32TensorData {
     assertFloat32Tensor(tensor, 'recognizer', 3);
     const expectedClasses = dictionary.length + 1;
     if (tensor.dims[0] !== 1 || tensor.dims[2] !== expectedClasses) {
@@ -25,10 +26,10 @@ export function assertRecognitionTensor(
 }
 
 function assertFloat32Tensor(
-    tensor: ort.Tensor | undefined,
+    tensor: TensorData | undefined,
     model: string,
     rank: number,
-): asserts tensor is ort.Tensor {
+): asserts tensor is Float32TensorData {
     if (!tensor) {
         throw contractError(model, 'the model did not return its output tensor');
     }
@@ -42,7 +43,7 @@ function assertFloat32Tensor(
     if (!Number.isSafeInteger(expectedLength)) {
         throw contractError(model, `output dimensions exceed the safe element-count range: [${tensor.dims.join(', ')}]`);
     }
-    let data: ort.Tensor.DataType;
+    let data: unknown;
     try {
         data = tensor.data;
     } catch {

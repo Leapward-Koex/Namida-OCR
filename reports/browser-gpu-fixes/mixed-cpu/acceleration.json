@@ -1,0 +1,452 @@
+[
+  {
+    "case": "case-001-inuda-san",
+    "acceleration": {
+      "requestedGpu": false,
+      "state": "ready",
+      "provider": "wasm",
+      "generation": 1,
+      "sessionKeys": [
+        "detector",
+        "recognizer"
+      ],
+      "successfulInferences": 2,
+      "wasmFallbackDisabled": false
+    }
+  },
+  {
+    "case": "case-002-hai-owari-mou-dame",
+    "acceleration": {
+      "requestedGpu": false,
+      "state": "ready",
+      "provider": "wasm",
+      "generation": 1,
+      "sessionKeys": [
+        "detector",
+        "recognizer"
+      ],
+      "successfulInferences": 3,
+      "wasmFallbackDisabled": false
+    }
+  },
+  {
+    "case": "case-003-kako",
+    "acceleration": {
+      "requestedGpu": false,
+      "state": "ready",
+      "provider": "wasm",
+      "generation": 1,
+      "sessionKeys": [
+        "detector",
+        "recognizer"
+      ],
+      "successfulInferences": 2,
+      "wasmFallbackDisabled": false
+    }
+  },
+  {
+    "case": "case-004-genzai",
+    "acceleration": {
+      "requestedGpu": false,
+      "state": "ready",
+      "provider": "wasm",
+      "generation": 1,
+      "sessionKeys": [
+        "detector",
+        "recognizer"
+      ],
+      "successfulInferences": 2,
+      "wasmFallbackDisabled": false
+    }
+  },
+  {
+    "case": "case-005-teto-san-kekkon-shiyou",
+    "acceleration": {
+      "requestedGpu": false,
+      "state": "ready",
+      "provider": "wasm",
+      "generation": 1,
+      "sessionKeys": [
+        "detector",
+        "recognizer"
+      ],
+      "successfulInferences": 2,
+      "wasmFallbackDisabled": false
+    }
+  },
+  {
+    "case": "case-006-a-sore-zenbu-iinchou-dayo",
+    "acceleration": {
+      "requestedGpu": false,
+      "state": "ready",
+      "provider": "wasm",
+      "generation": 1,
+      "sessionKeys": [
+        "detector",
+        "recognizer"
+      ],
+      "successfulInferences": 3,
+      "wasmFallbackDisabled": false
+    }
+  },
+  {
+    "case": "case-007-kawaii",
+    "acceleration": {
+      "requestedGpu": false,
+      "state": "ready",
+      "provider": "wasm",
+      "generation": 1,
+      "sessionKeys": [
+        "detector",
+        "recognizer"
+      ],
+      "successfulInferences": 2,
+      "wasmFallbackDisabled": false
+    }
+  },
+  {
+    "case": "case-008-ore-otoko-no-ko-damon",
+    "acceleration": {
+      "requestedGpu": false,
+      "state": "ready",
+      "provider": "wasm",
+      "generation": 1,
+      "sessionKeys": [
+        "detector",
+        "recognizer"
+      ],
+      "successfulInferences": 4,
+      "wasmFallbackDisabled": false
+    }
+  },
+  {
+    "case": "case-009-saikin-kurasu-no-fuuki",
+    "acceleration": {
+      "requestedGpu": false,
+      "state": "ready",
+      "provider": "wasm",
+      "generation": 1,
+      "sessionKeys": [
+        "detector",
+        "recognizer"
+      ],
+      "successfulInferences": 4,
+      "wasmFallbackDisabled": false
+    }
+  },
+  {
+    "case": "case-010-daiji-na-no-wa-konten-tsu-daro",
+    "acceleration": {
+      "requestedGpu": false,
+      "state": "ready",
+      "provider": "wasm",
+      "generation": 1,
+      "sessionKeys": [
+        "detector",
+        "recognizer"
+      ],
+      "successfulInferences": 2,
+      "wasmFallbackDisabled": false
+    }
+  },
+  {
+    "case": "case-011-zundamon-senpai-tsumetai-kute-kimochi-ii",
+    "acceleration": {
+      "requestedGpu": false,
+      "state": "ready",
+      "provider": "wasm",
+      "generation": 1,
+      "sessionKeys": [
+        "detector",
+        "recognizer"
+      ],
+      "successfulInferences": 2,
+      "wasmFallbackDisabled": false
+    }
+  },
+  {
+    "case": "case-012-obaachan",
+    "acceleration": {
+      "requestedGpu": false,
+      "state": "ready",
+      "provider": "wasm",
+      "generation": 1,
+      "sessionKeys": [
+        "detector",
+        "recognizer"
+      ],
+      "successfulInferences": 6,
+      "wasmFallbackDisabled": false
+    }
+  },
+  {
+    "case": "case-013",
+    "acceleration": {
+      "requestedGpu": false,
+      "state": "ready",
+      "provider": "wasm",
+      "generation": 1,
+      "sessionKeys": [
+        "detector",
+        "recognizer"
+      ],
+      "successfulInferences": 3,
+      "wasmFallbackDisabled": false
+    }
+  },
+  {
+    "case": "general-001-horizontal-japanese",
+    "acceleration": {
+      "requestedGpu": false,
+      "state": "ready",
+      "provider": "wasm",
+      "generation": 1,
+      "sessionKeys": [
+        "detector",
+        "recognizer"
+      ],
+      "successfulInferences": 2,
+      "wasmFallbackDisabled": false
+    }
+  },
+  {
+    "case": "general-002-mixed-japanese-latin-digits",
+    "acceleration": {
+      "requestedGpu": false,
+      "state": "ready",
+      "provider": "wasm",
+      "generation": 1,
+      "sessionKeys": [
+        "detector",
+        "recognizer"
+      ],
+      "successfulInferences": 2,
+      "wasmFallbackDisabled": false
+    }
+  },
+  {
+    "case": "general-003-apostrophe-date",
+    "acceleration": {
+      "requestedGpu": false,
+      "state": "ready",
+      "provider": "wasm",
+      "generation": 1,
+      "sessionKeys": [
+        "detector",
+        "recognizer"
+      ],
+      "successfulInferences": 2,
+      "wasmFallbackDisabled": false
+    }
+  },
+  {
+    "case": "general-004-long-horizontal",
+    "acceleration": {
+      "requestedGpu": false,
+      "state": "ready",
+      "provider": "wasm",
+      "generation": 1,
+      "sessionKeys": [
+        "detector",
+        "recognizer"
+      ],
+      "successfulInferences": 2,
+      "wasmFallbackDisabled": false
+    }
+  },
+  {
+    "case": "general-005-colored-text",
+    "acceleration": {
+      "requestedGpu": false,
+      "state": "ready",
+      "provider": "wasm",
+      "generation": 1,
+      "sessionKeys": [
+        "detector",
+        "recognizer"
+      ],
+      "successfulInferences": 2,
+      "wasmFallbackDisabled": false
+    }
+  },
+  {
+    "case": "general-006-white-on-dark",
+    "acceleration": {
+      "requestedGpu": false,
+      "state": "ready",
+      "provider": "wasm",
+      "generation": 1,
+      "sessionKeys": [
+        "detector",
+        "recognizer"
+      ],
+      "successfulInferences": 2,
+      "wasmFallbackDisabled": false
+    }
+  },
+  {
+    "case": "general-007-rotated-horizontal",
+    "acceleration": {
+      "requestedGpu": false,
+      "state": "ready",
+      "provider": "wasm",
+      "generation": 1,
+      "sessionKeys": [
+        "detector",
+        "recognizer"
+      ],
+      "successfulInferences": 2,
+      "wasmFallbackDisabled": false
+    }
+  },
+  {
+    "case": "general-008-vertical-three-columns",
+    "acceleration": {
+      "requestedGpu": false,
+      "state": "ready",
+      "provider": "wasm",
+      "generation": 1,
+      "sessionKeys": [
+        "detector",
+        "recognizer"
+      ],
+      "successfulInferences": 4,
+      "wasmFallbackDisabled": false
+    }
+  },
+  {
+    "case": "general-009-horizontal-three-lines",
+    "acceleration": {
+      "requestedGpu": false,
+      "state": "ready",
+      "provider": "wasm",
+      "generation": 1,
+      "sessionKeys": [
+        "detector",
+        "recognizer"
+      ],
+      "successfulInferences": 4,
+      "wasmFallbackDisabled": false
+    }
+  },
+  {
+    "case": "general-010-serif-japanese",
+    "acceleration": {
+      "requestedGpu": false,
+      "state": "ready",
+      "provider": "wasm",
+      "generation": 1,
+      "sessionKeys": [
+        "detector",
+        "recognizer"
+      ],
+      "successfulInferences": 2,
+      "wasmFallbackDisabled": false
+    }
+  },
+  {
+    "case": "manga-ocr-case-001-sunao-ni-ayamaru-shika",
+    "acceleration": {
+      "requestedGpu": false,
+      "state": "ready",
+      "provider": "wasm",
+      "generation": 1,
+      "sessionKeys": [
+        "detector",
+        "recognizer"
+      ],
+      "successfulInferences": 5,
+      "wasmFallbackDisabled": false
+    }
+  },
+  {
+    "case": "manga-ocr-case-002-tachikawa-de-mita-ana-no-shita-no-kyodaina-me-wa",
+    "acceleration": {
+      "requestedGpu": false,
+      "state": "ready",
+      "provider": "wasm",
+      "generation": 1,
+      "sessionKeys": [
+        "detector",
+        "recognizer"
+      ],
+      "successfulInferences": 5,
+      "wasmFallbackDisabled": false
+    }
+  },
+  {
+    "case": "manga-ocr-case-003-jissen-kenjutsu-mo-ichiryuu-desu",
+    "acceleration": {
+      "requestedGpu": false,
+      "state": "ready",
+      "provider": "wasm",
+      "generation": 1,
+      "sessionKeys": [
+        "detector",
+        "recognizer"
+      ],
+      "successfulInferences": 3,
+      "wasmFallbackDisabled": false
+    }
+  },
+  {
+    "case": "manga-ocr-case-004-gya",
+    "acceleration": {
+      "requestedGpu": false,
+      "state": "ready",
+      "provider": "wasm",
+      "generation": 1,
+      "sessionKeys": [
+        "detector",
+        "recognizer"
+      ],
+      "successfulInferences": 2,
+      "wasmFallbackDisabled": false
+    }
+  },
+  {
+    "case": "manga-ocr-case-005-pinpoon",
+    "acceleration": {
+      "requestedGpu": false,
+      "state": "ready",
+      "provider": "wasm",
+      "generation": 1,
+      "sessionKeys": [
+        "detector",
+        "recognizer"
+      ],
+      "successfulInferences": 3,
+      "wasmFallbackDisabled": false
+    }
+  },
+  {
+    "case": "manga-ocr-case-006-faia-panchi",
+    "acceleration": {
+      "requestedGpu": false,
+      "state": "ready",
+      "provider": "wasm",
+      "generation": 1,
+      "sessionKeys": [
+        "detector",
+        "recognizer"
+      ],
+      "successfulInferences": 2,
+      "wasmFallbackDisabled": false
+    }
+  },
+  {
+    "case": "manga-ocr-case-007-keisatsu-nimo-sensei-nimo-machijuu-no-hitotachi-ni",
+    "acceleration": {
+      "requestedGpu": false,
+      "state": "ready",
+      "provider": "wasm",
+      "generation": 1,
+      "sessionKeys": [
+        "detector",
+        "recognizer"
+      ],
+      "successfulInferences": 9,
+      "wasmFallbackDisabled": false
+    }
+  }
+]
