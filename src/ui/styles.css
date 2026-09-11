@@ -201,3 +201,11 @@ button:active {
     font-size: 30px;
     margin: 0 auto;
 }
+
+#build-version {
+    color: #666;
+    font-size: 12px;
+    text-align: center;
+    padding: 8px 12px 12px;
+    overflow-wrap: anywhere;
+}

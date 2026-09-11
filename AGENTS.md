@@ -54,6 +54,7 @@ When changing permissions, background execution, popup behavior, or shortcut flo
 
 - `npm run build:chrome`
 - `npm run build:firefox`
+- `npm run test:build`: validates automatic browser version ordering, local/CI identity, and package verification. `python -m unittest discover -s tests -p test_release_archives.py` checks release ZIP identity and layout.
 - `npm run prepare:paddleocr-onnx`: downloads the official PP-OCRv6 medium detector/recognizer ONNX repos, extracts the recognition dictionary from `inference.yml`, and refreshes the committed Chromium/server PaddleOCR bundle metadata for the experimental `paddleonnx` backend.
 - `npm run prepare:paddleocr-onnx:firefox`: downloads the official PP-OCRv6 small detector plus medium recognizer ONNX repos, extracts the recognition dictionary from `inference.yml`, and refreshes the committed Firefox default mixed PaddleOCR bundle metadata for the experimental `paddleonnx` backend.
 - `npm run prepare:paddleocr-onnx:mobile`: downloads the compact PP-OCRv6 tiny detector plus small recognizer ONNX repos, extracts the recognition dictionary from `inference.yml`, and refreshes the compact override PaddleOCR bundle metadata for the experimental `paddleonnx` backend.
@@ -171,6 +172,8 @@ Remove-Item Env:NAMIDA_TEST_OCR_INPUT_MODE
 
 ## Change Guidance
 
+- `.github/workflows/webpack.yml` builds Chrome/Edge and Firefox ZIPs and publishes automatic `build-<run number>` prereleases from `master` only. Keep PR jobs read-only and preserve the stale-rerun and archive-identity guards. This publishes GitHub assets, not signed browser-store releases.
+- `scripts/build-info.cjs` maps the workflow counter to `2.<high 16 bits>.<low 16 bits>` and embeds commit/run/attempt metadata. Do not reset the workflow counter without advancing the version epoch. Numeric versions stay constant across reruns; each artifact records its actual attempt. Local builds use `2.0.0` plus source identity and a dirty marker. Do not manually bump package.json for extension releases.
 - Keep task-specific research, audit notes, probe results, and agent artifacts out of commits. Store temporary results in ignored `test-results/` or `.tmp/`; the CI-maintained `reports/ocr-performance.md` remains tracked. Retain reusable tests, fixture provenance, and required third-party notices.
 - Preserve the browser-extension-only architecture.
 - Preserve offline behavior and the no-server product boundary.

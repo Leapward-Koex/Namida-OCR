@@ -137,3 +137,7 @@ test-results/
 # Task research and probe artifacts; retain the CI-maintained OCR baseline.
 /reports/*
 !/reports/ocr-performance.md
+
+# Generated release packages and Python test caches.
+/release-assets/
+__pycache__/

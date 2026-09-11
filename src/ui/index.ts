@@ -19,6 +19,12 @@ import type { PaddleAccelerationStatus } from "../background/ocr/PaddleWorkerPro
 import { describePaddleAcceleration } from "./OcrAccelerationStatus";
 
 document.addEventListener('DOMContentLoaded', () => {
+    const manifest = runtime.getManifest();
+    const buildVersion = document.getElementById('build-version');
+    if (buildVersion) {
+        buildVersion.textContent = manifest.version_name || manifest.version;
+        buildVersion.title = `Extension version ${manifest.version}`;
+    }
     const windowTimeoutSelect = document.getElementById("window-timeout") as HTMLSelectElement;
     const furiganaTypeSelect = document.getElementById("furigana-type") as HTMLSelectElement;
     const ocrBackendSelect = document.getElementById("ocr-backend") as HTMLSelectElement;

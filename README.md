@@ -98,6 +98,22 @@
 
 ## Development
 
+### Automatic builds and releases
+
+Pushes to `master` run the build/release workflow: unit and dictionary checks, separate Chrome/Edge and Firefox production builds, package verification, then an automatic GitHub prerelease tagged `build-<run number>`. Pull requests build the same ZIPs as workflow artifacts without publishing. The workflow can also be dispatched manually; only `master` publishes. Release notes include the source commit, changes since the preceding build, both browser ZIPs and SHA-256 checksums. Only the release job has repository write permission; it uses `GITHUB_TOKEN` without additional release secrets.
+
+Versions are automatic build counters, not semantic versions. For workflow run `N`, the extension version is `2.floor(N / 65536).(N % 65536)`; for example, run 42 is `2.0.42` and run 65536 is `2.1.0`. The leading `2` makes these versions newer than the previous `1.x` releases. Splitting the counter keeps every component within [Chrome's version limits](https://developer.chrome.com/docs/extensions/reference/manifest/version). Keep this workflow's run counter continuous; if replacing it with a new counter, advance the leading epoch before publishing.
+
+The popup and manifest `version_name` display `Build 42.1 (abcdef012345)`, including the run attempt and source commit. Every package contains `build-info.json` with the complete commit, run ID, attempt, timestamp, browser and model variant. Numbered builds reject modified or mismatched checkouts. Reruns retain the numeric version and release tag, while the metadata identifies the attempt; successful artifacts can be reused in a partial matrix rerun. Stale reruns do not overwrite releases after `master` moves on.
+
+Local builds need no environment setup: they use numeric version `2.0.0` and show their commit plus a modified-checkout marker. `--env build_number=<numeric version>` remains available for local packaging. CI sets `NAMIDA_BUILD_SEQUENCE` and `NAMIDA_BUILD_ATTEMPT`; manual numeric overrides are rejected there. The npm package version is not used as the extension release version.
+
+ZIPs have `manifest.json` at their root. Chromium packages serve Chrome and Edge; Firefox retains its smaller detector bundle. These are unsigned distribution packages, not automatic browser-store submissions: Chromium can load the extracted directory in developer mode, and Firefox requires temporary loading or Mozilla signing for normal installation. The extension's offline runtime is unchanged.
+
+Run `npm run test:build` and `python -m unittest discover -s tests -p test_release_archives.py` to check version ordering and release packaging guards. After a default production build, `node scripts/verify-extension-build.cjs dist chrome` (or `firefox`) checks the generated identity and bundle.
+
+### Runtime and testing
+
 - The default OCR backend is `tesseract`.
 - Tesseract keeps the original recognition as its baseline. Uncertain results get one local retry with a small white border and reduced image size for larger crops; a retry replaces the original only when confidence, text score, Japanese-character ratio, and text retention checks agree. Confident results use a single pass.
 - Tesseract worker requests and Chromium offscreen creation are serialized to handle simultaneous snips safely. `node --test tests/tesseract-backend.test.mjs` checks worker/retry behavior; `tests/tesseract.spec.ts` checks concurrent horizontal OCR with networking disabled.

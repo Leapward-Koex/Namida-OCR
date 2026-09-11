@@ -3,6 +3,7 @@ const fs = require('fs');
 const zlib = require('zlib');
 const webpack = require('webpack');
 const CopyPlugin = require('copy-webpack-plugin');
+const { createBuildInfo } = require('./scripts/build-info.cjs');
 
 function getBundledLanguagePatterns() {
     const langDirectory = path.resolve(__dirname, 'lang');
@@ -79,9 +80,8 @@ function resolvePaddleOcrModelVariant(browser, env) {
     return normalizedVariant;
 }
 
-module.exports = (env) => {
+module.exports = (env = {}) => {
     const browser = env.browser || 'firefox';
-    const buildNumber = env.build_number || "1.0.0";
     const ocrModel = env.ocr_model || process.env.NAMIDA_OCR_MODEL || 'jpn_vert';
     const ocrBackend = env.ocr_backend || process.env.NAMIDA_OCR_BACKEND || 'tesseract';
     const paddleOcrModelVariant = resolvePaddleOcrModelVariant(browser, env);
@@ -124,7 +124,7 @@ module.exports = (env) => {
         });
     }
 
-    const createManifest = () => {
+    const createManifest = (buildInfo) => {
         const broswerSpecificManifest = JSON.parse(
             fs.readFileSync(path.resolve(__dirname, `manifests/manifest.${browser}.json`), 'utf8')
         );
@@ -133,14 +133,12 @@ module.exports = (env) => {
             fs.readFileSync(path.resolve(__dirname, 'manifests/manifest.base.json'), 'utf8')
         );
 
-        fs.writeFileSync(
-            path.resolve(__dirname, 'dist/manifest.json'),
-            JSON.stringify(merged = {
-                ...baseManifest,
-                ...broswerSpecificManifest,
-                version: buildNumber
-            }, null, 2)
-        );
+        return {
+            ...baseManifest,
+            ...broswerSpecificManifest,
+            version: buildInfo.version,
+            version_name: buildInfo.versionName,
+        };
     };
     return {
         entry: {
@@ -228,10 +226,17 @@ module.exports = (env) => {
             }),
             {
                 apply: (compiler) => {
-                    compiler.hooks.afterEmit.tap('GenerateManifestPlugin', (compilation) => {
+                    compiler.hooks.thisCompilation.tap('GenerateManifestPlugin', (compilation) => {
                         compilation.fileDependencies.add(path.resolve(__dirname, 'manifests/manifest.base.json'));
                         compilation.fileDependencies.add(path.resolve(__dirname, `manifests/manifest.${browser}.json`));
-                        createManifest();
+                        compilation.hooks.processAssets.tap({ name: 'GenerateManifestPlugin',
+                            stage: webpack.Compilation.PROCESS_ASSETS_STAGE_ADDITIONAL }, () => {
+                            const buildInfo = createBuildInfo({ versionOverride: env.build_number });
+                            compilation.emitAsset('manifest.json', new webpack.sources.RawSource(JSON.stringify(createManifest(buildInfo), null, 2)));
+                            compilation.emitAsset('build-info.json', new webpack.sources.RawSource(JSON.stringify({
+                                ...buildInfo, browser, ocrBackend: resolvedOcrBackend, ocrModel, paddleOcrModelVariant,
+                            }, null, 2)));
+                        });
                     });
                 },
             },
