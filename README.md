@@ -98,6 +98,9 @@
 ## Development
 
 - The default OCR backend is `tesseract`.
+- Tesseract keeps the original recognition as its baseline. Uncertain results get one local retry with a small white border and reduced image size for larger crops; a retry replaces the original only when confidence, text score, Japanese-character ratio, and text retention checks agree. Confident results use a single pass.
+- Tesseract worker requests and Chromium offscreen creation are serialized to handle simultaneous snips safely. `node --test tests/tesseract-backend.test.mjs` checks worker/retry behavior; `tests/tesseract.spec.ts` checks concurrent horizontal OCR with networking disabled.
+- See [the Tesseract audit](reports/tesseract-upstream-audit.md) for official guidance, measured accuracy changes, and regression evidence.
 - The OCR runtime and backend implementations live under `src/background/ocr/`.
 - The popup can switch between bundled `tesseract` and experimental `paddleonnx` at runtime in normal builds.
 - You can still choose the default OCR backend at build time with `NAMIDA_OCR_BACKEND` or `webpack --env ocr_backend=...`.

@@ -35,17 +35,23 @@ if (globalThis.Worker) {
         await BackgroundOcrService.init();
     })().catch(console.error);
 }
-async function ensureOffscreenDocument() {
-    const offscreenUrl = runtime.getURL('offscreen/offscreen.html');
-    // Check if offscreen is already created
-    const existingDocs = await chrome.offscreen.hasDocument?.();
-    if (!existingDocs) {
-        await chrome.offscreen.createDocument({
-            url: offscreenUrl,
-            reasons: [chrome.offscreen.Reason.WORKERS],
-            justification: 'Perform background OCR with bundled local assets'
-        });
+let offscreenCreation: Promise<void> | null = null;
+
+function ensureOffscreenDocument(): Promise<void> {
+    // Share both the existence check and creation: simultaneous first snips
+    // would otherwise each try to create Chrome's single offscreen document.
+    if (!offscreenCreation) {
+        offscreenCreation = (async () => {
+            if (!await chrome.offscreen.hasDocument?.()) {
+                await chrome.offscreen.createDocument({
+                    url: runtime.getURL('offscreen/offscreen.html'),
+                    reasons: [chrome.offscreen.Reason.WORKERS],
+                    justification: 'Perform background OCR with bundled local assets'
+                });
+            }
+        })().finally(() => { offscreenCreation = null; });
     }
+    return offscreenCreation;
 }
 
 commands.onCommand.addListener((command) => {

@@ -72,6 +72,9 @@ Playwright currently exercises the Chromium extension harness. Firefox and Edge 
 - The popup presents `tesseract` as the faster/lower-accuracy option and experimental `paddleonnx` as the slower/higher-accuracy option. Tesseract-only and Paddle-only controls should stay scoped to the matching backend in the popup.
 - Tesseract popup settings include a text-direction selector that maps to bundled `jpn` vs `jpn_vert` model selection. Keep that mapping local to the bundled extension assets.
 - Tesseract page segmentation is not user-configurable in the popup. It should be derived automatically from the selected text direction/model: `jpn_vert` uses single-block vertical and `jpn` uses single-block.
+- Tesseract retains the original OCR candidate and makes at most one resize/white-border retry for empty or low-confidence results. Preserve its conservative confidence, score, Japanese-ratio, and text-retention guards; unconditional preprocessing regresses existing samples. Keep this selection local to Tesseract rather than changing shared Paddle scoring.
+- Tesseract queues entire recognition requests, including preprocessing/retries, per cached worker. Termination must drain accepted work. Chromium offscreen document checks/creation also share a promise to support simultaneous first requests.
+- Use bitmap decoding for Tesseract retry preparation: `Image.decode()` can stall in Chromium's hidden offscreen document. Keep preprocessing local and retain the original result if it fails.
 - The OCR dataset includes difficult manga and vertical-text samples. The model is not perfect.
 - Do not assume every OCR case will be an exact text match, and do not treat every OCR miss as a pure application bug.
 - Some E2E or model-comparison runs may remain non-perfect because OCR quality is a model limitation, not necessarily a regression in extension code.

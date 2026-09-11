@@ -1,0 +1,126 @@
+{
+  "regressions": 0,
+  "improved": 2,
+  "cases": [
+    {
+      "name": "manga-ocr-case-001-sunao-ni-ayamaru-shika",
+      "before": 0.31999999999999995,
+      "after": 0.31999999999999995,
+      "delta": 0
+    },
+    {
+      "name": "manga-ocr-case-002-tachikawa-de-mita-ana-no-shita-no-kyodaina-me-wa",
+      "before": 0.012875536480686733,
+      "after": 0.012875536480686733,
+      "delta": 0
+    },
+    {
+      "name": "manga-ocr-case-003-jissen-kenjutsu-mo-ichiryuu-desu",
+      "before": 0.5555555555555556,
+      "after": 0.6666666666666667,
+      "delta": 0.11111111111111116
+    },
+    {
+      "name": "manga-ocr-case-004-gya",
+      "before": 1,
+      "after": 1,
+      "delta": 0
+    },
+    {
+      "name": "manga-ocr-case-005-pinpoon",
+      "before": 0.1875,
+      "after": 0.1875,
+      "delta": 0
+    },
+    {
+      "name": "manga-ocr-case-006-faia-panchi",
+      "before": 0.4285714285714286,
+      "after": 0.4285714285714286,
+      "delta": 0
+    },
+    {
+      "name": "manga-ocr-case-007-keisatsu-nimo-sensei-nimo-machijuu-no-hitotachi-ni",
+      "before": 0.27586206896551724,
+      "after": 0.27586206896551724,
+      "delta": 0
+    },
+    {
+      "name": "case-001-inuda-san",
+      "before": 1,
+      "after": 1,
+      "delta": 0
+    },
+    {
+      "name": "case-002-hai-owari-mou-dame",
+      "before": 1,
+      "after": 1,
+      "delta": 0
+    },
+    {
+      "name": "case-003-kako",
+      "before": 0.5,
+      "after": 0.5,
+      "delta": 0
+    },
+    {
+      "name": "case-004-genzai",
+      "before": 1,
+      "after": 1,
+      "delta": 0
+    },
+    {
+      "name": "case-005-teto-san-kekkon-shiyou",
+      "before": 1,
+      "after": 1,
+      "delta": 0
+    },
+    {
+      "name": "case-006-a-sore-zenbu-iinchou-dayo",
+      "before": 1,
+      "after": 1,
+      "delta": 0
+    },
+    {
+      "name": "case-007-kawaii",
+      "before": 0.75,
+      "after": 0.75,
+      "delta": 0
+    },
+    {
+      "name": "case-008-ore-otoko-no-ko-damon",
+      "before": 0.9,
+      "after": 0.9,
+      "delta": 0
+    },
+    {
+      "name": "case-009-saikin-kurasu-no-fuuki",
+      "before": 1,
+      "after": 1,
+      "delta": 0
+    },
+    {
+      "name": "case-010-daiji-na-no-wa-konten-tsu-daro",
+      "before": 0.8571428571428572,
+      "after": 0.8571428571428572,
+      "delta": 0
+    },
+    {
+      "name": "case-011-zundamon-senpai-tsumetai-kute-kimochi-ii",
+      "before": 0.9444444444444444,
+      "after": 0.9444444444444444,
+      "delta": 0
+    },
+    {
+      "name": "case-012-obaachan",
+      "before": 0.9411764705882353,
+      "after": 0.9411764705882353,
+      "delta": 0
+    },
+    {
+      "name": "case-013",
+      "before": 0.6923076923076923,
+      "after": 0.9166666666666666,
+      "delta": 0.22435897435897434
+    }
+  ]
+}

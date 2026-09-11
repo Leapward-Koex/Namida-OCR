@@ -1,0 +1,308 @@
+{
+  "totalCases": 20,
+  "exactMatches": 7,
+  "exactMatchRate": 0.35,
+  "averageCharacterAccuracy": 0.7350453069763252,
+  "cases": [
+    {
+      "caseIndex": 0,
+      "name": "manga-ocr-case-001-sunao-ni-ayamaru-shika",
+      "image": "images/manga-ocr-case-01.jpg",
+      "expectedText": "素直にあやまるしか",
+      "actualText": "ttょli素直にいXあやぐまるしが硬茹こい1語トド",
+      "normalizedExpectedText": "素直にあやまるしか",
+      "normalizedActualText": "ttょli素直にいXあやぐまるしが硬茹こい1語トド",
+      "exactMatch": false,
+      "editDistance": 17,
+      "characterAccuracy": 0.31999999999999995,
+      "input": {
+        "mode": "snip"
+      }
+    },
+    {
+      "caseIndex": 1,
+      "name": "manga-ocr-case-002-tachikawa-de-mita-ana-no-shita-no-kyodaina-me-wa",
+      "image": "images/manga-ocr-case-02.jpg",
+      "expectedText": "立川で見た〝穴〟の下の巨大な眼は…",
+      "actualText": "。,ジイ24認了たタン人リンiiはAiに人ぎずもをる*lrリムマーしる3ーーアレ-ベーーーィビjaし』ば必四,ニス\\BiULrlしDeLiグズ作otniーー人人和信人ioヘイルル.\\)イusきき和ルル京ての沙る人イイ』はにこみせる】アト,放ググ2/ろVレー人た人しでVIii人有さジジN・』(と参っ「きいいーーuuRにー2kN\\っー。に、とeS。レニ|\\、らhb(たDo三辻人入oRンー>で、て4エエナんんし人イメptィ記人をンー3トトGR人大の和よ骨.人たるギンを",
+      "normalizedExpectedText": "立川で見た〝穴〟の下の巨大な眼は…",
+      "normalizedActualText": "。,ジイ24認了たタン人リンiiはAiに人ぎずもをる*lrリムマーしる3ーーアレ-ベーーーィビjaし』ば必四,ニス\\BiULrlしDeLiグズ作otniーー人人和信人ioヘイルル.\\)イusきき和ルル京ての沙る人イイ』はにこみせる】アト,放ググ2/ろVレー人た人しでVIii人有さジジN・』(と参っ「きいいーーuuRにー2kN\\っー。に、とeS。レニ|\\、らhb(たDo三辻人入oRンー>で、て4エエナんんし人イメptィ記人をンー3トトGR人大の和よ骨.人たるギンを",
+      "exactMatch": false,
+      "editDistance": 230,
+      "characterAccuracy": 0.012875536480686733,
+      "input": {
+        "mode": "snip"
+      }
+    },
+    {
+      "caseIndex": 2,
+      "name": "manga-ocr-case-003-jissen-kenjutsu-mo-ichiryuu-desu",
+      "image": "images/manga-ocr-case-03.jpg",
+      "expectedText": "実戦剣術も一流です",
+      "actualText": "実恥側術も一灘です",
+      "normalizedExpectedText": "実戦剣術も一流です",
+      "normalizedActualText": "実恥側術も一灘です",
+      "exactMatch": false,
+      "editDistance": 3,
+      "characterAccuracy": 0.6666666666666667,
+      "input": {
+        "mode": "snip"
+      }
+    },
+    {
+      "caseIndex": 3,
+      "name": "manga-ocr-case-004-gya",
+      "image": "images/manga-ocr-case-04.jpg",
+      "expectedText": "ぎゃっ",
+      "actualText": "ぎゃっ",
+      "normalizedExpectedText": "ぎゃっ",
+      "normalizedActualText": "ぎゃっ",
+      "exactMatch": true,
+      "editDistance": 0,
+      "characterAccuracy": 1,
+      "input": {
+        "mode": "snip"
+      }
+    },
+    {
+      "caseIndex": 4,
+      "name": "manga-ocr-case-005-pinpoon",
+      "image": "images/manga-ocr-case-05.jpg",
+      "expectedText": "ピンポーーン",
+      "actualText": "。こンーーニー了評芋共ーーツジ!",
+      "normalizedExpectedText": "ピンポーーン",
+      "normalizedActualText": "。こンーーニー了評芋共ーーツジ!",
+      "exactMatch": false,
+      "editDistance": 13,
+      "characterAccuracy": 0.1875,
+      "input": {
+        "mode": "snip"
+      }
+    },
+    {
+      "caseIndex": 5,
+      "name": "manga-ocr-case-006-faia-panchi",
+      "image": "images/manga-ocr-case-06.jpg",
+      "expectedText": "ファイアパンチ",
+      "actualText": "フアバアバン季",
+      "normalizedExpectedText": "ファイアパンチ",
+      "normalizedActualText": "フアバアバン季",
+      "exactMatch": false,
+      "editDistance": 4,
+      "characterAccuracy": 0.4285714285714286,
+      "input": {
+        "mode": "snip"
+      }
+    },
+    {
+      "caseIndex": 6,
+      "name": "manga-ocr-case-007-keisatsu-nimo-sensei-nimo-machijuu-no-hitotachi-ni",
+      "image": "images/manga-ocr-case-07.jpg",
+      "expectedText": "警察にも先生にも町中の人達に！！",
+      "actualText": "けいっ人部夫にも先任にも日噴の人巻にに!リス休RR季和、。",
+      "normalizedExpectedText": "警察にも先生にも町中の人達に！！",
+      "normalizedActualText": "けいっ人部夫にも先任にも日噴の人巻にに!リス休RR季和、。",
+      "exactMatch": false,
+      "editDistance": 21,
+      "characterAccuracy": 0.27586206896551724,
+      "input": {
+        "mode": "snip"
+      }
+    },
+    {
+      "caseIndex": 7,
+      "name": "case-001-inuda-san",
+      "image": "images/ocr-case-001.png",
+      "expectedText": "犬田さん",
+      "actualText": "犬田さん",
+      "normalizedExpectedText": "犬田さん",
+      "normalizedActualText": "犬田さん",
+      "exactMatch": true,
+      "editDistance": 0,
+      "characterAccuracy": 1,
+      "input": {
+        "mode": "snip"
+      }
+    },
+    {
+      "caseIndex": 8,
+      "name": "case-002-hai-owari-mou-dame",
+      "image": "images/ocr-case-002.png",
+      "expectedText": "はい終わりもうダメ",
+      "actualText": "はい終わりもうダメ",
+      "normalizedExpectedText": "はい終わりもうダメ",
+      "normalizedActualText": "はい終わりもうダメ",
+      "exactMatch": true,
+      "editDistance": 0,
+      "characterAccuracy": 1,
+      "input": {
+        "mode": "snip"
+      }
+    },
+    {
+      "caseIndex": 9,
+      "name": "case-003-kako",
+      "image": "images/ocr-case-003.png",
+      "expectedText": "過去",
+      "actualText": "刀去",
+      "normalizedExpectedText": "過去",
+      "normalizedActualText": "刀去",
+      "exactMatch": false,
+      "editDistance": 1,
+      "characterAccuracy": 0.5,
+      "input": {
+        "mode": "snip"
+      }
+    },
+    {
+      "caseIndex": 10,
+      "name": "case-004-genzai",
+      "image": "images/ocr-case-004.png",
+      "expectedText": "現在",
+      "actualText": "現在",
+      "normalizedExpectedText": "現在",
+      "normalizedActualText": "現在",
+      "exactMatch": true,
+      "editDistance": 0,
+      "characterAccuracy": 1,
+      "input": {
+        "mode": "snip"
+      }
+    },
+    {
+      "caseIndex": 11,
+      "name": "case-005-teto-san-kekkon-shiyou",
+      "image": "images/ocr-case-005.png",
+      "expectedText": "テトさん結婚しよう",
+      "actualText": "テトさん結婚しよう",
+      "normalizedExpectedText": "テトさん結婚しよう",
+      "normalizedActualText": "テトさん結婚しよう",
+      "exactMatch": true,
+      "editDistance": 0,
+      "characterAccuracy": 1,
+      "input": {
+        "mode": "snip"
+      }
+    },
+    {
+      "caseIndex": 12,
+      "name": "case-006-a-sore-zenbu-iinchou-dayo",
+      "image": "images/ocr-case-006.png",
+      "expectedText": "あーそれ\n全部委員長だよ",
+      "actualText": "あーそれ全部委員長だよ",
+      "normalizedExpectedText": "あーそれ全部委員長だよ",
+      "normalizedActualText": "あーそれ全部委員長だよ",
+      "exactMatch": true,
+      "editDistance": 0,
+      "characterAccuracy": 1,
+      "input": {
+        "mode": "snip"
+      }
+    },
+    {
+      "caseIndex": 13,
+      "name": "case-007-kawaii",
+      "image": "images/ocr-case-007.png",
+      "expectedText": "可愛い…",
+      "actualText": "可愛い",
+      "normalizedExpectedText": "可愛い…",
+      "normalizedActualText": "可愛い",
+      "exactMatch": false,
+      "editDistance": 1,
+      "characterAccuracy": 0.75,
+      "input": {
+        "mode": "snip"
+      }
+    },
+    {
+      "caseIndex": 14,
+      "name": "case-008-ore-otoko-no-ko-damon",
+      "image": "images/ocr-case-008.png",
+      "expectedText": "俺、男の子だもん\nこれお母さんに\nあげるよ…",
+      "actualText": "俺男の子だもんこれお母さんにあけるよ…",
+      "normalizedExpectedText": "俺、男の子だもんこれお母さんにあげるよ…",
+      "normalizedActualText": "俺男の子だもんこれお母さんにあけるよ…",
+      "exactMatch": false,
+      "editDistance": 2,
+      "characterAccuracy": 0.9,
+      "input": {
+        "mode": "snip"
+      }
+    },
+    {
+      "caseIndex": 15,
+      "name": "case-009-saikin-kurasu-no-fuuki",
+      "image": "images/ocr-case-009.png",
+      "expectedText": "最近…\nクラスの風紀が\n乱れてる気がするわ…",
+      "actualText": "最近…クラスの風紀が乱れてる気がするわ…",
+      "normalizedExpectedText": "最近…クラスの風紀が乱れてる気がするわ…",
+      "normalizedActualText": "最近…クラスの風紀が乱れてる気がするわ…",
+      "exactMatch": true,
+      "editDistance": 0,
+      "characterAccuracy": 1,
+      "input": {
+        "mode": "snip"
+      }
+    },
+    {
+      "caseIndex": 16,
+      "name": "case-010-daiji-na-no-wa-konten-tsu-daro",
+      "image": "images/ocr-case-010.png",
+      "expectedText": "大事なのはコンテンツだろ？",
+      "actualText": "大事なのはコンテンツだろ2?",
+      "normalizedExpectedText": "大事なのはコンテンツだろ？",
+      "normalizedActualText": "大事なのはコンテンツだろ2?",
+      "exactMatch": false,
+      "editDistance": 2,
+      "characterAccuracy": 0.8571428571428572,
+      "input": {
+        "mode": "snip"
+      }
+    },
+    {
+      "caseIndex": 17,
+      "name": "case-011-zundamon-senpai-tsumetai-kute-kimochi-ii",
+      "image": "images/ocr-case-011.png",
+      "expectedText": "ずんだもん先輩、冷たくて気持ちいい。",
+      "actualText": "ずんだもん先輩、おたくて気持ちいい。",
+      "normalizedExpectedText": "ずんだもん先輩、冷たくて気持ちいい。",
+      "normalizedActualText": "ずんだもん先輩、おたくて気持ちいい。",
+      "exactMatch": false,
+      "editDistance": 1,
+      "characterAccuracy": 0.9444444444444444,
+      "input": {
+        "mode": "snip"
+      }
+    },
+    {
+      "caseIndex": 18,
+      "name": "case-012-obaachan",
+      "image": "images/ocr-case-012.png",
+      "expectedText": "どうする\nやばいよ\nこの おばーちゃん",
+      "actualText": "どうする・やばいよこのおばーちゃん",
+      "normalizedExpectedText": "どうするやばいよこのおばーちゃん",
+      "normalizedActualText": "どうする・やばいよこのおばーちゃん",
+      "exactMatch": false,
+      "editDistance": 1,
+      "characterAccuracy": 0.9411764705882353,
+      "input": {
+        "mode": "snip"
+      }
+    },
+    {
+      "caseIndex": 19,
+      "name": "case-013",
+      "image": "images/ocr-case-013.png",
+      "expectedText": "こないだは\n世話になったな",
+      "actualText": "こないだは世諾になったな",
+      "normalizedExpectedText": "こないだは世話になったな",
+      "normalizedActualText": "こないだは世諾になったな",
+      "exactMatch": false,
+      "editDistance": 1,
+      "characterAccuracy": 0.9166666666666666,
+      "input": {
+        "mode": "snip"
+      }
+    }
+  ]
+}

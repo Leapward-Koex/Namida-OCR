@@ -6,6 +6,7 @@ import { buildOcrRecognitionCandidate, OcrRecognitionCandidate, serializeOcrCand
 type WorkerBundle = {
     promise: Promise<Worker>;
     worker: Worker | null;
+    queue: Promise<void>;
 };
 
 type RecognitionPlan = {
@@ -21,7 +22,7 @@ export class TesseractOcrBackend implements OcrBackend {
     private static workers = new Map<string, WorkerBundle>();
 
     public async init(model: string = DEFAULT_OCR_MODEL): Promise<void> {
-        await this.ensureWorker([this.normalizeModelName(model)]);
+        await this.ensureWorker([this.normalizeModelName(model)]).promise;
     }
 
     public async recognize(dataUrl: string, pageSegMode: PSM, model: string = DEFAULT_OCR_MODEL): Promise<string | undefined> {
@@ -35,24 +36,70 @@ export class TesseractOcrBackend implements OcrBackend {
         model: string = DEFAULT_OCR_MODEL,
     ): Promise<OcrRecognitionCandidate | null> {
         const normalizedModel = this.normalizeModelName(model);
-        const primaryCandidate = await this.executePlan(
-            {
-                id: `primary-${normalizedModel}`,
-                langs: [normalizedModel],
-                pageSegMode,
-            },
-            dataUrl,
-        );
-
-        if (primaryCandidate) {
-            console.debug(
-                TesseractOcrBackend.logTag,
-                'Selected primary OCR candidate',
-                serializeOcrCandidate(primaryCandidate),
-            );
+        const plan: RecognitionPlan = { id: `primary-${normalizedModel}`, langs: [normalizedModel], pageSegMode };
+        try {
+            // Queue the whole request, including any retry, so termination drains
+            // all accepted work and concurrent snips cannot share mutable state.
+            const bundle = this.ensureWorker(plan.langs);
+            const job = bundle.queue.then(async () => {
+                const worker = await bundle.promise;
+                const primary = await this.executePlan(plan, dataUrl, worker);
+                let selected = primary;
+                if (!primary || primary.confidence < 85) {
+                    try {
+                        const retryImage = await this.prepareRetryImage(dataUrl);
+                        const retry = await this.executePlan({ ...plan, id: `resized-border-${normalizedModel}` }, retryImage, worker);
+                        // Confidence alone can favor truncated or non-Japanese
+                        // output. Keep the original unless all these signals agree.
+                        if (retry && (!primary || (
+                            retry.confidence > primary.confidence
+                            && retry.score > primary.score
+                            && retry.japaneseRatio >= primary.japaneseRatio
+                            && retry.normalizedText.length >= primary.normalizedText.length * 0.75
+                        ))) {
+                            selected = retry;
+                        }
+                    } catch (error) {
+                        console.warn(TesseractOcrBackend.logTag, 'OCR image retry failed; keeping original result', error);
+                    }
+                }
+                if (selected) {
+                    console.debug(TesseractOcrBackend.logTag, 'Selected OCR candidate', serializeOcrCandidate(selected));
+                }
+                return selected;
+            });
+            bundle.queue = job.then(() => undefined, () => undefined);
+            return await job;
+        } catch (error) {
+            console.warn(TesseractOcrBackend.logTag, 'OCR request failed', error);
+            return null;
         }
+    }
 
-        return primaryCandidate;
+    private async prepareRetryImage(dataUrl: string): Promise<string> {
+        // Image.decode() can hang in Chromium's hidden offscreen document.
+        const image = await createImageBitmap(await (await fetch(dataUrl)).blob());
+        try {
+            // Screenshots are normally upscaled 4x before reaching this backend.
+            // Try smaller glyphs on uncertain results, but preserve small inputs.
+            const scale = Math.min(image.width, image.height) >= 80 ? 0.5 : 1;
+            const width = Math.max(1, Math.round(image.width * scale));
+            const height = Math.max(1, Math.round(image.height * scale));
+            const border = 10;
+            const canvas = document.createElement('canvas');
+            canvas.width = width + border * 2;
+            canvas.height = height + border * 2;
+            const context = canvas.getContext('2d');
+            if (!context) throw new Error('Unable to prepare Tesseract retry image');
+            context.fillStyle = '#fff';
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            context.imageSmoothingEnabled = true;
+            context.imageSmoothingQuality = 'high';
+            context.drawImage(image, border, border, width, height);
+            return canvas.toDataURL('image/png');
+        } finally {
+            image.close();
+        }
     }
 
     private normalizeModelName(model: string | undefined): string {
@@ -71,6 +118,7 @@ export class TesseractOcrBackend implements OcrBackend {
 
         await Promise.all(bundles.map(async (bundle) => {
             try {
+                await bundle.queue;
                 const worker = bundle.worker ?? await bundle.promise;
                 await worker.terminate();
             } catch (error) {
@@ -79,25 +127,21 @@ export class TesseractOcrBackend implements OcrBackend {
         }));
     }
 
-    private async executePlan(plan: RecognitionPlan, dataUrl: string): Promise<OcrRecognitionCandidate | null> {
+    private async executePlan(plan: RecognitionPlan, dataUrl: string, worker: Worker): Promise<OcrRecognitionCandidate | null> {
         try {
-            const worker = await this.ensureWorker(plan.langs);
-            await worker.setParameters({
+            // Tesseract.js saves/restores parameters passed to recognize().
+            const recognizeOptions = {
                 tessedit_pageseg_mode: plan.pageSegMode,
+                rotateAuto: plan.rotateAuto,
+                rotateRadians: plan.rotateRadians,
+            };
+            const result = await worker.recognize(dataUrl, recognizeOptions, {
+                text: true,
+                blocks: true, // Symbol confidence is used by candidate scoring.
+                hocr: false,
+                tsv: false,
             });
-
-            const recognizeOptions = (plan.rotateAuto !== undefined || plan.rotateRadians !== undefined)
-                ? {
-                    rotateAuto: plan.rotateAuto,
-                    rotateRadians: plan.rotateRadians,
-                }
-                : undefined;
-
-            const result = recognizeOptions
-                ? await worker.recognize(dataUrl, recognizeOptions)
-                : await worker.recognize(dataUrl);
-
-            return this.buildCandidate(plan.id, result.data.text ?? '', result.data.confidence, result.data.symbols);
+            return this.buildCandidate(plan.id, result.data.text ?? '', result.data.confidence, result.data.symbols ?? []);
         } catch (error) {
             console.warn(TesseractOcrBackend.logTag, `OCR plan '${plan.id}' failed`, error);
             return null;
@@ -113,19 +157,23 @@ export class TesseractOcrBackend implements OcrBackend {
         );
     }
 
-    private async ensureWorker(langs: string[]): Promise<Worker> {
+    private ensureWorker(langs: string[]): WorkerBundle {
         const key = langs.join('+');
         const existingBundle = TesseractOcrBackend.workers.get(key);
 
         if (existingBundle) {
-            return existingBundle.worker ?? existingBundle.promise;
+            return existingBundle;
         }
 
         console.debug(TesseractOcrBackend.logTag, 'Creating OCR worker', key);
 
         const bundle: WorkerBundle = {
             worker: null,
-            promise: createWorker(
+            queue: Promise.resolve(),
+            promise: undefined as unknown as Promise<Worker>,
+        };
+        bundle.promise = new Promise<Worker>((resolve, reject) => {
+            createWorker(
                 langs,
                 OEM.LSTM_ONLY,
                 {
@@ -135,18 +183,26 @@ export class TesseractOcrBackend implements OcrBackend {
                     langPath: '/libs/tesseract-lang',
                     gzip: true,
                     logger: (message) => console.debug(TesseractOcrBackend.logTag, key, message),
+                    errorHandler: (error) => {
+                        console.warn(TesseractOcrBackend.logTag, key, error);
+                        // v5 does not consistently reject createWorker() when
+                        // language loading or initialization fails.
+                        if (!bundle.worker) reject(error);
+                    },
                 },
-            ).then((worker) => {
-                bundle.worker = worker;
-                return worker;
-            }).catch((error) => {
+            ).then(resolve, reject);
+        }).then((worker) => {
+            bundle.worker = worker;
+            return worker;
+        }).catch((error) => {
+            if (TesseractOcrBackend.workers.get(key) === bundle) {
                 TesseractOcrBackend.workers.delete(key);
-                throw error;
-            }),
-        };
+            }
+            throw error;
+        });
 
         TesseractOcrBackend.workers.set(key, bundle);
-        return bundle.promise;
+        return bundle;
     }
 }
 
