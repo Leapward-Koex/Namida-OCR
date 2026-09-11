@@ -1,5 +1,7 @@
 # PP-OCRv6 integration audit
 
+Implementation follow-up: the reference pipeline rewrite is documented in [PaddleOCR reference implementation](paddleocr-reference-implementation.md), on `codex/paddleocr-reference-pipeline`. For that follow-up, the user explicitly allowed documented per-case losses to remove specialization. The historical findings, rejected experiment, and stricter acceptance decision below are preserved as recorded.
+
 Research and validation date: 11 September 2026. Starting revision: `3fce12c35a27b9a2d489f376c49a7ad7f652fc2b`. This report distinguishes the original implementation, retained changes, and the proposed migration. Detailed benchmark evidence is included below.
 
 The validated Paddle implementation and benchmark-tool changes described here are preserved on branch `codex/paddleocr-audit`. The findings and evidence are also retained on `master`; that branch keeps the Tesseract improvements without applying the Paddle implementation changes. Commands for the new regression tooling require the Paddle branch.

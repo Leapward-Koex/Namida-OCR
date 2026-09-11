@@ -37,7 +37,7 @@ test.describe('OCR accuracy dataset', () => {
             const debugSnapshot = await fetchLastOcrDebugSnapshot(serviceWorker);
             const result = { ...scoreOcrCase(ocrCase, run.actualText, caseIndex), input: run.input };
             if (run.input.mode === 'snip' && debugSnapshot?.workingImageDataUrl) {
-                // Diagnostic hash of the backend's padded PNG, not the raw screen capture.
+                // Diagnostic hash of the backend's working image, not the full screen capture.
                 result.input.sha256 = createHash('sha256').update(dataUrlToBuffer(debugSnapshot.workingImageDataUrl)).digest('hex');
             }
 
@@ -161,8 +161,8 @@ async function runFixedFixture(page: Page, serviceWorker: Worker, ocrCase: OcrCa
         const actualText = await extensionPage.evaluate(async ({ action, data }) => {
             return await chrome.runtime.sendMessage({ action, data }) as string | undefined;
         }, { action: NamidaMessageAction.RecognizeImage, data: dataUrl });
-        if (typeof actualText !== 'string' || !actualText.trim()) {
-            throw new Error(`No OCR output for fixed fixture ${ocrCase.name}.`);
+        if (typeof actualText !== 'string') {
+            throw new Error(`The OCR request did not return a text result for fixed fixture ${ocrCase.name}.`);
         }
         return { actualText, input };
     } finally {

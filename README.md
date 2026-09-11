@@ -1,6 +1,6 @@
 # Namida OCR
 
-**Namida OCR** is a completely local OCR browser extension for both **Chrome**, **Firefox**, and **Edge**. It enables you to take a “snip” (screenshot) of any part of your current tab, upscale it (either via basic linear upscaling or ESRGAN), and then perform OCR on the snipped region using bundled OCR assets. The default backend uses Tesseract.js, and the repo also includes an experimental local PaddleOCR ONNX backend. The OCR supports Japanese vertical text at the moment and automatically copies the recognized text to your clipboard, making it easy to use with online dictionaries like [Yomitan](https://github.com/yomidevs/yomitan) or manual translation tools. Additionally, Namida OCR includes the option to speak the recognized text aloud using your browser’s text-to-speech capabilities.
+**Namida OCR** is a local OCR browser extension for **Chrome**, **Firefox**, and **Edge**. It enables you to take a “snip” (screenshot) of any part of your current tab, optionally upscale it with canvas or ESRGAN, and recognize text using bundled OCR assets. The default backend uses Tesseract.js; experimental PaddleOCR ONNX provides a local PP-OCRv6 detector and recognizer. Namida supports Japanese horizontal and vertical text and copies the result to your clipboard for use with dictionaries such as [Yomitan](https://github.com/yomidevs/yomitan) or translation tools. It can also speak recognized text using your browser’s text-to-speech capabilities.
 
 
 ***
@@ -50,7 +50,7 @@
 
 3. **Upscale & OCR**  
    - Namida OCR upscales the snipped region using your chosen method (linear or ESRGAN).  
-   - Tesseract.js then performs OCR on the upscaled image.
+   - Your selected OCR backend then recognizes the text locally.
 
 4. **Copy to Clipboard**  
    The recognized text is automatically copied to your clipboard. You can then paste it into any dictionary, translation app, or text editor.
@@ -78,7 +78,8 @@
   - **Enable GPU support** is only shown for PaddleOCR in the popup and controls whether Paddle attempts WebGPU/WebNN before local WASM fallback.
 
 - **Supported Languages**  
-  - Japanese (jpn_vert)
+  - Japanese horizontal and vertical text (`jpn` / `jpn_vert` for Tesseract).
+  - PaddleOCR's shared recognition dictionary also preserves mixed Latin text, digits, punctuation, and spaces.
 
 - **Enable TTS**  
   - Option to enable or disable the "Speak" button for recognized text.  
@@ -110,32 +111,44 @@
 - Chromium builds package the PP-OCRv6 `medium_det` + `medium_rec` bundle by default, while Firefox builds package the smaller PP-OCRv6 `small_det` + `medium_rec` `mobile_det_server_rec` mixed bundle by default to stay under Firefox add-on size limits.
 - Override the packaged Paddle bundle with `NAMIDA_PADDLE_ONNX_MODEL_VARIANT=<bundle-name>` or `webpack --env paddleonnx_model_variant=<bundle-name>` when you need a non-default browser/model combination such as `server`, `mobile`, `mobile_det_server_rec`, or `server_det_mobile_rec`.
 - Set `NAMIDA_PADDLE_ONNX_DISABLE_WASM_FALLBACK=1` or pass `--env paddleonnx_disable_wasm_fallback=true` to make accelerated provider failures fatal for no-fallback testing.
-- `npm run prepare:paddleocr-onnx` regenerates the default `server` bundle, `npm run prepare:paddleocr-onnx:firefox` regenerates the Firefox default mixed bundle, and `npm run prepare:paddleocr-onnx:mobile` regenerates the compact override bundle. These use [prepare-paddleocr-onnx.py](/c:/Dev/Namida/prepare-paddleocr-onnx.py) to download official PP-OCRv6 ONNX repos, extract the recognition dictionary from `inference.yml`, and refresh the committed bundle metadata.
+- `npm run prepare:paddleocr-onnx` regenerates the default `server` bundle, `npm run prepare:paddleocr-onnx:firefox` regenerates the Firefox mixed bundle, and `npm run prepare:paddleocr-onnx:mobile` regenerates the compact override. [prepare-paddleocr-onnx.py](prepare-paddleocr-onnx.py) uses pinned repository revisions and verifies ONNX/export-YAML hashes from [sources.json](models/paddleocr/sources.json), preserves `inference.yml`, and extracts the dictionary and model settings. These downloads are development preparation; extension use remains offline.
 - `npm run test:e2e:tesseract`, `npm run test:e2e:scribejs`, and `npm run test:e2e:paddleonnx` run the Chromium Playwright OCR suite against a single backend without needing an extra `--backend` flag.
 - `npm run test:e2e:paddleonnx:no-fallback` runs the Chromium Playwright OCR suite against `paddleonnx` with WASM fallback disabled so WebGPU/WebNN failures are surfaced directly.
 - `npm run test:e2e:compare-backends` runs the Chromium Playwright OCR dataset against the `tesseract`, experimental `scribejs`, and experimental `paddleonnx` backends and writes `test-results/ocr-backend-comparison.json`.
 - `.github/workflows/ocr-performance.yml` runs on every branch push, executes `npm run test:e2e:tesseract` and `npm run test:e2e:paddleonnx`, writes [reports/ocr-performance.md](/c:/Dev/Namida/reports/ocr-performance.md), and commits that Markdown report back with `GITHUB_TOKEN`.
 - Playwright runs in this repo should use at least 5 workers. The local runner wrappers clamp lower worker counts up to `5`.
 - The `scribejs` backend is experimental, must keep using bundled local assets only, and the published `scribe.js-ocr` package is AGPL-3.0 licensed.
-- The `paddleonnx` backend is experimental, uses bundled local ONNX models only, currently targets the bundled Chinese/Japanese PaddleOCR recognition model with a bundled detection model for full-crop OCR, and does not fall back to Tesseract.
+- The `paddleonnx` backend is experimental and uses a bundled multilingual recognition model after text detection. Its model weights and browser bundle selection are unchanged by the reference-pipeline migration; there is no Tesseract fallback.
 
 ### PaddleOCR implementation
 
-[`PaddleOnnxOcrBackend.ts`](src/background/ocr/PaddleOnnxOcrBackend.ts) handles image preparation, text layout recovery, recognition, and candidate selection. [`PaddleOnnxRuntime.ts`](src/background/ocr/PaddleOnnxRuntime.ts) owns local ONNX sessions, provider fallback, and safe cleanup after pending work settles. [`PaddleOnnxModelContract.ts`](src/background/ocr/PaddleOnnxModelContract.ts) checks output types, shapes, lengths, and dictionary class counts so model integration errors are reported explicitly.
+The normal path follows the pinned PaddleX detector/recognizer pipeline: BGR image preparation, one detector pass, DB quadrilateral extraction, cubic perspective rectification with tall-line rotation, one recognition pass per region, and greedy CTC decoding. Recognition uses height 48, a base width of 320 expanded up to 3200, and zero padding after normalization. Confidence comes directly from model probabilities; decoded characters, punctuation, and spaces are preserved. There are no language penalties, character substitutions, projection splits, or recognition retries.
 
-Dictionary preparation preserves YAML apostrophe escaping and the appended space class. Each bundled recognizer has 18,708 exported characters plus space and CTC blank, matching its 18,710 output classes.
+The detector uses the pinned standalone PaddleX PP-OCRv6 policy of `960/max`, stride 32, with a separate 1536-pixel browser ceiling for overrides. Bundled export settings supply threshold `0.2`, box score `0.45`, unclip ratio `1.4`, and at most 3000 contour candidates. Reading order is a separate geometry-based policy: horizontal rows or Japanese columns from right to left. Optional document-orientation and layout models are not bundled.
 
-The [PP-OCRv6 upstream audit](reports/paddleocr-v6-upstream-audit.md) explains the remaining differences from PaddleOCR. RGB channel order, recognition width/padding, and applying softmax twice remain known issues pending a coordinated preprocessing and candidate-ranking migration. Extracting session management and fixing dictionaries does not by itself establish better OCR accuracy or a fully standard PaddleOCR pipeline.
+| Module | Responsibility |
+| --- | --- |
+| [PaddleOnnxOcrBackend.ts](src/background/ocr/PaddleOnnxOcrBackend.ts) | Pipeline orchestration and debug records |
+| [PaddleModelPipeline.ts](src/background/ocr/PaddleModelPipeline.ts) | BGR tensors, resize/padding rules, CTC probabilities |
+| [PaddleDbPostProcess.ts](src/background/ocr/PaddleDbPostProcess.ts) | Contours, polygon scores, unclip, quadrilaterals |
+| [PaddleCropGeometry.ts](src/background/ocr/PaddleCropGeometry.ts) | Cubic perspective crops and vertical rotation |
+| [PaddleReadingOrder.ts](src/background/ocr/PaddleReadingOrder.ts) | Ordering detected regions |
+| [PaddleOnnxRuntime.ts](src/background/ocr/PaddleOnnxRuntime.ts) | Local sessions, provider fallback, safe cleanup |
+| [PaddleOnnxModelContract.ts](src/background/ocr/PaddleOnnxModelContract.ts) | Output shapes and dictionary cardinality |
+
+Dictionary preparation preserves YAML apostrophe escaping and the appended space class: 18,708 exported characters plus space and CTC blank match 18,710 model classes. Geometry uses bundled `clipper-lib`; source attributions and redistribution terms in [PaddleGeometry-NOTICE.txt](third-party/PaddleGeometry-NOTICE.txt) accompany extension builds. Export YAML remains alongside the local model assets.
+
+The [reference implementation report](reports/paddleocr-reference-implementation.md) records the migration, reference checks, controlled scores, and known limitations. The [original upstream audit](reports/paddleocr-v6-upstream-audit.md) is retained as historical evidence. This migration was authorized to prioritize the reference pipeline with documented accuracy losses; it does not claim non-regression on every old manga case.
 
 ### Checking OCR regressions
 
-Run `npm run test:paddle:unit` for session lifecycle, model-contract, and regression-checker tests. Dictionary checks use Python 3: `python -m unittest discover -s tests -p test_paddle_dictionary.py`.
+Run `npm run test:paddle:unit` for model preparation/decoding, geometry, layout, backend/runtime, capture-flow, and regression-checker tests. Dictionary checks use Python 3: `python -m unittest discover -s tests -p test_paddle_dictionary.py`.
 
-The [recorded performance report](reports/ocr-performance.md) remains the historical reference. `npm run test:ocr:regression -- --actual <summary.json>` compares against it; the underlying command is `node scripts/check-ocr-regression.mjs`. The guard checks original cases individually as well as aggregate accuracy and exact matches, so added cases cannot hide a regression. Supply `--baseline <before-summary.json>` for a controlled comparison.
+Preserve the [recorded performance report](reports/ocr-performance.md) and prior audit results. For future changes, supply `--baseline <before-summary.json>` to `npm run test:ocr:regression -- --actual <after-summary.json>` using a controlled run of the current implementation. Without that argument the guard compares against the historical report. It checks individual cases and aggregate scores; a green Playwright run or higher overall average alone does not establish non-regression. Report the original 20 cases and the added 10 general-text cases separately so one cohort cannot conceal losses in the other.
 
-The normal capture benchmark also exercises screenshot behavior. Its OCR input can include the snipping overlay; differing captured before/after images were confirmed during the audit. Compare actual inputs before attributing a score change to the OCR model. Keep the recorded reports and use preserved runs to distinguish capture differences from model changes.
+The capture race found during the audit is addressed by removing the selection overlay, hiding existing floating UI, and waiting two animation frames before requesting a screenshot. OCR status appears after capture; hidden UI is restored even on failure. [capture.spec.ts](tests/capture.spec.ts) compares real browser-capture pixels across successive snips without running OCR. Inspect captured inputs whenever a snip-mode score changes.
 
-For deterministic backend inputs, set `NAMIDA_TEST_OCR_INPUT_MODE=fixture`. This uses the same 20 cases and scoring format, drawing fixed fixture images through canvas and bypassing screen capture. The per-case `result.input` records the mode and SHA-256 of the PNG bytes, and `--results-subdir` preserves the images in `ocr-fixture-inputs/`. Use matching modes and input hashes from the same browser environment for before/after model comparisons, and run capture tests separately to validate the screenshot flow. The [audit results](reports/paddleocr-v6-upstream-audit.md#controlled-results) include the original and retained implementation's complete comparison.
+For deterministic backend inputs, set `NAMIDA_TEST_OCR_INPUT_MODE=fixture`. The 30-case dataset retains all 20 original labels and adds [10 synthetic general-text cases](tests/fixtures/GENERAL-OCR-PROVENANCE.md) covering mixed scripts, digits, apostrophes, long lines, color, dark backgrounds, rotation, and multiple lines/columns. Fixed images use each case's configured upscaling; this mode bypasses screen capture. Each `result.input` records its mode and PNG SHA-256, and `--results-subdir` preserves inputs in `ocr-fixture-inputs/`. Compare matching modes and hashes in the same browser environment and exercise the capture tests separately.
 
 ```powershell
 $env:NAMIDA_TEST_OCR_INPUT_MODE = 'fixture'

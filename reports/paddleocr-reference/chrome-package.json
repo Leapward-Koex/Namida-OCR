@@ -1,0 +1,42 @@
+{
+  "browser": "chrome",
+  "modelVariant": "server",
+  "manifestVersion": 3,
+  "background": {
+    "service_worker": "background/index.js",
+    "type": "module"
+  },
+  "permissions": [
+    "tabs",
+    "activeTab",
+    "storage",
+    "offscreen"
+  ],
+  "uncompressedBytes": 262472601,
+  "largestJavascript": {
+    "path": "dist\\libs\\tesseract-core\\tesseract-core-simd-lstm.wasm.js",
+    "size": 3937911
+  },
+  "assets": [
+    {
+      "stage": "detector",
+      "sha256": "eb13b44b25bb36f89528b68720af8a61d9cf381176107f465db1757b65d086e1",
+      "bytes": 62032837,
+      "sourceRevision": "61323801669c338b7891481ec7bac61ce31b576a"
+    },
+    {
+      "stage": "recognizer",
+      "sha256": "9c09abf0957f7968c7586464b7397b84ad2387a0497a351af40e9acc71b673ba",
+      "bytes": 76554979,
+      "sourceRevision": "50c7eacafc52fa7bcf4194e8cd08e46f8558504b"
+    }
+  ],
+  "dictionaryClasses": 18710,
+  "thirdPartyNotices": [
+    "Apache-2.0.txt",
+    "JSBN-LICENSE.txt",
+    "OpenCV-BSD-LICENSES.txt",
+    "PaddleGeometry-NOTICE.txt"
+  ],
+  "rootManifestOnly": true
+}

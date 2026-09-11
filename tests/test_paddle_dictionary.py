@@ -1,6 +1,8 @@
 """Offline regression checks for PP-OCRv6's exported CTC dictionary contract."""
 
 import runpy
+import hashlib
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -67,6 +69,42 @@ class PaddleDictionaryTests(unittest.TestCase):
                 self.assertEqual(len(dictionary) + 1, 18710)
                 self.assertEqual(dictionary[6], "'")
                 self.assertEqual(dictionary[-1], " ")
+
+    def test_source_lock_rejects_mutable_revisions_and_missing_hashes(self):
+        for source in ({"revision": "main"}, {"revision": "a" * 40, "files": {}}):
+            with self.subTest(source=source), self.assertRaises(ValueError):
+                PREPARE["require_model_source"]({"test/repo": source}, "test/repo")
+
+    def test_asset_verification_rejects_modified_cache(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "inference.yml"
+            path.write_bytes(b"verified bytes")
+            expected = {"size": path.stat().st_size, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+            PREPARE["verify_file"](path, expected)
+            path.write_bytes(b"tampered bytes")
+            with self.assertRaisesRegex(ValueError, "asset hash/size mismatch"):
+                PREPARE["verify_file"](path, expected)
+
+    def test_bundle_provenance_matches_pinned_sources_and_shipped_assets(self):
+        sources = json.loads((ROOT / "models/paddleocr/sources.json").read_text())["sources"]
+        for variant, selection in PREPARE["MODEL_VARIANTS"].items():
+            directory = ROOT / "models/paddleocr" / variant
+            manifest = json.loads((directory / "manifest.json").read_text())
+            with self.subTest(variant=variant):
+                self.assertEqual(manifest["recognizer"]["base_image_width"], 320)
+                self.assertEqual(manifest["recognizer"]["max_image_width"], 3200)
+                self.assertEqual(manifest["recognizer"]["normalized_padding"], 0)
+                self.assertEqual(manifest["recognizer"]["output_classes"], 18710)
+                self.assertFalse(manifest["detector"]["use_dilation"])
+                self.assertEqual(manifest["detector"]["max_candidates"], 3000)
+                for stage, repo_key in (("detector", "det_repo"), ("recognizer", "rec_repo")):
+                    self.assertEqual(manifest[stage]["channel_order"], "BGR")
+                    config_path = directory / manifest[stage]["config_path"]
+                    config = json.loads(config_path.read_text())
+                    source = PREPARE["require_model_source"](sources, selection[repo_key])
+                    self.assertEqual(config["source_revision"], source["revision"])
+                    PREPARE["verify_file"](directory / manifest[stage]["model_path"], source["files"]["inference.onnx"])
+                    PREPARE["verify_file"](config_path.parent / config["inference_config_path"], source["files"]["inference.yml"])
 
 
 if __name__ == "__main__":

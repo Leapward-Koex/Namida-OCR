@@ -108,7 +108,7 @@ export class SnipOverlay {
             height: rect.height * window.devicePixelRatio
         };
 
-        this.onSelectionComplete(selection);
         this.hide();
+        this.onSelectionComplete(selection);
     }
 }

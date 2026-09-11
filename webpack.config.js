@@ -182,6 +182,7 @@ module.exports = (env) => {
             }),
             new CopyPlugin({
                 patterns: [
+                    { from: 'third-party', to: 'third-party' },
                     { from: 'src/ui/popup.html', to: 'ui/popup.html' },
                     { from: 'src/offscreen/offscreen.html', to: 'offscreen/offscreen.html' },
                     { from: 'src/ui/styles.css', to: 'ui/styles.css' },

@@ -44,25 +44,34 @@ class SnippingTool {
                 Settings.getOcrBackend(),
             ]);
 
+            const restoreWindow = FloatingWindow.hideForCapture();
+            let croppedDataURL: string;
+            try {
+                croppedDataURL = await screenshotHandler.captureAndCrop(upscalingMethod);
+            } finally {
+                restoreWindow();
+            }
             if (ocrBackend === 'paddleonnx') {
                 FloatingWindow.showStatus("Scanning text...");
             }
-
-            const croppedDataURL = await screenshotHandler.captureAndCrop(upscalingMethod);
             const recognizedText = await this.ocr.recognizeFromContent(croppedDataURL);
-            const spacesRemovedText = TextProcessorHandler.removeSpaces(recognizedText);
+            // Paddle's multilingual dictionary includes meaningful spaces. Keep
+            // model output intact; Tesseract retains its existing Japanese cleanup.
+            const outputText = ocrBackend === 'paddleonnx'
+                ? recognizedText
+                : TextProcessorHandler.removeSpaces(recognizedText);
             let furigana: string | undefined;
 
-            if (spacesRemovedText) {
+            if (outputText) {
                 try {
-                    furigana = await FuriganaHandler.generateFuriganaFromContent(spacesRemovedText);
+                    furigana = await FuriganaHandler.generateFuriganaFromContent(outputText);
                 } catch (error) {
                     console.warn(SnippingTool.logTag, 'Failed to generate furigana; continuing with plain text output', error);
                 }
             }
 
-            ClipboardHandler.copyText(spacesRemovedText);
-            new FloatingWindow({ text: spacesRemovedText, html: furigana });
+            ClipboardHandler.copyText(outputText);
+            new FloatingWindow({ text: outputText, html: furigana });
             if (await Settings.getSaveOcrCrop()) {
                 console.debug(SnippingTool.logTag, "Saving Image");
                 this.saveHandler.downloadImage(croppedDataURL, 'snippet.png');

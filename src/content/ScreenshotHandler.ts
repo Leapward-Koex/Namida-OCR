@@ -15,6 +15,9 @@ export class ScreenshotHandler {
     public async captureAndCrop(upscaleMethod: UpscaleMethod = UpscaleMethod.TensorFlow): Promise<string> {
         try {
             console.debug(ScreenshotHandler.logTag, 'Capturing Screen')
+            // The selection overlay was just removed. Two frames allow a paint
+            // without it before the browser captures the composited tab.
+            await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
             const base64Image: string = await runtime.sendMessage({ action: NamidaMessageAction.CaptureFullScreen }) as string;
             if (!base64Image) {
                 throw new Error("Failed to get screenshot of current tab")

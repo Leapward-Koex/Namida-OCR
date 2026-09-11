@@ -8,6 +8,7 @@ assets under models/paddleocr and never download models at runtime.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import shutil
@@ -20,6 +21,7 @@ from pathlib import Path
 MODEL_VERSION = "PP-OCRv6"
 DETECTOR_OUTPUT_VERSION = "v6"
 HF_RESOLVE_BASE_URL = "https://huggingface.co"
+SOURCE_LOCK_PATH = Path(__file__).resolve().parent / "models/paddleocr/sources.json"
 
 MODEL_VARIANTS = {
     "server": {
@@ -63,6 +65,10 @@ def main() -> int:
     parser.add_argument("--det-model-name")
     parser.add_argument("--rec-model-name")
     parser.add_argument("--skip-download", action="store_true")
+    parser.add_argument("--source-lock", type=Path, default=SOURCE_LOCK_PATH,
+                        help="Model repository revisions and SHA-256 hashes to verify before preparing assets.")
+    parser.add_argument("--metadata-only", action="store_true",
+                        help="Verify existing bundled weights and refresh metadata/configuration without copying weights.")
     args = parser.parse_args()
 
     variant = MODEL_VARIANTS[args.variant]
@@ -70,6 +76,9 @@ def main() -> int:
     rec_repo = args.rec_repo or variant["rec_repo"]
     det_model_name = args.det_model_name or variant["det_model_name"]
     rec_model_name = args.rec_model_name or variant["rec_model_name"]
+    sources = json.loads(args.source_lock.read_text(encoding="utf-8"))["sources"]
+    det_source = require_model_source(sources, det_repo)
+    rec_source = require_model_source(sources, rec_repo)
 
     output_dir = (args.output_dir or (Path("models/paddleocr") / args.variant)).resolve()
     work_dir = args.work_dir.resolve()
@@ -79,20 +88,30 @@ def main() -> int:
     rec_output_dir = output_dir / "languages" / "chinese"
 
     if not args.skip_download:
-        download_onnx_repo(det_repo, det_source_dir)
-        download_onnx_repo(rec_repo, rec_source_dir)
+        download_onnx_repo(det_repo, det_source_dir, det_source)
+        download_onnx_repo(rec_repo, rec_source_dir, rec_source)
 
     det_model_path = require_file(det_source_dir / "inference.onnx")
     det_yaml_path = require_file(det_source_dir / "inference.yml")
     rec_model_path = require_file(rec_source_dir / "inference.onnx")
     rec_yaml_path = require_file(rec_source_dir / "inference.yml")
+    verify_file(det_model_path, det_source["files"]["inference.onnx"])
+    verify_file(det_yaml_path, det_source["files"]["inference.yml"])
+    verify_file(rec_model_path, rec_source["files"]["inference.onnx"])
+    verify_file(rec_yaml_path, rec_source["files"]["inference.yml"])
 
-    reset_directory(det_output_dir)
-    reset_directory(rec_output_dir)
-    remove_stale_detector_versions(output_dir / "detection", det_output_dir)
+    det_output_dir.mkdir(parents=True, exist_ok=True)
+    rec_output_dir.mkdir(parents=True, exist_ok=True)
 
-    shutil.copy2(det_model_path, det_output_dir / "det.onnx")
-    shutil.copy2(rec_model_path, rec_output_dir / "rec.onnx")
+    if args.metadata_only:
+        verify_file(require_file(det_output_dir / "det.onnx"), det_source["files"]["inference.onnx"])
+        verify_file(require_file(rec_output_dir / "rec.onnx"), rec_source["files"]["inference.onnx"])
+    else:
+        shutil.copy2(det_model_path, det_output_dir / "det.onnx")
+        shutil.copy2(rec_model_path, rec_output_dir / "rec.onnx")
+    # Keep the exact exported preprocessing/dictionary contract beside its graph.
+    shutil.copy2(det_yaml_path, det_output_dir / "inference.yml")
+    shutil.copy2(rec_yaml_path, rec_output_dir / "inference.yml")
     write_dictionary_file(rec_yaml_path, rec_output_dir / "dict.txt")
 
     det_threshold = extract_yaml_number(det_yaml_path, "thresh", 0.3)
@@ -106,6 +125,10 @@ def main() -> int:
             "framework": "PaddleOCR",
             "version": MODEL_VERSION,
             "source_repo": det_repo,
+            "source_revision": det_source["revision"],
+            "model_sha256": det_source["files"]["inference.onnx"]["sha256"],
+            "inference_config_path": "inference.yml",
+            "inference_config_sha256": det_source["files"]["inference.yml"]["sha256"],
             "original_format": "ONNX",
             "converted_format": "ONNX",
             "input_shape": "dynamic (batch_size, 3, height, width)",
@@ -128,6 +151,10 @@ def main() -> int:
                 "Japanese",
             ],
             "source_repo": rec_repo,
+            "source_revision": rec_source["revision"],
+            "model_sha256": rec_source["files"]["inference.onnx"]["sha256"],
+            "inference_config_path": "inference.yml",
+            "inference_config_sha256": rec_source["files"]["inference.yml"]["sha256"],
             "original_format": "ONNX",
             "converted_format": "ONNX",
             "dictionary_file": "dict.txt",
@@ -138,7 +165,7 @@ def main() -> int:
     write_json(
         output_dir / "manifest.json",
         {
-            "version": "2026-06-12",
+            "version": "2026-09-11",
             "model_version": MODEL_VERSION,
             "variant": args.variant,
             "description": variant["description"],
@@ -146,26 +173,35 @@ def main() -> int:
             "detector": {
                 "model_path": f"detection/{DETECTOR_OUTPUT_VERSION}/det.onnx",
                 "config_path": f"detection/{DETECTOR_OUTPUT_VERSION}/config.json",
-                "limit_side_len": 736,
-                "limit_type": "min",
+                "channel_order": "BGR",
+                "resize_policy": "PaddleX c50f5da858020db473a2285f089bb8c7bbd6afdc standalone PP-OCRv6 predictor: max960, stride32; additional browser ceiling1536",
+                "limit_side_len": 960,
+                "limit_type": "max",
                 "max_side_len": 1536,
                 "mean": [0.485, 0.456, 0.406],
                 "std": [0.229, 0.224, 0.225],
                 "threshold": det_threshold,
                 "box_score_threshold": det_box_threshold,
-                "dilation_radius": 1,
-                "min_box_size": 6,
-                "box_padding": 4,
+                "unclip_ratio": extract_yaml_number(det_yaml_path, "unclip_ratio", 1.4),
+                "max_candidates": int(extract_yaml_number(det_yaml_path, "max_candidates", 1000)),
+                "use_dilation": False,
+                "score_mode": "fast",
+                "min_box_size": 3,
             },
             "recognizer": {
                 "model_path": "languages/chinese/rec.onnx",
                 "config_path": "languages/chinese/config.json",
                 "dict_path": "languages/chinese/dict.txt",
+                "channel_order": "BGR",
                 "image_height": 48,
-                "min_image_width": 48,
-                "max_image_width": 320,
-                "mean": [0.5, 0.5, 0.5],
-                "std": [0.5, 0.5, 0.5],
+                "base_image_width": 320,
+                "max_image_width": 3200,
+                "normalized_padding": 0,
+                "width_overflow_policy": "resize-complete-line-to-3200",
+                "output_activation": "softmax",
+                "blank_index": 0,
+                "output_classes": 18710,
+                "score_threshold": 0.0,
                 "rotation_aspect_threshold": 1.5,
             },
         },
@@ -175,15 +211,17 @@ def main() -> int:
     return 0
 
 
-def download_onnx_repo(repo_id: str, target_dir: Path) -> None:
+def download_onnx_repo(repo_id: str, target_dir: Path, source: dict) -> None:
     target_dir.mkdir(parents=True, exist_ok=True)
     for file_name in ["inference.onnx", "inference.yml", "README.md"]:
         required = file_name != "README.md"
-        download_file(repo_id, file_name, target_dir / file_name, required=required)
+        download_file(repo_id, source["revision"], file_name, target_dir / file_name, required=required)
+        if required:
+            verify_file(target_dir / file_name, source["files"][file_name])
 
 
-def download_file(repo_id: str, file_name: str, target_path: Path, *, required: bool) -> None:
-    url = f"{HF_RESOLVE_BASE_URL}/{repo_id}/resolve/main/{file_name}"
+def download_file(repo_id: str, revision: str, file_name: str, target_path: Path, *, required: bool) -> None:
+    url = f"{HF_RESOLVE_BASE_URL}/{repo_id}/resolve/{revision}/{file_name}"
     print(f"+ download {url}")
     request = urllib.request.Request(url, headers={"User-Agent": "namida-ocr-model-prep"})
 
@@ -278,20 +316,22 @@ def require_file(path: Path) -> Path:
     raise SystemExit(f"Required model file was not found: {path}")
 
 
-def reset_directory(path: Path) -> None:
-    if path.exists():
-        shutil.rmtree(path)
-    path.mkdir(parents=True, exist_ok=True)
+def require_model_source(sources: dict, repo_id: str) -> dict:
+    source = sources.get(repo_id)
+    if not source or not re.fullmatch(r"[0-9a-f]{40}", source.get("revision", "")):
+        raise ValueError(f"Provide an immutable repository revision in --source-lock for {repo_id}")
+    for filename in ("inference.onnx", "inference.yml"):
+        file = source.get("files", {}).get(filename, {})
+        if not re.fullmatch(r"[0-9a-f]{64}", file.get("sha256", "")) or not isinstance(file.get("size"), int) or file["size"] <= 0:
+            raise ValueError(f"Provide SHA-256 and positive byte size for {repo_id}/{filename} in --source-lock")
+    return source
 
 
-def remove_stale_detector_versions(detection_root: Path, active_output_dir: Path) -> None:
-    if not detection_root.exists():
-        return
-
-    active_output_dir = active_output_dir.resolve()
-    for entry in detection_root.iterdir():
-        if entry.is_dir() and entry.resolve() != active_output_dir:
-            shutil.rmtree(entry)
+def verify_file(path: Path, expected: dict) -> None:
+    with path.open("rb") as stream:
+        actual_hash = hashlib.file_digest(stream, "sha256").hexdigest()
+    if path.stat().st_size != expected["size"] or actual_hash != expected["sha256"]:
+        raise ValueError(f"PaddleOCR asset hash/size mismatch for {path}; expected {expected['sha256']}, received {actual_hash}")
 
 
 def repo_cache_key(repo_id: str) -> str:

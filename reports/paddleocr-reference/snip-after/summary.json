@@ -1,0 +1,488 @@
+{
+  "totalCases": 30,
+  "exactMatches": 21,
+  "exactMatchRate": 0.7,
+  "averageCharacterAccuracy": 0.897936978771239,
+  "cases": [
+    {
+      "caseIndex": 0,
+      "name": "manga-ocr-case-001-sunao-ni-ayamaru-shika",
+      "image": "images/manga-ocr-case-01.jpg",
+      "expectedText": "素直にあやまるしか",
+      "actualText": "すなお素直にあやまるしか",
+      "normalizedExpectedText": "素直にあやまるしか",
+      "normalizedActualText": "すなお素直にあやまるしか",
+      "exactMatch": false,
+      "editDistance": 3,
+      "characterAccuracy": 0.75,
+      "input": {
+        "mode": "snip",
+        "sha256": "abe7b32cc61fba2792417ebced671a8760c77a695a3ba597b98aad5dd0f247a5"
+      }
+    },
+    {
+      "caseIndex": 1,
+      "name": "manga-ocr-case-002-tachikawa-de-mita-ana-no-shita-no-kyodaina-me-wa",
+      "image": "images/manga-ocr-case-02.jpg",
+      "expectedText": "立川で見た〝穴〟の下の巨大な眼は…",
+      "actualText": "たち办わみ立川で見た29244穴の下の042S巨大な眼は…",
+      "normalizedExpectedText": "立川で見た〝穴〟の下の巨大な眼は…",
+      "normalizedActualText": "たち办わみ立川で見た29244穴の下の042S巨大な眼は…",
+      "exactMatch": false,
+      "editDistance": 15,
+      "characterAccuracy": 0.48275862068965514,
+      "input": {
+        "mode": "snip",
+        "sha256": "a66a1669ebd0be0c274e66e19f7988d85f2b369e40c3bb9b09ae8438dbf61353"
+      }
+    },
+    {
+      "caseIndex": 2,
+      "name": "manga-ocr-case-003-jissen-kenjutsu-mo-ichiryuu-desu",
+      "image": "images/manga-ocr-case-03.jpg",
+      "expectedText": "実戦剣術も一流です",
+      "actualText": "実戦剣術も一流です",
+      "normalizedExpectedText": "実戦剣術も一流です",
+      "normalizedActualText": "実戦剣術も一流です",
+      "exactMatch": true,
+      "editDistance": 0,
+      "characterAccuracy": 1,
+      "input": {
+        "mode": "snip",
+        "sha256": "fcbfc5a099b4637654f26be864bdb7f3065c6541eb2ef1f48cc83822278de7e5"
+      }
+    },
+    {
+      "caseIndex": 3,
+      "name": "manga-ocr-case-004-gya",
+      "image": "images/manga-ocr-case-04.jpg",
+      "expectedText": "ぎゃっ",
+      "actualText": "やゃっ",
+      "normalizedExpectedText": "ぎゃっ",
+      "normalizedActualText": "やゃっ",
+      "exactMatch": false,
+      "editDistance": 1,
+      "characterAccuracy": 0.6666666666666667,
+      "input": {
+        "mode": "snip",
+        "sha256": "5bbf76888d0c9c10942eedcc6df67a914dea568dfb2155b14d5483abe6c747b7"
+      }
+    },
+    {
+      "caseIndex": 4,
+      "name": "manga-ocr-case-005-pinpoon",
+      "image": "images/manga-ocr-case-05.jpg",
+      "expectedText": "ピンポーーン",
+      "actualText": "ピンポ",
+      "normalizedExpectedText": "ピンポーーン",
+      "normalizedActualText": "ピンポ",
+      "exactMatch": false,
+      "editDistance": 3,
+      "characterAccuracy": 0.5,
+      "input": {
+        "mode": "snip",
+        "sha256": "f91f78eed29843e57c205d53a71389c99a954a718b93548900dd6687b58c3dc3"
+      }
+    },
+    {
+      "caseIndex": 5,
+      "name": "manga-ocr-case-006-faia-panchi",
+      "image": "images/manga-ocr-case-06.jpg",
+      "expectedText": "ファイアパンチ",
+      "actualText": "フAイアパンチ",
+      "normalizedExpectedText": "ファイアパンチ",
+      "normalizedActualText": "フAイアパンチ",
+      "exactMatch": false,
+      "editDistance": 1,
+      "characterAccuracy": 0.8571428571428572,
+      "input": {
+        "mode": "snip",
+        "sha256": "7fb1e2e07e2dbcf63d42103567dded970d6f550a154944bf8759909f673ba84c"
+      }
+    },
+    {
+      "caseIndex": 6,
+      "name": "manga-ocr-case-007-keisatsu-nimo-sensei-nimo-machijuu-no-hitotachi-ni",
+      "image": "images/manga-ocr-case-07.jpg",
+      "expectedText": "警察にも先生にも町中の人達に！！",
+      "actualText": "けいさっ警察にもせんせい先生にもまちじゅうひとたち町中の人達に",
+      "normalizedExpectedText": "警察にも先生にも町中の人達に！！",
+      "normalizedActualText": "けいさっ警察にもせんせい先生にもまちじゅうひとたち町中の人達に",
+      "exactMatch": false,
+      "editDistance": 19,
+      "characterAccuracy": 0.3870967741935484,
+      "input": {
+        "mode": "snip",
+        "sha256": "34d2f920c833794adad5fee3907bbf7d4835a49a15eb3b200d051b8760a2bdaf"
+      }
+    },
+    {
+      "caseIndex": 7,
+      "name": "case-001-inuda-san",
+      "image": "images/ocr-case-001.png",
+      "expectedText": "犬田さん",
+      "actualText": "犬田さん",
+      "normalizedExpectedText": "犬田さん",
+      "normalizedActualText": "犬田さん",
+      "exactMatch": true,
+      "editDistance": 0,
+      "characterAccuracy": 1,
+      "input": {
+        "mode": "snip",
+        "sha256": "eac016b8b0def0ac28581fb1e0acf2086c519e314e9b0f030f436877642dffe7"
+      }
+    },
+    {
+      "caseIndex": 8,
+      "name": "case-002-hai-owari-mou-dame",
+      "image": "images/ocr-case-002.png",
+      "expectedText": "はい終わりもうダメ",
+      "actualText": "はい終わりもうダメ",
+      "normalizedExpectedText": "はい終わりもうダメ",
+      "normalizedActualText": "はい終わりもうダメ",
+      "exactMatch": true,
+      "editDistance": 0,
+      "characterAccuracy": 1,
+      "input": {
+        "mode": "snip",
+        "sha256": "87f999de9dcac86b586452135926255177eec8c061942481cefdf9c88d1f9f8b"
+      }
+    },
+    {
+      "caseIndex": 9,
+      "name": "case-003-kako",
+      "image": "images/ocr-case-003.png",
+      "expectedText": "過去",
+      "actualText": "過去",
+      "normalizedExpectedText": "過去",
+      "normalizedActualText": "過去",
+      "exactMatch": true,
+      "editDistance": 0,
+      "characterAccuracy": 1,
+      "input": {
+        "mode": "snip",
+        "sha256": "468d7c7e2c1d9421eee69cafdba6ea764843efa1c682df27e84d8401d006c2ab"
+      }
+    },
+    {
+      "caseIndex": 10,
+      "name": "case-004-genzai",
+      "image": "images/ocr-case-004.png",
+      "expectedText": "現在",
+      "actualText": "現在",
+      "normalizedExpectedText": "現在",
+      "normalizedActualText": "現在",
+      "exactMatch": true,
+      "editDistance": 0,
+      "characterAccuracy": 1,
+      "input": {
+        "mode": "snip",
+        "sha256": "13817fdef7084a0f3d2ab9bc5c6cbe3f9cb195c722556aa4d64f29795c4d0f3c"
+      }
+    },
+    {
+      "caseIndex": 11,
+      "name": "case-005-teto-san-kekkon-shiyou",
+      "image": "images/ocr-case-005.png",
+      "expectedText": "テトさん結婚しよう",
+      "actualText": "テトさん結婚しよう",
+      "normalizedExpectedText": "テトさん結婚しよう",
+      "normalizedActualText": "テトさん結婚しよう",
+      "exactMatch": true,
+      "editDistance": 0,
+      "characterAccuracy": 1,
+      "input": {
+        "mode": "snip",
+        "sha256": "d66c00410a3af79df7893087488f1d043b6a7c72e735d4d1449b59733a679691"
+      }
+    },
+    {
+      "caseIndex": 12,
+      "name": "case-006-a-sore-zenbu-iinchou-dayo",
+      "image": "images/ocr-case-006.png",
+      "expectedText": "あーそれ\n全部委員長だよ",
+      "actualText": "あーそれ全部、委員長だよ",
+      "normalizedExpectedText": "あーそれ全部委員長だよ",
+      "normalizedActualText": "あーそれ全部、委員長だよ",
+      "exactMatch": false,
+      "editDistance": 1,
+      "characterAccuracy": 0.9166666666666666,
+      "input": {
+        "mode": "snip",
+        "sha256": "6b066ad13da7b59670b663aacdfc937aef1f60751affc8fc01621ac2830744f0"
+      }
+    },
+    {
+      "caseIndex": 13,
+      "name": "case-007-kawaii",
+      "image": "images/ocr-case-007.png",
+      "expectedText": "可愛い…",
+      "actualText": "可愛い…",
+      "normalizedExpectedText": "可愛い…",
+      "normalizedActualText": "可愛い…",
+      "exactMatch": true,
+      "editDistance": 0,
+      "characterAccuracy": 1,
+      "input": {
+        "mode": "snip",
+        "sha256": "6c4b00323d773c9bc7d08287be1f70bd8c36cf431aa27bb196be0012187cd190"
+      }
+    },
+    {
+      "caseIndex": 14,
+      "name": "case-008-ore-otoko-no-ko-damon",
+      "image": "images/ocr-case-008.png",
+      "expectedText": "俺、男の子だもん\nこれお母さんに\nあげるよ…",
+      "actualText": "俺、男の子だもんこれお母さんにあげるよ…",
+      "normalizedExpectedText": "俺、男の子だもんこれお母さんにあげるよ…",
+      "normalizedActualText": "俺、男の子だもんこれお母さんにあげるよ…",
+      "exactMatch": true,
+      "editDistance": 0,
+      "characterAccuracy": 1,
+      "input": {
+        "mode": "snip",
+        "sha256": "b5bef2ab13694095c06aa53d3a30e074f67e1ddf043f2a477a5ca0d93ce0ca58"
+      }
+    },
+    {
+      "caseIndex": 15,
+      "name": "case-009-saikin-kurasu-no-fuuki",
+      "image": "images/ocr-case-009.png",
+      "expectedText": "最近…\nクラスの風紀が\n乱れてる気がするわ…",
+      "actualText": "最近…クラスの風紀が乱れてる気がするわ…",
+      "normalizedExpectedText": "最近…クラスの風紀が乱れてる気がするわ…",
+      "normalizedActualText": "最近…クラスの風紀が乱れてる気がするわ…",
+      "exactMatch": true,
+      "editDistance": 0,
+      "characterAccuracy": 1,
+      "input": {
+        "mode": "snip",
+        "sha256": "23c3ffb146bbf36a835c6bec02378ee301913d15de21cb04b8caca8e04eca095"
+      }
+    },
+    {
+      "caseIndex": 16,
+      "name": "case-010-daiji-na-no-wa-konten-tsu-daro",
+      "image": "images/ocr-case-010.png",
+      "expectedText": "大事なのはコンテンツだろ？",
+      "actualText": "大事なのはコンテンツだろ？",
+      "normalizedExpectedText": "大事なのはコンテンツだろ？",
+      "normalizedActualText": "大事なのはコンテンツだろ？",
+      "exactMatch": true,
+      "editDistance": 0,
+      "characterAccuracy": 1,
+      "input": {
+        "mode": "snip",
+        "sha256": "77b0fc1b5951d81f3ab1bdc9f9b24081efef5a868852980f7463158d55987ac5"
+      }
+    },
+    {
+      "caseIndex": 17,
+      "name": "case-011-zundamon-senpai-tsumetai-kute-kimochi-ii",
+      "image": "images/ocr-case-011.png",
+      "expectedText": "ずんだもん先輩、冷たくて気持ちいい。",
+      "actualText": "んだも気ちいい。",
+      "normalizedExpectedText": "ずんだもん先輩、冷たくて気持ちいい。",
+      "normalizedActualText": "んだも気ちいい。",
+      "exactMatch": false,
+      "editDistance": 10,
+      "characterAccuracy": 0.4444444444444444,
+      "input": {
+        "mode": "snip",
+        "sha256": "9e2584f392e13188be5e241f26f1d420dffa1b377058f485958e6c971d668688"
+      }
+    },
+    {
+      "caseIndex": 18,
+      "name": "case-012-obaachan",
+      "image": "images/ocr-case-012.png",
+      "expectedText": "どうする\nやばいよ\nこの おばーちゃん",
+      "actualText": "どうするやばいよこのおばーちゃん",
+      "normalizedExpectedText": "どうするやばいよこのおばーちゃん",
+      "normalizedActualText": "どうするやばいよこのおばーちゃん",
+      "exactMatch": true,
+      "editDistance": 0,
+      "characterAccuracy": 1,
+      "input": {
+        "mode": "snip",
+        "sha256": "10906acef22c81b6e72f746808f4c395a6344ee0ee82cf76f1d33f375c5f7547"
+      }
+    },
+    {
+      "caseIndex": 19,
+      "name": "case-013",
+      "image": "images/ocr-case-013.png",
+      "expectedText": "こないだは\n世話になったな",
+      "actualText": "こないだは世話になったな",
+      "normalizedExpectedText": "こないだは世話になったな",
+      "normalizedActualText": "こないだは世話になったな",
+      "exactMatch": true,
+      "editDistance": 0,
+      "characterAccuracy": 1,
+      "input": {
+        "mode": "snip",
+        "sha256": "d72cb117348753c6e033ffa45f10d596673ed0eff4f66b0bbbbdda3e0e8c443c"
+      }
+    },
+    {
+      "caseIndex": 20,
+      "name": "general-001-horizontal-japanese",
+      "image": "images/ocr-general-001.png",
+      "expectedText": "本日は晴天です。",
+      "actualText": "本日は晴天です。",
+      "normalizedExpectedText": "本日は晴天です。",
+      "normalizedActualText": "本日は晴天です。",
+      "exactMatch": true,
+      "editDistance": 0,
+      "characterAccuracy": 1,
+      "input": {
+        "mode": "snip",
+        "sha256": "c4ce7ac3f8a3d2ed8a674fdfe7631427b7d0090d6cfd391c1b24855a310c7752"
+      }
+    },
+    {
+      "caseIndex": 21,
+      "name": "general-002-mixed-japanese-latin-digits",
+      "image": "images/ocr-general-002.png",
+      "expectedText": "日本語 OCR Test 2026",
+      "actualText": "日本語 OCR Test 2026",
+      "normalizedExpectedText": "日本語OCRTest2026",
+      "normalizedActualText": "日本語OCRTest2026",
+      "exactMatch": true,
+      "editDistance": 0,
+      "characterAccuracy": 1,
+      "input": {
+        "mode": "snip",
+        "sha256": "ca730e1138b4f32052d3d6e9fd3e570232448a21cd8165f13a3cf5e09bd3077c"
+      }
+    },
+    {
+      "caseIndex": 22,
+      "name": "general-003-apostrophe-date",
+      "image": "images/ocr-general-003.png",
+      "expectedText": "It's 2026年9月11日",
+      "actualText": "It's 2026年9月11日",
+      "normalizedExpectedText": "It's2026年9月11日",
+      "normalizedActualText": "It's2026年9月11日",
+      "exactMatch": true,
+      "editDistance": 0,
+      "characterAccuracy": 1,
+      "input": {
+        "mode": "snip",
+        "sha256": "e57e6cc3bcd01de954901d26b8feff0f6ade180ee4ba30171474bdcc85660a94"
+      }
+    },
+    {
+      "caseIndex": 23,
+      "name": "general-004-long-horizontal",
+      "image": "images/ocr-general-004.png",
+      "expectedText": "日本語の長い文章を省略せず読み取り、数字1234567890と英語ABCも正確に表示します。",
+      "actualText": "日本語の長い文章を省略せず読み取り、数字1234567890と英語ABCも正確に表示します。",
+      "normalizedExpectedText": "日本語の長い文章を省略せず読み取り、数字1234567890と英語ABCも正確に表示します。",
+      "normalizedActualText": "日本語の長い文章を省略せず読み取り、数字1234567890と英語ABCも正確に表示します。",
+      "exactMatch": true,
+      "editDistance": 0,
+      "characterAccuracy": 1,
+      "input": {
+        "mode": "snip",
+        "sha256": "703a53e96a1562718cbef5123edba8bcbafaacb072a22e28b6167ebd6476c3af"
+      }
+    },
+    {
+      "caseIndex": 24,
+      "name": "general-005-colored-text",
+      "image": "images/ocr-general-005.png",
+      "expectedText": "青い文字と赤い数字 123",
+      "actualText": "青い文字と赤い数字123",
+      "normalizedExpectedText": "青い文字と赤い数字123",
+      "normalizedActualText": "青い文字と赤い数字123",
+      "exactMatch": true,
+      "editDistance": 0,
+      "characterAccuracy": 1,
+      "input": {
+        "mode": "snip",
+        "sha256": "f95a07d15cde89e285403210eadb2618e98473f1a73832ab21343b6a5f792633"
+      }
+    },
+    {
+      "caseIndex": 25,
+      "name": "general-006-white-on-dark",
+      "image": "images/ocr-general-006.png",
+      "expectedText": "夜間モードでも読めます 2026",
+      "actualText": "夜間モ一ドでも読めます 2026",
+      "normalizedExpectedText": "夜間モードでも読めます2026",
+      "normalizedActualText": "夜間モ一ドでも読めます2026",
+      "exactMatch": false,
+      "editDistance": 1,
+      "characterAccuracy": 0.9333333333333333,
+      "input": {
+        "mode": "snip",
+        "sha256": "2432ff0cd61c8119f44e68ba51a3b080dcb3d9bd657926dace0b7dd8e2c595b7"
+      }
+    },
+    {
+      "caseIndex": 26,
+      "name": "general-007-rotated-horizontal",
+      "image": "images/ocr-general-007.png",
+      "expectedText": "少し傾いた日本語の文章です",
+      "actualText": "少し傾いた日本語の文章です",
+      "normalizedExpectedText": "少し傾いた日本語の文章です",
+      "normalizedActualText": "少し傾いた日本語の文章です",
+      "exactMatch": true,
+      "editDistance": 0,
+      "characterAccuracy": 1,
+      "input": {
+        "mode": "snip",
+        "sha256": "5ca93e8a32678348178420a361869007a4b2f797a08a0674acca98225a75ec5e"
+      }
+    },
+    {
+      "caseIndex": 27,
+      "name": "general-008-vertical-three-columns",
+      "image": "images/ocr-general-008.png",
+      "expectedText": "明日の予定\n図書館へ行く\n本を三冊借りる",
+      "actualText": "明日の予定図書館へ行く本を三冊借りる",
+      "normalizedExpectedText": "明日の予定図書館へ行く本を三冊借りる",
+      "normalizedActualText": "明日の予定図書館へ行く本を三冊借りる",
+      "exactMatch": true,
+      "editDistance": 0,
+      "characterAccuracy": 1,
+      "input": {
+        "mode": "snip",
+        "sha256": "0df214db77ecd62fc7e632fa7f513ade19c51c356369efaae30b0e38e11c11f9"
+      }
+    },
+    {
+      "caseIndex": 28,
+      "name": "general-009-horizontal-three-lines",
+      "image": "images/ocr-general-009.png",
+      "expectedText": "受付時間は午前九時です\n予約番号は12345です\n入口で名前を伝えてください",
+      "actualText": "受付時間は午前九時です予約番号は12345です入口で名前を伝えてください",
+      "normalizedExpectedText": "受付時間は午前九時です予約番号は12345です入口で名前を伝えてください",
+      "normalizedActualText": "受付時間は午前九時です予約番号は12345です入口で名前を伝えてください",
+      "exactMatch": true,
+      "editDistance": 0,
+      "characterAccuracy": 1,
+      "input": {
+        "mode": "snip",
+        "sha256": "0f3268cc2e88dddf140b60536d19bee132ca6e5578ef7fdd22067a67b0e38026"
+      }
+    },
+    {
+      "caseIndex": 29,
+      "name": "general-010-serif-japanese",
+      "image": "images/ocr-general-010.png",
+      "expectedText": "図書館で新しい本を読みました。",
+      "actualText": "図書館で新しい本を読みました。",
+      "normalizedExpectedText": "図書館で新しい本を読みました。",
+      "normalizedActualText": "図書館で新しい本を読みました。",
+      "exactMatch": true,
+      "editDistance": 0,
+      "characterAccuracy": 1,
+      "input": {
+        "mode": "snip",
+        "sha256": "f0bca1fac25940a0a375655ef34a07e311417baf2d571c93f00b804f421252c0"
+      }
+    }
+  ]
+}
