@@ -37,6 +37,7 @@ test('captures clean pixels without the snip overlay, OCR status, or previous re
         expression: `(${installCaptureProbe.toString()})(${JSON.stringify({
             captureAction: NamidaMessageAction.CaptureFullScreen,
             recognizeAction: NamidaMessageAction.RecognizeImage,
+            preloadAction: NamidaMessageAction.PreloadOcr,
         })})`,
         returnByValue: true,
     });
@@ -143,7 +144,7 @@ test('captures clean pixels without the snip overlay, OCR status, or previous re
 
 // Runs in the extension's content-script world. Actual screenshot requests remain
 // untouched; only OCR is stubbed so this regression test never loads model assets.
-function installCaptureProbe({ captureAction, recognizeAction }: { captureAction: number; recognizeAction: number }) {
+function installCaptureProbe({ captureAction, recognizeAction, preloadAction }: { captureAction: number; recognizeAction: number; preloadAction: number }) {
     const root = globalThis as typeof globalThis & {
         __namidaCaptureProbe?: { captureRequests: number; recognitionRequests: number; overlayAtCapture: boolean; statusAtCapture: boolean; windowAttachedAtCapture: boolean; dataUrl: string };
     };
@@ -152,6 +153,14 @@ function installCaptureProbe({ captureAction, recognizeAction }: { captureAction
     const originalSendMessage = chrome.runtime.sendMessage.bind(chrome.runtime);
     chrome.runtime.sendMessage = ((...args: unknown[]) => {
         const message = args.find((arg) => typeof arg === 'object' && arg !== null && 'action' in arg) as { action: number; data?: string } | undefined;
+        if (message?.action === preloadAction) {
+            const callback = args.at(-1);
+            if (typeof callback === 'function') {
+                queueMicrotask(() => callback());
+                return;
+            }
+            return Promise.resolve();
+        }
         if (message?.action === captureAction) {
             observation.captureRequests += 1;
             observation.overlayAtCapture = Boolean(document.querySelector('[data-testid="namida-snip-overlay"]'));

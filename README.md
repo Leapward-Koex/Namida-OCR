@@ -73,6 +73,7 @@
   - **Tesseract** – Faster, but usually less accurate.
   - **PaddleOCR** – Slower, but usually more accurate.
   - The popup can switch between `tesseract` and experimental `paddleonnx`.
+  - Starting a snip with PaddleOCR selected preloads its local runtime and both models while you select a region. The scan reuses those sessions; a quick selection may still need to wait for loading to finish. Preloading does not block selection, and a failed preload leaves normal scan initialization available.
   - Tesseract also exposes a **Text direction** setting in the popup, which switches between `jpn` and `jpn_vert`.
   - Tesseract page segmentation is now chosen automatically from that text direction: vertical uses single-block vertical and horizontal uses single-block.
   - **Enable GPU support** is only shown for PaddleOCR. It requests a hardware WebGPU adapter and falls back to local CPU (WASM) when unavailable or after a provider failure. The popup shows the current provider and fallback reason; **Retry GPU** creates a fresh runtime after a failure. The browser chooses which GPU to expose. Some ONNX operations can still execute on the CPU within a WebGPU session.

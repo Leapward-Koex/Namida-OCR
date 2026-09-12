@@ -13,7 +13,7 @@ const overlayCode = compile('../src/content/SnippingOverlay.ts');
 const screenshotCode = compile('../src/content/ScreenshotHandler.ts');
 const contentCode = compile('../src/content/index.ts');
 const floatingWindowCode = compile('../src/content/FloatingWindowHandler.ts');
-const actions = { SnipPage: 0, CaptureFullScreen: 1 };
+const actions = { SnipPage: 0, CaptureFullScreen: 1, PreloadOcr: 13 };
 const quietConsole = { debug() {}, error() {}, warn() {} };
 
 async function flush() {
@@ -161,6 +161,9 @@ for (const backend of ['paddleonnx', 'tesseract']) {
     for (const captureFails of [false, true]) {
     test(`restores previous UI after ${backend} capture ${captureFails ? 'failure' : 'success'} and preserves output policy`, async () => {
         const events = [];
+        let snipListener;
+        let rejectPreload;
+        const preload = new Promise((_, reject) => { rejectPreload = reject; });
         let selectionCallback;
         let completeCapture;
         let shownText;
@@ -168,9 +171,15 @@ for (const backend of ['paddleonnx', 'tesseract']) {
         let previousWindowVisible = true;
         const captured = new Promise((resolve) => { completeCapture = resolve; });
         const modules = {
-            'webextension-polyfill': { runtime: { onMessage: { addListener() {} } } },
+            'webextension-polyfill': { runtime: {
+                onMessage: { addListener(callback) { snipListener = callback; } },
+                sendMessage(message) { assert.equal(message.action, actions.PreloadOcr); events.push('preload'); return preload; },
+            } },
             '../interfaces/message': { NamidaMessageAction: actions },
-            './SnippingOverlay': { SnipOverlay: class { constructor(callback) { selectionCallback = callback; } } },
+            './SnippingOverlay': { SnipOverlay: class {
+                constructor(callback) { selectionCallback = callback; }
+                show() { events.push('overlay'); }
+            } },
             './SaveHandler': { SaveHandler: class {} },
             '../background/TesseractOcrHandler': { TesseractOcrHandler: class { async recognizeFromContent(data) { assert.equal(data, 'crop'); events.push('recognize'); return '日本語 OCR 2026'; } } },
             './ScreenshotHandler': { ScreenshotHandler: class { async captureAndCrop() {
@@ -199,9 +208,16 @@ for (const backend of ['paddleonnx', 'tesseract']) {
         };
         const context = vm.createContext({ exports: {}, console: quietConsole, require(name) { assert.ok(name in modules, name); return modules[name]; } });
         vm.runInContext(contentCode, context);
+        assert.deepEqual(events, [], 'Loading a page must not trigger preloading.');
+        assert.equal(snipListener({ action: actions.SnipPage }), undefined, 'Snipping must not await preload.');
+        assert.deepEqual(events, ['overlay', 'preload']);
+        events.length = 0;
         const result = selectionCallback({ left: 0, top: 0, width: 20, height: 20 });
         await flush();
         assert.deepEqual(events, ['hide', 'capture-start'], 'Status must not appear while screenshot capture is pending.');
+        rejectPreload(new Error('Preload unavailable'));
+        await flush();
+        assert.deepEqual(events, ['hide', 'capture-start'], 'A rejected preload must not fail the selection/capture.');
         completeCapture();
         await result;
         if (captureFails) {

@@ -14,6 +14,8 @@ export enum NamidaMessageAction {
     GetOcrAccelerationStatusOffscreen,
     RetryOcrGpu,
     RetryOcrGpuOffscreen,
+    PreloadOcr,
+    PreloadOcrOffscreen,
 }
 
 export interface NamidaMessage {
@@ -26,12 +28,15 @@ export interface NamidaOcrRuntimeSettings {
     paddleGpuEnabled: boolean,
 }
 
-export interface NamidaOcrFromOffscreenData {
+export interface NamidaOcrPreloadData {
+    ocrModel: string,
+    runtimeSettings: NamidaOcrRuntimeSettings
+}
+
+export interface NamidaOcrFromOffscreenData extends NamidaOcrPreloadData {
     debugArtifactsEnabled: boolean,
     imageData: string,
     pageSegMode: PSM,
-    ocrModel: string,
-    runtimeSettings: NamidaOcrRuntimeSettings
 }
 export interface NamidaOcrFromOffscreenMessage {
     action: NamidaMessageAction,

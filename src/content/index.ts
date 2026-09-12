@@ -30,6 +30,11 @@ class SnippingTool {
             if ((message as NamidaMessage).action === NamidaMessageAction.SnipPage) {
                 console.debug(SnippingTool.logTag, "Going to show overlay over content")
                 this.overlay.show();
+                // Load Paddle while the user selects a region. Selection and
+                // capture must not wait for initialization or fail with it.
+                void runtime.sendMessage({ action: NamidaMessageAction.PreloadOcr }).catch((error) => {
+                    console.warn(SnippingTool.logTag, 'OCR preload failed; the scan can retry initialization', error);
+                });
             }
             return undefined;
         });

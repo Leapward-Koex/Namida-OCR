@@ -28,7 +28,7 @@ function deferred() {
 
 const settings = (paddleGpuEnabled, backend = 'paddleonnx') => ({ backend, paddleGpuEnabled });
 
-function harness({ recognize, failSetup = false } = {}) {
+function harness({ recognize, init, failSetup = false } = {}) {
     const instances = [];
     const events = [];
     let imports = 0;
@@ -42,7 +42,7 @@ function harness({ recognize, failSetup = false } = {}) {
             instances.push(this);
             events.push(`create:${this.id}`);
         }
-        async init() {}
+        async init() { await init?.(this); }
         async setDebugEnabled(enabled) { this.debugEnabled = enabled; }
         async setGpuEnabled(enabled) {
             this.gpuEnabled = enabled;
@@ -92,6 +92,27 @@ test('concurrent identical requests share one selected backend', async () => {
     assert.equal(h.instances.length, 1);
     assert.ok(h.events.indexOf('end:first') < h.events.indexOf('start:second'));
 });
+
+for (const failPreload of [false, true]) {
+    test(`a scan queued during ${failPreload ? 'failed' : 'successful'} preload reuses the backend and can still run`, async () => {
+        const started = deferred();
+        const release = deferred();
+        const h = harness({ async init() {
+            started.resolve();
+            await release.promise;
+            if (failPreload) throw new Error('preload failed');
+        } });
+        const preload = h.service.init('jpn_vert', settings(false));
+        const completion = failPreload ? assert.rejects(preload, /preload failed/) : preload;
+        await started.promise;
+        const scan = h.service.recognize('scan', '3', 'jpn_vert', settings(false));
+        assert.equal(h.events.includes('start:scan'), false);
+        release.resolve();
+        await completion;
+        assert.equal(await scan, 'scan:false');
+        assert.equal(h.instances.length, 1);
+    });
+}
 
 test('queued requests copy settings before the caller can mutate its object', async () => {
     const h = harness();
@@ -207,10 +228,11 @@ test('initializing and failed GPU states remain distinct from a working provider
 const messageModule = load('interfaces/message.ts');
 const actions = messageModule.NamidaMessageAction;
 
-function backgroundHarness({ hasDocument = false, direct = false } = {}) {
+function backgroundHarness({ hasDocument = false, direct = false, backend = 'paddleonnx', createDocument } = {}) {
     let listener;
     const sent = [];
     const calls = [];
+    const initializations = [];
     const status = { requestedGpu: true, state: 'ready', provider: 'webgpu' };
     const snapshot = { request: 'owned' };
     const runtime = {
@@ -219,7 +241,7 @@ function backgroundHarness({ hasDocument = false, direct = false } = {}) {
         async sendMessage(message) { sent.push(message); return status; },
     };
     const service = {
-        async init() { calls.push('init'); },
+        async init(...args) { calls.push('init'); initializations.push(args); },
         async getAccelerationStatus() { calls.push('status'); return status; },
         async retryGpu() { calls.push('retry'); },
         async recognizeWithDebug(...args) { calls.push(args); return { recognizedText: 'owned', debugSnapshot: snapshot }; },
@@ -232,7 +254,7 @@ function backgroundHarness({ hasDocument = false, direct = false } = {}) {
         '../interfaces/Storage': { Settings: {
             async getOcrDebugArtifacts() { return true; },
             async getOcrModel() { return 'jpn_vert'; },
-            async getOcrBackend() { return 'paddleonnx'; },
+            async getOcrBackend() { return backend; },
             async getPaddleOnnxGpuEnabled() { return false; },
         } },
         './FuriganaHandler': { FuriganaHandler: {} },
@@ -241,12 +263,49 @@ function backgroundHarness({ hasDocument = false, direct = false } = {}) {
         console: { log() {}, debug() {}, error() {} },
         Worker: direct ? function Worker() {} : undefined,
         chrome: { offscreen: {
+            Reason: { WORKERS: 'WORKERS' },
             async hasDocument() { return hasDocument; },
-            async createDocument() { throw new Error('Status must not create an offscreen document'); },
+            async createDocument() {
+                assert.ok(createDocument, 'An unused host must not be created');
+                await createDocument();
+                hasDocument = true;
+            },
         } },
     });
-    return { dispatch: (action, data) => listener({ action, data }, {}), sent, calls, status, snapshot };
+    return { dispatch: (action, data) => listener({ action, data }, {}), sent, calls, initializations, status, snapshot };
 }
+
+test('Paddle preload shares offscreen creation across simultaneous snips and recognition', async () => {
+    let creations = 0;
+    const h = backgroundHarness({ async createDocument() { creations++; } });
+    await Promise.all([
+        h.dispatch(actions.PreloadOcr), h.dispatch(actions.PreloadOcr),
+        h.dispatch(actions.RecognizeImage, 'pixels'),
+    ]);
+    assert.equal(creations, 1);
+    const preloads = h.sent.filter(message => message.action === actions.PreloadOcrOffscreen);
+    assert.equal(preloads.length, 2);
+    assert.deepEqual(JSON.parse(JSON.stringify(preloads[0].data)), {
+        ocrModel: 'jpn_vert', runtimeSettings: { ocrBackend: 'paddleonnx', paddleGpuEnabled: false },
+    });
+    assert.equal(h.initializations.length, 0, 'Chromium must load models in the offscreen host');
+});
+
+test('a Tesseract snip does not preload Paddle or create its host', async () => {
+    const h = backgroundHarness({ backend: 'tesseract' });
+    await h.dispatch(actions.PreloadOcr);
+    assert.equal(h.sent.length, 0);
+    assert.equal(h.initializations.length, 0);
+});
+
+test('Firefox preloads directly with the selected GPU preference', async () => {
+    const h = backgroundHarness({ direct: true });
+    await h.dispatch(actions.PreloadOcr);
+    assert.deepEqual(JSON.parse(JSON.stringify(h.initializations.at(-1))), [
+        'jpn_vert', { backend: 'paddleonnx', paddleGpuEnabled: false },
+    ]);
+    assert.equal(h.sent.length, 0);
+});
 
 test('Chromium status and retry leave an unused offscreen host uncreated', async () => {
     const h = backgroundHarness();
@@ -286,6 +345,7 @@ test('offscreen recognition passes settings and debug capture in one service cal
         '../interfaces/message': messageModule,
         '../background/FuriganaHandler': { FuriganaHandler: {} },
         '../background/ocr/OcrService': { OcrService: {
+            async init(...args) { calls.push(args); },
             async recognizeWithDebug(...args) { calls.push(args); return result; },
             async getAccelerationStatus() { calls.push('status'); return status; },
             async retryGpu() { calls.push('retry'); },
@@ -300,4 +360,10 @@ test('offscreen recognition passes settings and debug capture in one service cal
     assert.equal(await listener({ action: actions.GetOcrAccelerationStatusOffscreen }), status);
     assert.equal(await listener({ action: actions.RetryOcrGpuOffscreen }), status);
     assert.deepEqual(calls.slice(1), ['status', 'retry', 'status']);
+    await listener({ action: actions.PreloadOcrOffscreen, data: {
+        ocrModel: 'jpn_vert', runtimeSettings: { ocrBackend: 'paddleonnx', paddleGpuEnabled: false },
+    } });
+    assert.deepEqual(JSON.parse(JSON.stringify(calls.at(-1))), [
+        'jpn_vert', { backend: 'paddleonnx', paddleGpuEnabled: false },
+    ]);
 });

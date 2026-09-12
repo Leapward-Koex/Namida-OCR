@@ -1,6 +1,6 @@
 import { commands, runtime, tabs } from "webextension-polyfill";
 import { PSM } from "tesseract.js";
-import { NamidaMessage, NamidaMessageAction, NamidaOcrFromOffscreenData, NamidaOcrFromOffscreenResult, NamidaTensorflowUpscaleData } from "../interfaces/message";
+import { NamidaMessage, NamidaMessageAction, NamidaOcrFromOffscreenData, NamidaOcrFromOffscreenResult, NamidaTensorflowUpscaleData, type NamidaOcrPreloadData } from "../interfaces/message";
 import { Upscaler } from "./Upscaler";
 import { Settings } from "../interfaces/Storage";
 import { FuriganaHandler } from "./FuriganaHandler";
@@ -78,6 +78,27 @@ runtime.onMessage.addListener((message, sender) => {
 
         case NamidaMessageAction.UpscaleImage: {
             return Upscaler.upscaleImageWithAIFromBackground(namidaMessage.data as NamidaTensorflowUpscaleData);
+        }
+
+        case NamidaMessageAction.PreloadOcr: {
+            return (async () => {
+                if (await Settings.getOcrBackend() !== 'paddleonnx') return;
+                const [ocrModel, paddleGpuEnabled] = await Promise.all([
+                    Settings.getOcrModel(),
+                    Settings.getPaddleOnnxGpuEnabled(),
+                ]);
+                if (globalThis.Worker) {
+                    return BackgroundOcrService.init(ocrModel, { backend: 'paddleonnx', paddleGpuEnabled });
+                }
+                await ensureOffscreenDocument();
+                return runtime.sendMessage({
+                    action: NamidaMessageAction.PreloadOcrOffscreen,
+                    data: {
+                        ocrModel,
+                        runtimeSettings: { ocrBackend: 'paddleonnx', paddleGpuEnabled },
+                    } satisfies NamidaOcrPreloadData,
+                });
+            })();
         }
 
         case NamidaMessageAction.GenerateFurigana: {
