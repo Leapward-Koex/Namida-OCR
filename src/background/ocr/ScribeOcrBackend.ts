@@ -104,7 +104,7 @@ export class ScribeOcrBackend implements OcrBackend {
                 [model],
                 ScribeTessWorker.OEM.LSTM_ONLY,
                 {
-                    gzip: true,
+                    gzip: false,
                     langPath: '/libs/tesseract-lang',
                     legacyCore: false,
                     legacyLang: false,

@@ -40,9 +40,10 @@ function getBundledLanguagePatterns() {
         .sort(([leftName], [rightName]) => leftName.localeCompare(rightName))
         .map(([modelName, bundle]) => ({
             from: bundle.absolutePath,
-            to: `libs/tesseract-lang/${modelName}.traineddata.gz`,
+            // Edge Add-ons rejects .gz assets. Always ship actual uncompressed data.
+            to: `libs/tesseract-lang/${modelName}.traineddata`,
             transform(content) {
-                return bundle.alreadyGzipped ? content : zlib.gzipSync(content);
+                return bundle.alreadyGzipped ? zlib.gunzipSync(content) : content;
             },
         }));
 }

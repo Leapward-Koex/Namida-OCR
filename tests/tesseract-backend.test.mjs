@@ -144,7 +144,7 @@ test('shares initialization across backend instances and keeps worker assets loc
     assert.equal(options.corePath, '/libs/tesseract-core');
     assert.equal(options.workerPath, '/libs/tesseract-worker/worker.min.js');
     assert.equal(options.langPath, '/libs/tesseract-lang');
-    assert.equal(options.gzip, true);
+    assert.equal(options.gzip, false);
     await h.backend.terminate();
     assert.equal(worker.terminations, 1);
 });

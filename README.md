@@ -111,13 +111,15 @@ Local builds need no environment setup: they use numeric version `2.0.0` and sho
 
 ZIPs have `manifest.json` at their root. Chromium packages serve Chrome and Edge; Firefox retains its smaller detector bundle. These are unsigned distribution packages, not automatic browser-store submissions: Chromium can load the extracted directory in developer mode, and Firefox requires temporary loading or Mozilla signing for normal installation. The extension's offline runtime is unchanged.
 
+Tesseract language assets are packaged as uncompressed `libs/tesseract-lang/jpn.traineddata` and `jpn_vert.traineddata` for all browsers because Edge Add-ons rejects the `.gz` files. The release ZIP still compresses these assets for distribution. Tesseract and experimental Scribe load the same local model data with `gzip: false`; OCR quality is unchanged.
+
 Run `npm run test:build` and `python -m unittest discover -s tests -p test_release_archives.py` to check version ordering and release packaging guards. After a default production build, `node scripts/verify-extension-build.cjs dist chrome` (or `firefox`) checks the generated identity and bundle.
 
 ### Runtime and testing
 
 - The default OCR backend is `tesseract`.
 - Tesseract keeps the original recognition as its baseline. Uncertain results get one local retry with a small white border and reduced image size for larger crops; a retry replaces the original only when confidence, text score, Japanese-character ratio, and text retention checks agree. Confident results use a single pass.
-- Tesseract worker requests and Chromium offscreen creation are serialized to handle simultaneous snips safely. `node --test tests/tesseract-backend.test.mjs` checks worker/retry behavior; `tests/tesseract.spec.ts` checks concurrent horizontal OCR with networking disabled.
+- Tesseract worker requests and Chromium offscreen creation are serialized to handle simultaneous snips safely. `node --test tests/tesseract-backend.test.mjs` checks worker/retry behavior; `tests/tesseract.spec.ts` checks concurrent horizontal OCR and vertical model loading with networking disabled.
 - The OCR runtime and backend implementations live under `src/background/ocr/`.
 - The popup can switch between bundled `tesseract` and experimental `paddleonnx` at runtime in normal builds.
 - You can still choose the default OCR backend at build time with `NAMIDA_OCR_BACKEND` or `webpack --env ocr_backend=...`.

@@ -40,6 +40,7 @@ When changing permissions, background execution, popup behavior, or shortcut flo
 
 - OCR, upscaling, and furigana generation are expected to run locally from the extension bundle.
 - Keep traineddata, WASM, and model assets bundled locally. Do not switch this project to CDN downloads or server-backed OCR.
+- Package Tesseract language data as uncompressed `libs/tesseract-lang/*.traineddata` for every browser to avoid Edge Add-ons rejecting `.gz` assets. If a source model is gzipped, decompress it during the build. Keep both Tesseract and experimental Scribe worker options at `gzip: false`.
 - Any `scribe.js-ocr` integration must continue to use extension-local language/model assets. Do not rely on its CDN fallback.
 - Any `paddleonnx` integration must continue to use extension-local ONNX, dictionary, manifest, and ONNX Runtime JSEP/WASM assets. Do not rely on remote model fetches or runtime downloads.
 - Keep both committed PaddleOCR bundles local to the repo when Chromium/server and Firefox/mobile packaging are supported, but only copy the browser-appropriate bundle into `dist/` at build time.

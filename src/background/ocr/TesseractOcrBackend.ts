@@ -181,7 +181,7 @@ export class TesseractOcrBackend implements OcrBackend {
                     corePath: '/libs/tesseract-core',
                     workerPath: '/libs/tesseract-worker/worker.min.js',
                     langPath: '/libs/tesseract-lang',
-                    gzip: true,
+                    gzip: false,
                     logger: (message) => console.debug(TesseractOcrBackend.logTag, key, message),
                     errorHandler: (error) => {
                         console.warn(TesseractOcrBackend.logTag, key, error);
