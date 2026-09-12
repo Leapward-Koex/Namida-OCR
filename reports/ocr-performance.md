@@ -2,18 +2,18 @@
 
 # OCR Performance Report
 
-Generated: 2026-09-12T03:13:56.061Z
+Generated: 2026-09-12T09:00:29.552Z
 Repository: `Leapward-Koex/Namida-OCR`
 Branch: `master`
-Commit: [`1b45a1f`](https://github.com/Leapward-Koex/Namida-OCR/commit/1b45a1fd9bb4d33c1474d046f1dcfebfdfc4604f)
-Workflow run: [#10](https://github.com/Leapward-Koex/Namida-OCR/actions/runs/34669503490)
+Commit: [`c39046e`](https://github.com/Leapward-Koex/Namida-OCR/commit/c39046e8da344006734d62333665e9502fdf30f7)
+Workflow run: [#11](https://github.com/Leapward-Koex/Namida-OCR/actions/runs/34684408684)
 
 ## Summary
 
 | Backend | Status | Model | Variant | Exact Matches | Exact Match Rate | Avg Character Accuracy | Build Time | Test Time | Total Time |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Tesseract | Passed | jpn_vert | n/a | 7/30 | 23.3% | 54.2% | 31s | 1m 49s | 2m 20s |
-| PaddleOCR ONNX | Passed | jpn_vert | server | 21/30 | 70.0% | 89.9% | 31s | 3m 17s | 3m 48s |
+| Tesseract | Passed | jpn_vert | n/a | 7/30 | 23.3% | 54.2% | 28s | 2m 16s | 2m 44s |
+| PaddleOCR ONNX | Passed | jpn_vert | server | 21/30 | 70.0% | 89.9% | 27s | 3m 26s | 3m 54s |
 
 ## Comparison
 
@@ -22,7 +22,7 @@ Workflow run: [#10](https://github.com/Leapward-Koex/Namida-OCR/actions/runs/346
 | Exact matches | 7/30 | 21/30 | +14 |
 | Exact match rate | 23.3% | 70.0% | +46.7 pp |
 | Avg character accuracy | 54.2% | 89.9% | +35.6 pp |
-| Total time | 2m 20s | 3m 48s | +1m 28s |
+| Total time | 2m 44s | 3m 54s | +1m 10s |
 
 ## Case Accuracy
 
