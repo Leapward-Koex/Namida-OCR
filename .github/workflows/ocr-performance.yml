@@ -1,6 +1,7 @@
 name: OCR Performance
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - '**'
@@ -8,6 +9,8 @@ on:
       - 'src/background/ocr/**'
       - 'models/**'
       - 'lang/**'
+      - 'tests/**'
+      - '.github/workflows/ocr-performance.yml'
 
 permissions:
   contents: write
