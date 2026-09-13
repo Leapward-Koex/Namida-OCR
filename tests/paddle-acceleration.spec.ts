@@ -290,6 +290,7 @@ async function prepareProbe({ context, page, serviceWorker, extensionId }: Fixtu
         await chrome.storage.sync.set({ OcrBackend: 'paddleonnx', PaddleOnnxGpuEnabled: true, OcrDebugArtifacts: true, FuriganaType: 'none' });
     });
     await page.goto(`chrome-extension://${extensionId}/ui/popup.html`);
+    await page.getByRole('tab', { name: 'Recognition', exact: true }).click();
     await expect(page.locator('#paddle-settings')).toBeVisible();
     const image = `data:image/png;base64,${(await fs.readFile('tests/fixtures/images/ocr-general-002.png')).toString('base64')}`;
     const scans: Array<{ text?: string; error?: string; elapsedMs: number; status: PaddleAccelerationStatus | null }> = [];

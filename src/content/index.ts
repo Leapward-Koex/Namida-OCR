@@ -18,6 +18,7 @@ class SnippingTool {
     private overlay: SnipOverlay;
     private saveHandler: SaveHandler;
     private ocr: TesseractOcrHandler;
+    private scanRevision = 0;
 
     constructor() {
         this.saveHandler = new SaveHandler();
@@ -28,6 +29,8 @@ class SnippingTool {
     public setupMessageListener() {
         runtime.onMessage.addListener((message) => {
             if ((message as NamidaMessage).action === NamidaMessageAction.SnipPage) {
+                ++this.scanRevision;
+                FloatingWindow.cancelTranslation(true);
                 console.debug(SnippingTool.logTag, "Going to show overlay over content")
                 this.overlay.show();
                 // Load Paddle while the user selects a region. Selection and
@@ -41,6 +44,7 @@ class SnippingTool {
     }
 
     private async onSelectionComplete(selection: SelectionRect) {
+        const revision = this.scanRevision;
         const screenshotHandler = new ScreenshotHandler(selection);
         try {
             console.debug(SnippingTool.logTag, "Capturing screen");
@@ -56,6 +60,7 @@ class SnippingTool {
             } finally {
                 restoreWindow();
             }
+            if (revision !== this.scanRevision) return;
             if (ocrBackend === 'paddleonnx') {
                 FloatingWindow.showStatus("Scanning text...");
             }
@@ -75,6 +80,7 @@ class SnippingTool {
                 }
             }
 
+            if (revision !== this.scanRevision) return;
             ClipboardHandler.copyText(outputText);
             new FloatingWindow({ text: outputText, html: furigana });
             if (await Settings.getSaveOcrCrop()) {
@@ -82,6 +88,7 @@ class SnippingTool {
                 this.saveHandler.downloadImage(croppedDataURL, 'snippet.png');
             }
         } catch (error) {
+            if (revision !== this.scanRevision) return;
             console.error(SnippingTool.logTag, 'Failed when creating selection and performing OCR', error);
             FloatingWindow.showFailure();
         }

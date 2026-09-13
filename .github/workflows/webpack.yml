@@ -40,6 +40,7 @@ jobs:
         run: node scripts/build-info.cjs --github-output
       - run: npm run test:build
       - run: npm run test:paddle:unit
+      - run: node --test tests/translation-*.test.mjs
       - run: node --test tests/tesseract-backend.test.mjs
       - run: python -m unittest discover -s tests -p test_paddle_dictionary.py
       - run: python -m unittest discover -s tests -p test_release_archives.py
@@ -70,9 +71,9 @@ jobs:
       - name: Install Chromium for the build identity smoke test
         if: matrix.browser == 'chrome'
         run: npx playwright install --with-deps chromium
-      - name: Check popup build identity offline
+      - name: Check popup, translation and capture behavior
         if: matrix.browser == 'chrome'
-        run: npx playwright test tests/build.spec.ts --workers 5
+        run: npx playwright test tests/build.spec.ts tests/translation.spec.ts tests/capture.spec.ts --workers 5
       - name: Package extension ZIP
         env:
           BUILD_VERSION: ${{ needs.quality.outputs.version }}

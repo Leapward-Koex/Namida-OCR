@@ -16,6 +16,15 @@ export enum NamidaMessageAction {
     RetryOcrGpuOffscreen,
     PreloadOcr,
     PreloadOcrOffscreen,
+    GetTranslationStatus,
+    GetTranslationStatusOffscreen,
+    TranslateText,
+    TranslateTextOffscreen,
+    CancelTranslation,
+    CancelTranslationOffscreen,
+    ResetTranslation,
+    ResetTranslationOffscreen,
+    OpenTranslationSettings,
 }
 
 export interface NamidaMessage {

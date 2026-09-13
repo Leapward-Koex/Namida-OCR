@@ -97,6 +97,10 @@ function loadFloatingWindow(globals = {}) {
     const context = vm.createContext({
         exports: {},
         require(name) {
+            if (name === 'webextension-polyfill') return { runtime: {}, storage: {} };
+            if (name === '../interfaces/message') return { NamidaMessageAction: {} };
+            if (name === '../translation/TranslatorApi') return { isTranslationPlatformSupported: () => false };
+            if (name === '../translation/TranslationLanguages') return { TRANSLATION_LANGUAGES: [] };
             if (name === '../interfaces/Storage') return { Settings: {} };
             if (name === './SpeechHandler') return { SpeechSynthesisHandler: class {} };
             if (name === './TTSWrapper') return { TTSWrapper: {} };
@@ -195,6 +199,7 @@ for (const backend of ['paddleonnx', 'tesseract']) {
             './ClipboardHandler': { ClipboardHandler: { copyText(text) { copiedText = text; } } },
             './FloatingWindowHandler': { FloatingWindow: class {
                 constructor({ text }) { shownText = text; events.push('result'); }
+                static cancelTranslation() {}
                 static hideForCapture() {
                     events.push('hide');
                     previousWindowVisible = false;

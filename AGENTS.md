@@ -13,6 +13,7 @@ Core constraint: keep this project offline-first and serverless. Do not introduc
 - Chrome: build with `npm run build:chrome`. Chromium uses the Manifest V3 service worker plus the `offscreen` document flow defined in `manifests/manifest.chrome.json`.
 - Edge: Edge support comes from the Chromium build. There is no separate Edge manifest today, so Edge should be treated as a Chromium target that uses the Chrome build output. The popup already has Edge-specific shortcut handling in `src/ui/index.ts`.
 - Firefox: build with `npm run build:firefox`. Firefox uses `manifests/manifest.firefox.json`, background scripts, and does not use the Chromium `offscreen` permission/document flow.
+- Optional translation is desktop Chromium-only. Chrome and Edge use the browser-provided Translator API when `'Translator' in self` succeeds in the relevant document; API presence does not guarantee the selected Japanese-to-target pair is available. Hide translation controls and avoid API calls in Firefox builds and on mobile browsers.
 
 When changing permissions, background execution, popup behavior, or shortcut flows, keep Chrome, Edge, and Firefox aligned. If you introduce a Chromium-only API, provide a Firefox-safe path.
 
@@ -49,6 +50,7 @@ When changing permissions, background execution, popup behavior, or shortcut flo
 - Preserve bundled `clipper-lib` and `third-party/` attribution/license notices when packaging the reference geometry implementation.
 - Do not add any extension feature that requires calling an application server to function.
 - Browser/system capabilities such as clipboard access or speech synthesis are acceptable. They are not a substitute for adding project servers.
+- Optional local translation may use browser-managed Translator model downloads initiated only by an explicit settings setup click. It adds no bundled model weights or cloud fallback. OCR assets remain bundled and offline. Translation is offline after setup while the browser retains its models; sync only enable/target preferences, never a downloaded/readiness flag.
 - The only HTTP server in this repo is `tests/serve-fixtures.mjs`, which exists solely to serve local Playwright fixtures during tests. It is not part of product architecture.
 
 ## Build and Test Commands
@@ -79,6 +81,14 @@ Firefox builds should package the smaller PP-OCRv6 `mobile_det_server_rec` mixed
 Playwright currently exercises the Chromium extension harness. Firefox and Edge changes still need build validation and targeted manual verification.
 
 ## OCR Test Expectations
+
+- Translation defaults to automatic when the selected model is ready, with Japanese as source and English as target. An unset enable preference means check browser readiness; a saved false is an explicit opt-out. Never persist readiness or download automatically. Preserve original Japanese display, automatic clipboard copy, furigana, speech, and the Japanese-only OCR test selector. Keep Copy Japanese and Speak beside the Japanese heading, and the translated language's copy action beside its heading directly below. Blank OCR never requests translation.
+- Unwrap Japanese OCR layout line breaks only in the translation input, without inserting spaces at Japanese boundaries; preserve Latin word separators and existing in-line spaces. Translate the complete passage together to retain context. Chrome can omit later lines when raw line breaks or replacement spaces are passed through. Keep the original OCR text unchanged and cover multiline completeness with native browser probes as well as deterministic tests.
+- Translator API setup must call `create()` directly from the visible settings button click before any await, preserving user activation. Automatic translation runs in the Chromium offscreen document, not a worker, and creates a session only after the selected pair reports `available`. Opening settings performs feature/availability checks without model downloads, OCR initialization, or offscreen creation.
+- Keep settings inside the compact toolbar popup, with Reading and Recognition views. Translation setup uses one explicit Download & enable action, then enables the preference only after offscreen readiness is verified. Show download progress/cancel while active and one readiness message afterward; hide completed setup actions. Closing the popup cancels its setup session and reopening allows retry. Do not reintroduce a separate settings tab or repeated download help. The result's settings action opens the toolbar popup, with a toolbar instruction if the browser rejects opening it.
+- Verify popup layout in an actual toolbar popup as well as an extension page: browser autosizing can shrink viewport-relative widths, and Chromium's default extension body font can override inherited sizing. Preserve readable text, a stable width, and a scrollable content area bounded by the available height.
+- Keep translation sessions/request lifecycle separate from OCR. Serialize translations, enforce a 60-second deadline, dispose failed or obsolete sessions, and discard results after dismissal, a new snip, disable, or target change. Pending translation pauses floating-window dismissal, and the existing capture hide covers the entire bilingual window.
+- Verify absent/present Translator feature detection, setup/progress/retry, selected-pair support, synced settings races, timeout/cancellation, stale results, and clipboard/capture behavior with deterministic tests. Native desktop Chrome and Edge checks must additionally establish setup, offscreen operation, restart, and offline translation; mocked API success alone is not native compatibility evidence.
 
 - The default OCR model is `jpn_vert`.
 - The optional `scribejs` backend is experimental. Treat timeouts or missing OCR output as runtime integration failures first, not as OCR-quality regressions.

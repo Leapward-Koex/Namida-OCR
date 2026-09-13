@@ -1,6 +1,8 @@
 import { PSM } from "tesseract.js";
 import { UpscaleMethod } from "./UpscaleMethod";
 import { FuriganaType } from "../background/FuriganaHandler";
+import { normalizeTranslationTarget } from "../translation/TranslationLanguages";
+import type { TranslationSettings } from "../translation/TranslationTypes";
 
 export enum StorageKey {
     OcrBackend = "OcrBackend",
@@ -13,6 +15,8 @@ export enum StorageKey {
     ShowSpeakButton = "ShowSpeakButton",
     PreferredVoices = "PreferredVoices",
     WindowTimeout = "WindowTimeout",
+    TranslationEnabled = "TranslationEnabled",
+    TranslationTargetLanguage = "TranslationTargetLanguage",
     FuriganaType = "FuriganaType"
 }
 
@@ -100,6 +104,16 @@ function readSyncStorage(query: StorageQuery): Promise<Record<string, unknown>> 
 }
 
 export class Settings {
+    public static async getTranslationSettings(): Promise<TranslationSettings> {
+        if (!__NAMIDA_TRANSLATION_ENABLED__) return { enabled: false, targetLanguage: 'en' };
+        const values = await readSyncStorage([StorageKey.TranslationEnabled, StorageKey.TranslationTargetLanguage]);
+        return {
+            enabled: typeof values[StorageKey.TranslationEnabled] === 'boolean'
+                ? values[StorageKey.TranslationEnabled] as boolean : undefined,
+            targetLanguage: normalizeTranslationTarget(values[StorageKey.TranslationTargetLanguage]),
+        };
+    }
+
     private static getOcrModelFromString(settingString: string | undefined) {
         const trimmedSetting = settingString?.trim();
 

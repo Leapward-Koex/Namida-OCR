@@ -17,8 +17,11 @@ import { FuriganaType } from "../background/FuriganaHandler";
 import { NamidaMessageAction } from "../interfaces/message";
 import type { PaddleAccelerationStatus } from "../background/ocr/PaddleWorkerProtocol";
 import { describePaddleAcceleration } from "./OcrAccelerationStatus";
+import { initializeTranslationSettings } from "./TranslationSettings";
 
 document.addEventListener('DOMContentLoaded', () => {
+    initializeSettingsNavigation();
+    initializeTranslationSettings();
     const manifest = runtime.getManifest();
     const buildVersion = document.getElementById('build-version');
     if (buildVersion) {
@@ -40,10 +43,57 @@ document.addEventListener('DOMContentLoaded', () => {
     const voiceSelect = document.getElementById("voice-selection") as HTMLSelectElement;
     const saveOcrCropCheckbox = document.getElementById("save-ocr-crop") as HTMLInputElement;
     const showSpeakButtonCheckbox = document.getElementById("show-speak-button") as HTMLInputElement;
+    const speechOptions = document.getElementById("speech-options") as HTMLDivElement;
     const speechStatus = document.getElementById("speech-status") as HTMLSpanElement;
-    const speakeDemoButton = document.getElementById("voice-demo-button") as HTMLButtonElement;
+    const speechDemoButton = document.getElementById("voice-demo-button") as HTMLButtonElement;
     const changeShortcut = document.getElementById("change-shortcut") as HTMLButtonElement;
     let statusRevision = 0;
+    let voiceRevision = 0;
+
+    function updateSpeechVisibility() {
+        speechOptions.hidden = !showSpeakButtonCheckbox.checked;
+    }
+
+    async function refreshVoices() {
+        const revision = ++voiceRevision;
+        const voiceRow = document.querySelector<HTMLDivElement>('.voice-selection-container')!;
+        try {
+            const [preferredVoiceUri, voices] = await Promise.all([
+                Settings.getPreferredVoiceId(),
+                TTSWrapper.getVoices(),
+            ]);
+            if (revision !== voiceRevision) return;
+            populateVoiceSelection(voiceSelect, preferredVoiceUri, voices);
+            const hasVoice = voiceSelect.options.length > 0;
+            voiceRow.hidden = !hasVoice;
+            speechDemoButton.hidden = !hasVoice;
+            speechDemoButton.disabled = !hasVoice;
+            speechStatus.hidden = hasVoice;
+            speechStatus.textContent = hasVoice ? '' : 'No Japanese voice. Install one and restart your browser.';
+            if (!hasVoice && isWindows()) {
+                const link = document.createElement('a');
+                link.id = 'learn-install-pack';
+                link.href = 'https://support.microsoft.com/en-us/windows/language-packs-for-windows-a5094319-a92d-18de-5b53-1cfc697cfca8';
+                link.textContent = 'Windows voice setup';
+                link.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    tabs.create({ url: link.href });
+                });
+                speechStatus.append(' ', link);
+            }
+        } catch {
+            if (revision !== voiceRevision) return;
+            voiceRow.hidden = true;
+            speechDemoButton.hidden = true;
+            speechDemoButton.disabled = true;
+            speechStatus.hidden = false;
+            speechStatus.textContent = 'Could not load voices. Try reopening settings.';
+        }
+    }
+
+    speechDemoButton.textContent = 'Preview voice';
+    speechDemoButton.hidden = true;
+    speechDemoButton.disabled = true;
 
     async function refreshPaddleStatus() {
         const revision = ++statusRevision;
@@ -82,6 +132,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showSpeakButtonCheckbox,
     ).then(() => {
         updateBackendSettingsVisibility(ocrBackendSelect.value as OcrBackendKind, tesseractSettings, paddleSettings);
+        updateSpeechVisibility();
         return refreshPaddleStatus();
     });
 
@@ -165,12 +216,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     showSpeakButtonCheckbox.addEventListener("change", () => {
+        updateSpeechVisibility();
         const record: Record<string, unknown> = {};
         record[StorageKey.ShowSpeakButton] = showSpeakButtonCheckbox.checked;
         storage.sync.set(record);
     });
 
-    speakeDemoButton.addEventListener("click", async () => {
+    speechDemoButton.addEventListener("click", async () => {
         const speechHandler = new SpeechSynthesisHandler();
         speechHandler.speak("こんにちは、NAMIDA OCRです。");
     });
@@ -187,9 +239,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (browserType == BrowserType.Firefox) {
         changeShortcut.hidden = true;
-        const firefoxExplanation = document.createElement('p');
-        firefoxExplanation.innerText = "To change the shortcut key combination, go to url 'about:addons' → click 'Extensions' → click the cog icon → click 'Manage Extension Shortcuts'.";
-        changeShortcut.parentElement?.insertBefore(firefoxExplanation, changeShortcut.nextElementSibling);
+        const shortcutHelp = document.getElementById('shortcut-help');
+        const shortcutHelpText = document.getElementById('shortcut-help-text');
+        if (shortcutHelp) shortcutHelp.hidden = false;
+        if (shortcutHelpText) shortcutHelpText.textContent = 'Open about:addons → Extensions → gear menu → Manage Extension Shortcuts.';
     }
 
     commands.getAll().then((installedCommands) => {
@@ -198,26 +251,51 @@ document.addEventListener('DOMContentLoaded', () => {
             document.querySelector<HTMLSpanElement>('#shortcut-key')!.innerText = snipCommand.shortcut
         }
         else {
-            document.querySelector<HTMLSpanElement>('#shortcut-key')!.innerText = "<no shortcut setup>"
+            document.getElementById('scan-instruction')!.textContent = 'Set a shortcut to start scanning.';
+            changeShortcut.textContent = 'Set shortcut';
         }
     });
 
-    // Check for Japanese speech synthesis voice
-    // The voices may not be loaded immediately, so also listen for updates.
-    speechSynthesis.addEventListener("voiceschanged", () => {
-        checkJapaneseVoice(speechStatus);
-        // Also repopulate it when the voices change
-        Settings.getPreferredVoiceId().then(async (preferredVoiceUri) => {
-            const voices = await TTSWrapper.getVoices();
-            populateVoiceSelection(voiceSelect, preferredVoiceUri, voices);
-        });
-    });
-    checkJapaneseVoice(speechStatus);
-    Settings.getPreferredVoiceId().then(async (preferredVoiceUri) => {
-        const voices = await TTSWrapper.getVoices();
-        populateVoiceSelection(voiceSelect, preferredVoiceUri, voices);
-    });
+    // Browser voices can arrive after the popup has opened.
+    speechSynthesis.addEventListener('voiceschanged', refreshVoices);
+    refreshVoices();
 });
+
+function initializeSettingsNavigation(): void {
+    const settingsTabs = ['reading-tab', 'recognition-tab']
+        .map((id) => document.getElementById(id) as HTMLButtonElement | null)
+        .filter((tab): tab is HTMLButtonElement => tab !== null);
+
+    function activateTab(selected: HTMLButtonElement, focus = false) {
+        for (const tab of settingsTabs) {
+            const active = tab === selected;
+            tab.setAttribute('aria-selected', String(active));
+            tab.tabIndex = active ? 0 : -1;
+            const panel = document.getElementById(tab.getAttribute('aria-controls') ?? '');
+            if (panel) panel.hidden = !active;
+        }
+        if (focus) selected.focus();
+    }
+
+    for (const [index, tab] of settingsTabs.entries()) {
+        tab.addEventListener('click', () => activateTab(tab));
+        tab.addEventListener('keydown', (event) => {
+            let nextIndex: number;
+            if (event.key === 'ArrowRight') nextIndex = (index + 1) % settingsTabs.length;
+            else if (event.key === 'ArrowLeft') nextIndex = (index - 1 + settingsTabs.length) % settingsTabs.length;
+            else if (event.key === 'Home') nextIndex = 0;
+            else if (event.key === 'End') nextIndex = settingsTabs.length - 1;
+            else return;
+            event.preventDefault();
+            activateTab(settingsTabs[nextIndex], true);
+        });
+    }
+
+    if (settingsTabs[0]) activateTab(settingsTabs[0]);
+    window.addEventListener('hashchange', () => {
+        if (window.location.hash === '#translation' && settingsTabs[0]) activateTab(settingsTabs[0]);
+    });
+}
 
 async function loadSettings(
     windowTimeoutSelect: HTMLSelectElement,
@@ -273,32 +351,10 @@ function updateBackendSettingsVisibility(
     const isPaddleBackend = backend === 'paddleonnx';
     tesseractSettings.hidden = isPaddleBackend;
     paddleSettings.hidden = !isPaddleBackend;
-}
-
-/**
- * Check if there's at least one Japanese (ja) voice available in speech synthesis
- * and update the UI with the appropriate message.
- */
-async function checkJapaneseVoice(speechStatus: HTMLElement) {
-    const handler = new SpeechSynthesisHandler();
-    const japaneseVoice = await handler.voiceForLanguage();
-
-    if (japaneseVoice) {
-        speechStatus.textContent = "A Japanese speech synthesis voice is available!";
-    } else {
-        speechStatus.innerHTML =
-            "No Japanese voice is available. Please install a Japanese language pack to your system" +
-            "and restart your browser.";
-
-        if (isWindows()) {
-            speechStatus.innerHTML += " Click <a id=\"learn-install-pack\" href=\"https://support.microsoft.com/en-us/windows/language-packs-for-windows-a5094319-a92d-18de-5b53-1cfc697cfca8\">here</a> to learn how to install a language pack";
-            speechStatus.querySelector('#learn-install-pack')?.addEventListener('click', () => {
-                tabs.create({ url: "https://support.microsoft.com/en-us/windows/language-packs-for-windows-a5094319-a92d-18de-5b53-1cfc697cfca8" });
-            });
-        }
-        document.querySelector<HTMLDivElement>('.voice-selection-container')!.hidden = true;
-
-    }
+    const description = document.getElementById('ocr-backend-description');
+    if (description) description.textContent = isPaddleBackend
+        ? 'Better for difficult text. Slower; GPU recommended.'
+        : 'Fast scans. Match the text direction to your image.';
 }
 
 function populateVoiceSelection(
@@ -309,7 +365,7 @@ function populateVoiceSelection(
 ): void {
     // Clear existing options
     voiceSelect.innerHTML = '';
-    const voicesForLanguage = voices.filter((voice) => voice.language.toLowerCase() === voiceLanguage.toLowerCase());
+    const voicesForLanguage = voices.filter((voice) => voice.language.toLowerCase().startsWith(voiceLanguage.toLowerCase()));
     // Populate the select element with available voices
     voicesForLanguage.forEach((voice) => {
         const option = document.createElement('option');
@@ -339,13 +395,13 @@ function updateFuriganaExample(furiganaType: FuriganaTypeString) {
     const furiganaExample = document.getElementById("furigana-example") as HTMLSpanElement;
     switch (furiganaType) {
         case FuriganaTypeString.None:
-            furiganaExample.innerHTML = "<ruby>日本語</ruby>";
+            furiganaExample.textContent = '日本語';
             break;
         case FuriganaTypeString.Hiragana:
-            furiganaExample.innerHTML = "<ruby>日<rt>に</rt></ruby><ruby>本<rt>ほん</rt></ruby><ruby>語<rt>ご</rt></ruby></ruby>";
+            furiganaExample.innerHTML = '<ruby>日本語<rt>にほんご</rt></ruby>';
             break;
         case FuriganaTypeString.Katakana:
-            furiganaExample.innerHTML = "<ruby>日<rt>ニ</rt></ruby><ruby>本<rt>ホン</rt></ruby><ruby>語<rt>ゴ</rt></ruby></ruby>";
+            furiganaExample.innerHTML = '<ruby>日本語<rt>ニホンゴ</rt></ruby>';
             break;
     }
 }

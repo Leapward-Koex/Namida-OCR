@@ -2,10 +2,12 @@ import { commands, runtime, tabs } from "webextension-polyfill";
 import { PSM } from "tesseract.js";
 import { NamidaMessage, NamidaMessageAction, NamidaOcrFromOffscreenData, NamidaOcrFromOffscreenResult, NamidaTensorflowUpscaleData, type NamidaOcrPreloadData } from "../interfaces/message";
 import { Upscaler } from "./Upscaler";
-import { Settings } from "../interfaces/Storage";
+import { Settings, StorageKey } from "../interfaces/Storage";
 import { FuriganaHandler } from "./FuriganaHandler";
 import { BackgroundOcrService } from "namida-background-ocr-service";
 import type { OcrDebugSnapshot } from "./ocr/OcrDebugSnapshot";
+import { isTranslationPlatformSupported } from '../translation/TranslatorApi';
+import type { TranslationCancelRequest, TranslationRequest, TranslationResult, TranslationStatus, TranslationStatusRequest } from '../translation/TranslationTypes';
 
 console.log('Background script loaded');
 
@@ -37,21 +39,58 @@ if (globalThis.Worker) {
 }
 let offscreenCreation: Promise<void> | null = null;
 
+async function hasOffscreenDocument(): Promise<boolean> {
+    // getContexts covers browser versions that expose offscreen without hasDocument.
+    if (chrome.runtime?.getContexts) {
+        const contexts = await chrome.runtime.getContexts({
+            contextTypes: [chrome.runtime.ContextType.OFFSCREEN_DOCUMENT],
+            documentUrls: [runtime.getURL('offscreen/offscreen.html')],
+        });
+        return contexts.length > 0;
+    }
+    return await chrome.offscreen.hasDocument?.() ?? false;
+}
+
 function ensureOffscreenDocument(): Promise<void> {
     // Share both the existence check and creation: simultaneous first snips
     // would otherwise each try to create Chrome's single offscreen document.
     if (!offscreenCreation) {
         offscreenCreation = (async () => {
-            if (!await chrome.offscreen.hasDocument?.()) {
+            if (!await hasOffscreenDocument()) {
                 await chrome.offscreen.createDocument({
                     url: runtime.getURL('offscreen/offscreen.html'),
                     reasons: [chrome.offscreen.Reason.WORKERS],
-                    justification: 'Perform background OCR with bundled local assets'
+                    justification: 'Perform local OCR, furigana and browser-provided translation in a document'
                 });
             }
         })().finally(() => { offscreenCreation = null; });
     }
     return offscreenCreation;
+}
+
+const pendingTranslations = new Map<string, { cancelled: boolean }>();
+const translationCancelled: TranslationResult = { ok: false, reason: 'cancelled', message: 'Translation cancelled.' };
+let translationReset: Promise<void> = Promise.resolve();
+
+function resetTranslation(): Promise<void> {
+    // Invalidate only requests already accepted when settings changed. New
+    // requests wait for disposal, so a delayed reset cannot destroy their session.
+    for (const pending of pendingTranslations.values()) pending.cancelled = true;
+    const resetting = translationReset.then(async () => {
+        if (await hasOffscreenDocument()) {
+            await runtime.sendMessage({ action: NamidaMessageAction.ResetTranslationOffscreen });
+        }
+    });
+    translationReset = resetting.catch(() => {});
+    return resetting;
+}
+
+if (__NAMIDA_TRANSLATION_ENABLED__) {
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+        if (areaName === 'sync' && (changes[StorageKey.TranslationEnabled] || changes[StorageKey.TranslationTargetLanguage])) {
+            resetTranslation().catch(console.warn);
+        }
+    });
 }
 
 commands.onCommand.addListener((command) => {
@@ -72,6 +111,66 @@ runtime.onMessage.addListener((message, sender) => {
     const namidaMessage = message as NamidaMessage;
 
     switch (namidaMessage.action) {
+        case NamidaMessageAction.GetTranslationStatus: {
+            if (!isTranslationPlatformSupported()) return Promise.resolve({ state: 'unsupported', message: 'Local translation is unavailable in this browser' } satisfies TranslationStatus);
+            const data = namidaMessage.data as TranslationStatusRequest;
+            return (async (): Promise<TranslationStatus> => {
+                try {
+                    if (data.ensureHost) await ensureOffscreenDocument();
+                    else if (!await hasOffscreenDocument()) return { state: 'error', message: 'Open translation settings to check browser availability.' };
+                    return await runtime.sendMessage({ action: NamidaMessageAction.GetTranslationStatusOffscreen, data });
+                } catch {
+                    return { state: 'error', message: 'Could not check translation in the background. Try setup again in settings.' };
+                }
+            })();
+        }
+
+        case NamidaMessageAction.TranslateText: {
+            if (!isTranslationPlatformSupported()) return Promise.resolve({ ok: false, reason: 'unsupported', message: 'Local translation is unavailable in this browser' } satisfies TranslationResult);
+            const data = namidaMessage.data as TranslationRequest;
+            const requestId = `${sender.tab?.id ?? 'extension'}:${data.requestId}`;
+            const pending = { cancelled: false };
+            pendingTranslations.set(requestId, pending);
+            return (async (): Promise<TranslationResult> => {
+                try {
+                    await translationReset;
+                    const settings = await Settings.getTranslationSettings();
+                    if (pending.cancelled || settings.enabled === false || settings.targetLanguage !== data.targetLanguage) return translationCancelled;
+                    await ensureOffscreenDocument();
+                    if (pending.cancelled) return translationCancelled;
+                    return await runtime.sendMessage({
+                        action: NamidaMessageAction.TranslateTextOffscreen,
+                        data: { ...data, requestId } satisfies TranslationRequest,
+                    });
+                } catch {
+                    return { ok: false, reason: 'error', message: 'Local translation could not start. Try again or check translation settings.' };
+                } finally {
+                    if (pendingTranslations.get(requestId) === pending) pendingTranslations.delete(requestId);
+                }
+            })();
+        }
+
+        case NamidaMessageAction.CancelTranslation: {
+            if (!isTranslationPlatformSupported()) return Promise.resolve();
+            const data = namidaMessage.data as TranslationCancelRequest;
+            const requestId = `${sender.tab?.id ?? 'extension'}:${data.requestId}`;
+            const pending = pendingTranslations.get(requestId);
+            if (pending) pending.cancelled = true;
+            return hasOffscreenDocument().then((exists) => {
+                if (exists) return runtime.sendMessage({ action: NamidaMessageAction.CancelTranslationOffscreen, data: { requestId } satisfies TranslationCancelRequest });
+            });
+        }
+
+        case NamidaMessageAction.ResetTranslation: {
+            if (!isTranslationPlatformSupported()) return Promise.resolve();
+            return resetTranslation();
+        }
+
+        case NamidaMessageAction.OpenTranslationSettings: {
+            if (!isTranslationPlatformSupported()) return Promise.resolve();
+            return chrome.action.openPopup(sender.tab?.windowId === undefined ? {} : { windowId: sender.tab.windowId });
+        }
+
         case NamidaMessageAction.CaptureFullScreen: {
             return tabs.captureVisibleTab(sender.tab?.windowId, { format: 'png' });
         }
@@ -189,7 +288,7 @@ runtime.onMessage.addListener((message, sender) => {
                 }
                 // Merely opening the popup must not create the offscreen host or
                 // initialize a model. A later scan creates it through the normal path.
-                if (!await chrome.offscreen.hasDocument?.()) return null;
+                if (!await hasOffscreenDocument()) return null;
                 return runtime.sendMessage({
                     action: retry ? NamidaMessageAction.RetryOcrGpuOffscreen : NamidaMessageAction.GetOcrAccelerationStatusOffscreen,
                 });

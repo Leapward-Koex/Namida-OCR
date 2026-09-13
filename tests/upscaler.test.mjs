@@ -128,6 +128,7 @@ test('settings use the lightweight enum without importing screenshot or upscaler
             if (name === './UpscaleMethod') return enumContext.exports;
             if (name === 'tesseract.js') return { PSM: {} };
             if (name === '../background/FuriganaHandler') return { FuriganaType: {} };
+            if (name === '../translation/TranslationLanguages') return { normalizeTranslationTarget: value => value || 'en' };
             throw new Error(`Settings unexpectedly imported ${name}`);
         },
     });

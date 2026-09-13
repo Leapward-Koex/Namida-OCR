@@ -182,6 +182,7 @@ module.exports = (env = {}) => {
                 __NAMIDA_OCR_BACKEND__: JSON.stringify(resolvedOcrBackend),
                 __NAMIDA_OCR_MODEL__: JSON.stringify(ocrModel),
                 __NAMIDA_PADDLE_ONNX_DISABLE_WASM_FALLBACK__: JSON.stringify(disablePaddleOnnxWasmFallback),
+                __NAMIDA_TRANSLATION_ENABLED__: JSON.stringify(browser === 'chrome'),
             }),
             new CopyPlugin({
                 patterns: [

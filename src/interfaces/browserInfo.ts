@@ -8,7 +8,7 @@ export const getCurrentBrowser = () => {
     if (/Firefox/.test(navigator.userAgent)) {
         return BrowserType.Firefox;
     }
-    else if (/Edge/.test(navigator.userAgent)) {
+    else if (/Edg(?:e|A|iOS)?\//.test(navigator.userAgent)) {
         return BrowserType.Edge;
     }
     else {

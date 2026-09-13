@@ -10,6 +10,7 @@ function load(relativePath, dependencies = {}, globals = {}) {
     }).outputText;
     const context = vm.createContext({
         exports: {},
+        __NAMIDA_TRANSLATION_ENABLED__: false,
         require(name) {
             if (name in dependencies) return dependencies[name];
             throw new Error(`Unexpected import ${name}`);
@@ -259,6 +260,7 @@ function backgroundHarness({ hasDocument = false, direct = false, backend = 'pad
         } },
         './FuriganaHandler': { FuriganaHandler: {} },
         'namida-background-ocr-service': { BackgroundOcrService: service },
+        '../translation/TranslatorApi': { isTranslationPlatformSupported: () => false },
     }, {
         console: { log() {}, debug() {}, error() {} },
         Worker: direct ? function Worker() {} : undefined,
@@ -344,6 +346,7 @@ test('offscreen recognition passes settings and debug capture in one service cal
         'webextension-polyfill': { runtime: { onMessage: { addListener(callback) { listener = callback; } } } },
         '../interfaces/message': messageModule,
         '../background/FuriganaHandler': { FuriganaHandler: {} },
+        '../translation/TranslationService': { TranslationService: class {} },
         '../background/ocr/OcrService': { OcrService: {
             async init(...args) { calls.push(args); },
             async recognizeWithDebug(...args) { calls.push(args); return result; },

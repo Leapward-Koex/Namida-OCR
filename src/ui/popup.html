@@ -1,119 +1,150 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Namida OCR Settings</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
-
 <body>
   <div class="settings-container">
-    <h1>Namida OCR Settings</h1>
-
-    <div class="section">
-      <h2>Instructions</h2>
-      <ol style="margin-bottom: 10px;">
-        <li>Press <span id="shortcut-key">...</span> to show the snipping tool</li>
-        <li>Drag the curson to make a selection around a block of text</li>
-        <li>View the recognized text in the bottom right of the page. Text is also automatically copied to the
-          clipboard.
-        </li>
-      </ol>
-      <Button id="change-shortcut">Change shortcut key</Button>
-    </div>
-
-    <div class="section">
-      <h2>General</h2>
-      <label for="window-timeout">Floating window timeout</label>
-      <select id="window-timeout">
-        <option value="10000" selected>10 Seconds</option>
-        <option value="30000">30 Seconds</option>
-        <option value="60000">1 minute</option>
-        <option value="-1">Never</option>
-      </select>
-      <label for="furigana-type">Furigana display</label>
-      <select id="furigana-type">
-        <option value="none" selected>None</option>
-        <option value="hiragana">Hiragana</option>
-        <option value="katakana">Katakana</option>
-      </select>
-      <div style="margin-left: 5px;">
-        <h4 style="margin-bottom: 5px;">Preview</h4>
-        <span id="furigana-example"></span>
+    <header class="popup-header">
+      <div class="heading-row">
+        <h1>Namida <span>OCR</span></h1>
+        <span class="saved-note">Settings save automatically</span>
       </div>
-
-    </div>
-
-    <div class="section">
-      <h2>Speech Synthesis</h2>
-      <div class="inline-setting">
-        <input id="show-speak-button" type="checkbox" />
-        <label for="show-speak-button">Show Speak button when available</label>
+      <div class="shortcut-row">
+        <p id="scan-instruction">Press <kbd id="shortcut-key">…</kbd> and drag to scan.</p>
+        <button id="change-shortcut" type="button" class="text-button">Change shortcut</button>
       </div>
-      <p id="speech-status">Checking if Japanese voices are available...</p>
-      <div class="voice-selection-container">
-        <label for="voice-selection">Voice</label>
-        <select id="voice-selection"></select>
+      <details id="shortcut-help" hidden>
+        <summary>Change shortcut</summary>
+        <p id="shortcut-help-text" class="setting-description"></p>
+      </details>
+    </header>
+    <nav class="settings-tabs" role="tablist" aria-label="Settings">
+      <button id="reading-tab" type="button" role="tab" aria-selected="true" aria-controls="reading-panel">Reading</button>
+      <button id="recognition-tab" type="button" role="tab" aria-selected="false" aria-controls="recognition-panel" tabindex="-1">Recognition</button>
+    </nav>
+    <main class="settings-content">
+      <div id="reading-panel" role="tabpanel" aria-labelledby="reading-tab">
+        <section class="section" id="translation" aria-labelledby="translation-heading" hidden>
+          <div class="section-heading">
+            <h2 id="translation-heading">Translation</h2>
+            <label class="toggle-label" for="translation-enabled">
+              <span>Translate Japanese</span>
+              <input id="translation-enabled" type="checkbox" role="switch" disabled />
+            </label>
+          </div>
+          <div class="setting-row">
+            <label for="translation-target-language">Translate into</label>
+            <select id="translation-target-language" disabled></select>
+          </div>
+          <p id="translation-status" class="setting-description" role="status" aria-live="polite">Checking availability…</p>
+          <progress id="translation-download-progress" max="1" aria-label="Translation model download" hidden></progress>
+          <div class="translation-actions">
+            <button id="translation-setup" type="button" disabled hidden>Download &amp; enable</button>
+            <button id="translation-cancel-setup" class="secondary-button" type="button" hidden>Cancel</button>
+          </div>
+        </section>
+        <section class="section" aria-labelledby="display-heading">
+          <h2 id="display-heading">Japanese text</h2>
+          <p class="setting-description">Shown after each scan and copied to your clipboard.</p>
+          <div class="setting-columns">
+            <div class="field">
+              <label for="furigana-type">Furigana</label>
+              <select id="furigana-type">
+                <option value="none">Off</option>
+                <option value="hiragana">Hiragana</option>
+                <option value="katakana">Katakana</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="window-timeout">Hide results after</label>
+              <select id="window-timeout">
+                <option value="10000">10 seconds</option>
+                <option value="30000">30 seconds</option>
+                <option value="60000">1 minute</option>
+                <option value="-1">Never</option>
+              </select>
+            </div>
+          </div>
+          <div class="furigana-preview"><span>Preview</span><span id="furigana-example" lang="ja"></span></div>
+        </section>
+        <section class="section" aria-labelledby="speech-heading">
+          <div class="section-heading">
+            <h2 id="speech-heading">Japanese speech</h2>
+            <label class="toggle-label" for="show-speak-button">
+              <span>Show Speak button</span>
+              <input id="show-speak-button" type="checkbox" role="switch" />
+            </label>
+          </div>
+          <div id="speech-options" hidden>
+            <div class="voice-selection-container setting-row">
+              <label for="voice-selection">Voice</label>
+              <select id="voice-selection"></select>
+            </div>
+            <p id="speech-status" class="setting-description" role="status" hidden></p>
+            <button id="voice-demo-button" type="button" class="text-button">Preview voice</button>
+          </div>
+        </section>
       </div>
-      <Button id="voice-demo-button">Demo</Button>
-    </div>
-
-    <div class="section">
-      <h2>Advanced</h2>
-      <label for="ocr-backend">OCR Backend</label>
-      <select id="ocr-backend" title="Tesseract is faster, but you must manually set the correct text direction or the result will usually be wrong. PaddleOCR is slower, but usually more accurate on difficult text and is strongly recommended with GPU support enabled.">
-        <option value="tesseract" selected>Tesseract</option>
-        <option value="paddleonnx">PaddleOCR</option>
-      </select>
-      <p class="setting-description" id="ocr-backend-description">
-        <strong>Tesseract:</strong> Faster and lighter, but you must manually choose the correct text direction. If this text direction setting does not match the source text, the OCR output will most likely be incorrect.
-        <br />
-        <strong>PaddleOCR:</strong> Usually more accurate for difficult text, but slower to start and scan. GPU support is highly recommended for practical scan speed when your browser and hardware allow it.
-      </p>
-      <label for="upscaling-mode">Upscaling Mode</label>
-      <select id="upscaling-mode">
-        <option value="none">None</option>
-        <option value="canvas" selected>Canvas</option>
-        <option value="tensorflow">Tensorflow</option>
-      </select>
-      <div id="tesseract-settings">
-        <label for="tesseract-text-direction">Text direction</label>
-        <select id="tesseract-text-direction">
-          <option value="vertical" selected>Vertical (`jpn_vert`)</option>
-          <option value="horizontal">Horizontal (`jpn`)</option>
-        </select>
-      </div>
-      <div id="paddle-settings" hidden>
-        <div class="inline-setting">
-          <input id="enable-paddle-gpu" type="checkbox" />
-          <label for="enable-paddle-gpu">Enable GPU for PaddleOCR</label>
-        </div>
-        <p class="setting-description">
-          Tries WebGPU for OCR, with local CPU (WASM) fallback. AI upscaling selects acceleration separately.
-        </p>
-        <p id="paddle-gpu-status" class="setting-description" role="status" aria-live="polite">Checking OCR status…</p>
-        <details id="paddle-gpu-details" class="setting-description" hidden>
-          <summary>Acceleration details</summary>
-          <p id="paddle-gpu-detail-text"></p>
+      <div id="recognition-panel" role="tabpanel" aria-labelledby="recognition-tab" hidden>
+        <section class="section" aria-labelledby="ocr-heading">
+          <h2 id="ocr-heading">Text recognition</h2>
+          <div class="setting-row">
+            <label for="ocr-backend">OCR engine</label>
+            <select id="ocr-backend" aria-describedby="ocr-backend-description">
+              <option value="tesseract">Tesseract · faster</option>
+              <option value="paddleonnx">PaddleOCR · more accurate</option>
+            </select>
+          </div>
+          <p class="setting-description" id="ocr-backend-description">Fast scans. Match the text direction to your image.</p>
+          <div id="tesseract-settings">
+            <div class="setting-row">
+              <label for="tesseract-text-direction">Text direction</label>
+              <select id="tesseract-text-direction">
+                <option value="vertical">Vertical</option>
+                <option value="horizontal">Horizontal</option>
+              </select>
+            </div>
+          </div>
+          <div id="paddle-settings" hidden>
+            <label class="toggle-label setting-toggle" for="enable-paddle-gpu">
+              <span>Use GPU acceleration</span>
+              <input id="enable-paddle-gpu" type="checkbox" role="switch" />
+            </label>
+            <p id="paddle-gpu-status" class="setting-description" role="status" aria-live="polite">Checking OCR status…</p>
+            <details id="paddle-gpu-details" class="setting-description" hidden>
+              <summary>GPU details</summary>
+              <p id="paddle-gpu-detail-text"></p>
+            </details>
+            <button id="retry-paddle-gpu" type="button" class="secondary-button" hidden>Retry GPU</button>
+          </div>
+        </section>
+        <section class="section" aria-labelledby="image-heading">
+          <h2 id="image-heading">Image preparation</h2>
+          <div class="setting-row">
+            <label for="upscaling-mode">Upscaling</label>
+            <select id="upscaling-mode">
+              <option value="none">Off</option>
+              <option value="canvas">Standard</option>
+              <option value="tensorflow">AI · slower</option>
+            </select>
+          </div>
+          <p class="setting-description">Enlarge small text before recognition.</p>
+        </section>
+        <details class="section advanced-settings">
+          <summary>Troubleshooting</summary>
+          <label class="toggle-label setting-toggle" for="save-ocr-crop">
+            <span>Save each scanned image</span>
+            <input id="save-ocr-crop" type="checkbox" role="switch" />
+          </label>
         </details>
-        <button id="retry-paddle-gpu" type="button" hidden>Retry GPU</button>
       </div>
-    </div>
-
-    <div class="section">
-      <h2>Debugging</h2>
-      <div class="inline-setting">
-        <input id="save-ocr-crop" type="checkbox" />
-        <label for="save-ocr-crop">Save OCR Crop</label>
-      </div>
-    </div>
+    </main>
+    <footer id="build-version" aria-label="Build version"></footer>
   </div>
-
-  <footer id="build-version" aria-label="Build version"></footer>
-
-  <!-- Your compiled JS (transpiled from TypeScript) -->
   <script src="index.js"></script>
 </body>
-
 </html>
