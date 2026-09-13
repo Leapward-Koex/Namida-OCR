@@ -2,18 +2,18 @@
 
 # OCR Performance Report
 
-Generated: 2026-09-12T03:13:56.061Z
+Generated: 2026-09-13T10:22:22.038Z
 Repository: `Leapward-Koex/Namida-OCR`
-Branch: `master`
-Commit: [`1b45a1f`](https://github.com/Leapward-Koex/Namida-OCR/commit/1b45a1fd9bb4d33c1474d046f1dcfebfdfc4604f)
-Workflow run: [#10](https://github.com/Leapward-Koex/Namida-OCR/actions/runs/34669503490)
+Branch: `chromium-translation`
+Commit: [`30c9072`](https://github.com/Leapward-Koex/Namida-OCR/commit/30c9072f77211a6e7f79b42f682e3c0d4117b737)
+Workflow run: [#12](https://github.com/Leapward-Koex/Namida-OCR/actions/runs/34751348382)
 
 ## Summary
 
 | Backend | Status | Model | Variant | Exact Matches | Exact Match Rate | Avg Character Accuracy | Build Time | Test Time | Total Time |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Tesseract | Passed | jpn_vert | n/a | 7/30 | 23.3% | 54.2% | 31s | 1m 49s | 2m 20s |
-| PaddleOCR ONNX | Passed | jpn_vert | server | 21/30 | 70.0% | 89.9% | 31s | 3m 17s | 3m 48s |
+| Tesseract | Failed | jpn_vert | n/a | 7/30 | 23.3% | 54.2% | 30s | 2m 4s | 2m 33s |
+| PaddleOCR ONNX | Failed | jpn_vert | server | 21/30 | 70.0% | 89.9% | 29s | 3m 38s | 4m 7s |
 
 ## Comparison
 
@@ -22,7 +22,7 @@ Workflow run: [#10](https://github.com/Leapward-Koex/Namida-OCR/actions/runs/346
 | Exact matches | 7/30 | 21/30 | +14 |
 | Exact match rate | 23.3% | 70.0% | +46.7 pp |
 | Avg character accuracy | 54.2% | 89.9% | +35.6 pp |
-| Total time | 2m 20s | 3m 48s | +1m 28s |
+| Total time | 2m 33s | 4m 7s | +1m 34s |
 
 ## Case Accuracy
 
@@ -58,6 +58,13 @@ Workflow run: [#10](https://github.com/Leapward-Koex/Namida-OCR/actions/runs/346
 | general-008-vertical-three-columns | 100.0% | 100.0% | 0.0 pp | Tie |
 | general-009-horizontal-three-lines | 8.3% | 100.0% | +91.7 pp | PaddleOCR ONNX |
 | general-010-serif-japanese | 6.7% | 100.0% | +93.3 pp | PaddleOCR ONNX |
+
+## Failures
+
+| Backend | Status | Build Exit | Test Exit | Overall Exit |
+| --- | --- | --- | --- | --- |
+| Tesseract | Failed | 0 | 1 | 1 |
+| PaddleOCR ONNX | Failed | 0 | 1 | 1 |
 
 ## Notes
 
