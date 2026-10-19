@@ -35,9 +35,12 @@ The normal snip mode remains an integration test of screen capture.
 
 No per-case accuracy threshold is assigned before measuring either backend. Report
 the original twenty and these ten as separate cohorts as well as reporting the
-combined score; adding easy cases must not hide regressions in old cases. Current
-scoring removes whitespace, so these samples include spaces but do not test exact
-word-spacing preservation. The apostrophe remains significant in scoring.
+combined score; adding easy cases must not hide regressions in old cases. Historical
+scoring removes whitespace. The separate spacing-sensitive metric preserves inline
+whitespace, removes Japanese layout line breaks, and inserts one space at line
+breaks between Latin letters/numbers. Both metrics remain significant for the
+before/after gate, including missing word separators. The apostrophe is significant
+in both metrics.
 
 These are controlled synthetic probes, not a representative natural-image test
 set. They do not establish performance for handwriting, severe perspective,

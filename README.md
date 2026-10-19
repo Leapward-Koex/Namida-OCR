@@ -135,7 +135,7 @@ Run `npm run test:build` and `python -m unittest discover -s tests -p test_relea
 - `npm run test:e2e:tesseract`, `npm run test:e2e:scribejs`, and `npm run test:e2e:paddleonnx` run the Chromium Playwright OCR suite against a single backend without needing an extra `--backend` flag.
 - `npm run test:e2e:paddleonnx:no-fallback` runs the Chromium Playwright OCR suite against `paddleonnx` with CPU retry disabled so WebGPU failures are surfaced directly.
 - `npm run test:e2e:compare-backends` runs the Chromium Playwright OCR dataset against the `tesseract`, experimental `scribejs`, and experimental `paddleonnx` backends and writes `test-results/ocr-backend-comparison.json`.
-- `.github/workflows/ocr-performance.yml` runs on every branch push, executes `npm run test:e2e:tesseract` and `npm run test:e2e:paddleonnx`, writes [reports/ocr-performance.md](reports/ocr-performance.md), and commits that Markdown report back with `GITHUB_TOKEN`.
+- `.github/workflows/ocr-performance.yml` checks relevant pushes and pull requests against a distinct baseline commit. Both Paddle builds run with the same fixtures, browser, CPU/WASM provider, and five workers; any individual-case or cohort regression fails the job. Before/after artifacts are retained. A separate job publishes [reports/ocr-performance.md](reports/ocr-performance.md) only after successful checks on `master`; benchmark and PR jobs have read-only permissions.
 - Playwright runs in this repo should use at least 5 workers. The local runner wrappers clamp lower worker counts up to `5`.
 - The `scribejs` backend is experimental, must keep using bundled local assets only, and the published `scribe.js-ocr` package is AGPL-3.0 licensed.
 - The `paddleonnx` backend is experimental and uses a bundled multilingual recognition model after text detection, with no Tesseract fallback.
@@ -145,6 +145,8 @@ Run `npm run test:build` and `python -m unittest discover -s tests -p test_relea
 The normal path follows the pinned PaddleX detector/recognizer pipeline: BGR image preparation, one detector pass, DB quadrilateral extraction, cubic perspective rectification with tall-line rotation, one recognition pass per region, and greedy CTC decoding. Recognition uses height 48, a base width of 320 expanded up to 3200, and zero padding after normalization. Confidence comes directly from model probabilities; decoded characters, punctuation, and spaces are preserved. There are no language penalties, character substitutions, projection splits, or recognition retries.
 
 The detector uses the pinned standalone PaddleX PP-OCRv6 policy of `960/max`, stride 32, with a separate 1536-pixel browser ceiling for overrides. Bundled export settings supply threshold `0.2`, box score `0.45`, unclip ratio `1.4`, and at most 3000 contour candidates. Reading order is a separate geometry-based policy: horizontal rows or Japanese columns from right to left. Optional document-orientation and layout models are not bundled.
+
+DB rectangles preserve OpenCV's integer convex-hull order, including duplicate-point and equal-area ties. This matters at score boundaries: a different hull start can change float32 coordinates and the integer polygon used to accept or reject text. Independent OpenCV fixtures cover hull order, rectangles, scoring, and threshold acceptance.
 
 | Module | Responsibility |
 | --- | --- |
@@ -161,9 +163,13 @@ Dictionary preparation preserves YAML apostrophe escaping and the appended space
 
 ### Checking OCR regressions
 
-Run `npm run test:paddle:unit` for model preparation/decoding, geometry, layout, backend/runtime, capture-flow, and regression-checker tests. Dictionary checks use Python 3: `python -m unittest discover -s tests -p test_paddle_dictionary.py`.
+Run `npm run test:paddle:unit` for model preparation/decoding, geometry, layout, backend/runtime, capture-flow, scoring, and accuracy-gate tests. Dictionary checks use Python 3: `python -m unittest discover -s tests -p test_paddle_dictionary.py`.
 
-The [recorded performance report](reports/ocr-performance.md) is maintained by CI. For changes, supply `--baseline <before-summary.json>` to `npm run test:ocr:regression -- --actual <after-summary.json>` using a controlled run of the current implementation. Without that argument the guard compares against the recorded report. It checks individual cases and aggregate scores; a green Playwright run or higher overall average alone does not establish non-regression. Report the original 20 cases and the added 10 general-text cases separately so one cohort cannot conceal losses in the other.
+The [recorded performance report](reports/ocr-performance.md) is maintained by CI. For changes, supply `--baseline <before-summary.json>` to `npm run test:ocr:regression -- --actual <after-summary.json>` using a controlled run of the current implementation. The gate checks every baseline case, exact matches, and aggregate scores for the original 20 and general 10 cases separately; additions cannot offset losses. Raw text validates recorded scores, and changed labels, input hashes, or provider/model metadata invalidate the comparison. A green Playwright run alone does not establish non-regression.
+
+JSON summaries retain the historical whitespace-insensitive metric and add `spacingSensitive` accuracy and exact matches. This second metric preserves inline whitespace, removes Japanese layout line breaks, and replaces line breaks between Latin letters/numbers with one space. `rawExactMatch` is diagnostic. Legacy JSON with raw text gains these checks automatically; the default Markdown baseline remains limited to its historical metric and rounded precision.
+
+CI resolves the PR merge base or previous pushed commit, verifies that existing case declarations and fixture bytes are unchanged, and builds both revisions. `node scripts/run-ocr-dataset.mjs --build-dir <extension-dir> --results-subdir <name>` runs a prepared Paddle build with deterministic fixtures and CPU/WASM, preserving results under `test-results/<name>/`. The candidate test harness exercises both builds. Missing or unusable baselines fail the job rather than silently using the candidate as its own baseline.
 
 Screen capture removes the selection overlay, hides existing floating UI, and waits two animation frames before requesting a screenshot. OCR status appears after capture; hidden UI is restored even on failure. [capture.spec.ts](tests/capture.spec.ts) compares real browser-capture pixels across successive snips without running OCR. Inspect captured inputs whenever a snip-mode score changes.
 

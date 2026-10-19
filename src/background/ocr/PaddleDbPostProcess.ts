@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0 AND BSD-3-Clause
-// Contour tracing and integer polygon rasterization follow OpenCV's algorithms.
+// Contour tracing, convex hulls and integer polygon rasterization follow OpenCV.
 // Copyright (C) 2000 Intel Corporation; Copyright (C) 2009 Willow Garage Inc.;
 // Copyright (C) 2013 OpenCV Foundation; Copyright (C) 2015 Itseez Inc.
 // See third-party/PaddleGeometry-NOTICE.txt for sources and license information.
@@ -25,9 +25,9 @@ export type DbRectangle = { points: DbQuad; shortSide: number };
  * Clipper round offset -> minimum rectangle -> source coordinates.
  *
  * Clipper uses the same integer coordinate convention as Pyclipper. Rectangle
- * calculations follow float32 rotating calipers. Platform floating-point and
- * equal-area hull ties can still change a boundary pixel; reference fixtures
- * measure that limitation rather than treating an axis-aligned box as parity.
+ * calculations preserve OpenCV's hull order and float32 rotating-caliper ties.
+ * Platform floating-point differences can still change a boundary pixel;
+ * reference fixtures measure the supported geometry and score behavior.
  */
 export function postProcessDb(
     probabilities: ArrayLike<number>, mapWidth: number, mapHeight: number,
@@ -155,30 +155,98 @@ export function findDbContours(bitmap: ArrayLike<number>, width: number, height:
     return contours.reverse();
 }
 
-function cross(origin: DbPoint, a: DbPoint, b: DbPoint): number {
-    return (a.x - origin.x) * (b.y - origin.y) - (a.y - origin.y) * (b.x - origin.x);
-}
-
-function convexHull(points: readonly DbPoint[]): DbPoint[] {
-    const sorted = [...points].sort((a, b) => a.x - b.x || a.y - b.y)
-        .filter((point, index, entries) => !index || point.x !== entries[index - 1].x || point.y !== entries[index - 1].y);
-    if (sorted.length < 3) return sorted;
-    const lower: DbPoint[] = [], upper: DbPoint[] = [];
-    for (const point of sorted) {
-        while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], point) <= 0) lower.pop();
-        lower.push(point);
+/** OpenCV convexHull(clockwise=false, returnPoints=true) for integer DB paths. */
+export function convexDbHull(points: readonly DbPoint[]): DbPoint[] {
+    if (!points.length) return [];
+    // Keep duplicate indices: OpenCV breaks coordinate ties by input address,
+    // then uses those indices to choose the hull's cyclic starting vertex.
+    const sorted = points.map((point, index) => ({ ...point, index }))
+        .sort((a, b) => a.x - b.x || a.y - b.y || a.index - b.index);
+    const last = sorted.length - 1;
+    if (sorted[0].x === sorted[last].x && sorted[0].y === sorted[last].y) return [points[0]];
+    let minY = 0, maxY = 0;
+    for (let i = 1; i <= last; i += 1) {
+        if (sorted[i].y < sorted[minY].y) minY = i;
+        if (sorted[i].y > sorted[maxY].y) maxY = i;
     }
-    for (let index = sorted.length - 1; index >= 0; index -= 1) {
-        const point = sorted[index];
-        while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], point) <= 0) upper.pop();
-        upper.push(point);
+    const sklansky = (start: number, end: number, ySign: number, convexitySign: number): number[] => {
+        if (start === end || (sorted[start].x === sorted[end].x && sorted[start].y === sorted[end].y)) return [start];
+        const step = end > start ? 1 : -1, afterEnd = end + step;
+        let previous = start, current = start + step, next = current + step;
+        const stack = [previous, current, next];
+        let size = 3;
+        while (next !== afterEnd) {
+            const by = sorted[next].y - sorted[current].y;
+            if (Math.sign(by) !== ySign) {
+                const ax = sorted[current].x - sorted[previous].x;
+                const ay = sorted[current].y - sorted[previous].y;
+                const bx = sorted[next].x - sorted[current].x;
+                if (Math.sign(ay * bx - ax * by) === convexitySign && (ax !== 0 || ay !== 0)) {
+                    previous = current;
+                    current = next;
+                    next += step;
+                    stack[size++] = next;
+                } else if (previous === start) {
+                    current = next;
+                    stack[1] = current;
+                    next += step;
+                    stack[2] = next;
+                } else {
+                    stack[size - 2] = next;
+                    current = previous;
+                    previous = stack[size - 4];
+                    size -= 1;
+                }
+            } else {
+                next += step;
+                stack[size - 1] = next;
+            }
+        }
+        return stack.slice(0, size - 1);
+    };
+    // Counterclockwise output swaps the two upper stacks, but not the lower.
+    const topLeft = sklansky(last, maxY, -1, -1);
+    const topRight = sklansky(0, maxY, -1, 1);
+    const hull = topLeft.slice(0, -1).concat(topRight.slice(1).reverse());
+    const stop = topRight.length > 2 ? topRight[1] : topLeft.length > 2 ? topLeft[topLeft.length - 2] : -1;
+    let bottomLeft = sklansky(0, minY, 1, -1), bottomRight = sklansky(last, minY, 1, 1);
+    if (stop >= 0) {
+        const check = bottomLeft.length > 2 ? bottomLeft[1]
+            : bottomLeft.length + bottomRight.length > 2 ? bottomRight[2 - bottomLeft.length] : -1;
+        if (check === stop || (check >= 0 && sorted[check].x === sorted[stop].x && sorted[check].y === sorted[stop].y)) {
+            bottomLeft = bottomLeft.slice(0, 2);
+            bottomRight = bottomRight.slice(0, 2);
+        }
     }
-    return lower.slice(0, -1).concat(upper.slice(0, -1));
+    hull.push(...bottomLeft.slice(0, -1), ...bottomRight.slice(1).reverse());
+    const indices = hull.map((index) => sorted[index].index);
+    // Match OpenCV's optional monotonic-index rotation. An arbitrary rotation
+    // changes which equal-area rectangle wins and can cross the DB score gate
+    // after float32 coordinates are truncated to the integer polygon mask.
+    if (indices.length >= 3) {
+        let min = 0, max = 0, increases = 0;
+        for (let i = 1; i < indices.length; i += 1) {
+            increases += Number(indices[i - 1] < indices[i]);
+            if (increases > 1 && increases <= i - 2) break;
+            if (indices[i] < indices[min]) min = i;
+            if (indices[i] > indices[max]) max = i;
+        }
+        const distance = Math.abs(max - min);
+        if ((distance === 1 || distance === indices.length - 1) && (increases <= 1 || increases >= indices.length - 2)) {
+            const ascending = (max + 1) % indices.length === min;
+            const start = ascending ? min : max;
+            const shifted = indices.slice(start).concat(indices.slice(0, start));
+            if (start > 0 && shifted.slice(1).every((index, i) => ascending === (shifted[i] < index))) {
+                return shifted.map((index) => points[index]);
+            }
+        }
+    }
+    return indices.map((index) => points[index]);
 }
 
 /** Float32 rotating calipers, following OpenCV minAreaRect/boxPoints. */
 export function minimumAreaRectangle(points: readonly DbPoint[]): DbRectangle | null {
-    const hull = convexHull(points);
+    const hull = convexDbHull(points);
     if (hull.length < 3) return null;
     const f = Math.fround;
     const vectors: DbPoint[] = [];

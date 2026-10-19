@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { scoreOcrText, summarizeOcrCases as summarize, summarizeOcrCohorts } from './ocr-scoring.mjs';
 
 const JSON_TOLERANCE = 1e-9;
 const HELP = `Usage: node scripts/check-ocr-regression.mjs [--baseline FILE] [--actual FILE]
@@ -9,7 +10,10 @@ Compare OCR accuracy against the original baseline cases. Every baseline case
 must occur exactly once in the actual summary. New cases are reported separately
 and cannot offset regressions. Checks include each case's character accuracy,
 average character accuracy, and exact matches/rate for the baseline case cohort.
-JSON baselines also preserve each case's exact-match status.
+JSON baselines also preserve each case's exact-match status and separately check
+spacing-sensitive accuracy. Inline whitespace is retained; Japanese layout line
+breaks are removed, and breaks between Latin letters/numbers become one space.
+The original-20 and general-10 fixture cohorts are checked independently.
 
   --baseline FILE  Default: reports/ocr-performance.md (PaddleOCR ONNX column)
                    Or supply a before-run ocr-accuracy-summary.json.
@@ -17,7 +21,9 @@ JSON baselines also preserve each case's exact-match status.
   --help          Show this help.
 
 Markdown scores are compared at the report's one-decimal percentage precision.
-JSON scores use a 1e-9 tolerance. Summary totals must agree with case data.
+JSON scores use a 1e-9 tolerance. Scores with raw text are recomputed and checked;
+legacy raw JSON also gains spacing-sensitive checks. Summary totals must agree
+with case data. Markdown baselines retain their historical whitespace-free metric.
 Exit codes: 0 = no regression, 1 = regression/missing case, 2 = invalid input.
 `;
 
@@ -26,16 +32,6 @@ function requireScore(value, label) {
         throw new Error(`${label} must be a finite number between 0 and 1.`);
     }
     return value;
-}
-
-function summarize(cases) {
-    const exactMatches = cases.filter((entry) => entry.exactMatch).length;
-    return {
-        totalCases: cases.length,
-        exactMatches,
-        exactMatchRate: exactMatches / cases.length,
-        averageCharacterAccuracy: cases.reduce((sum, entry) => sum + entry.characterAccuracy, 0) / cases.length,
-    };
 }
 
 function validateCases(cases, label, requireExactMatch) {
@@ -59,20 +55,79 @@ function validateCases(cases, label, requireExactMatch) {
 }
 
 export function parseJsonSummary(value, label = 'JSON summary') {
+    if (value?.schemaVersion !== undefined && value.schemaVersion !== 2) {
+        throw new Error(`${label}: unsupported schemaVersion ${value.schemaVersion}.`);
+    }
+    const strict = value?.schemaVersion === 2;
+    if (Object.hasOwn(value ?? {}, 'run')) {
+        if (!value.run || typeof value.run !== 'object' || Array.isArray(value.run)) {
+            throw new Error(`${label}: run metadata must be an object.`);
+        }
+        if (Object.hasOwn(value.run, 'status') && value.run.status !== 'passed') {
+            throw new Error(`${label}: run.status must be passed; failed or incomplete browser runs are not accuracy evidence.`);
+        }
+        for (const field of ['exitCode', 'buildExitCode', 'testExitCode', 'summaryExitCode']) {
+            if (Object.hasOwn(value.run, field) && value.run[field] !== 0) {
+                throw new Error(`${label}: run.${field} must be 0; failed or incomplete runs cannot pass the accuracy gate.`);
+            }
+        }
+    }
     validateCases(value?.cases, label, true);
-    const calculated = summarize(value.cases);
-    for (const key of ['totalCases', 'exactMatches']) {
-        if (!Number.isInteger(value[key]) || value[key] !== calculated[key]) {
-            throw new Error(`${label}: ${key} must equal the case data (${calculated[key]}).`);
+    const cases = value.cases.map((entry) => {
+        const hasRawText = Object.hasOwn(entry, 'expectedText') || Object.hasOwn(entry, 'actualText');
+        const hasSpacingMetric = Object.keys(entry).some((key) => key.startsWith('spacingSensitive') || key === 'rawExactMatch');
+        if (!hasRawText && !hasSpacingMetric && !strict) return entry;
+        if (typeof entry.expectedText !== 'string' || typeof entry.actualText !== 'string') {
+            throw new Error(`${label}: ${entry.name} requires raw expectedText and actualText strings to verify its scores.`);
+        }
+        const scores = scoreOcrText(entry.expectedText, entry.actualText);
+        for (const [key, calculated] of Object.entries(scores)) {
+            if (!Object.hasOwn(entry, key) && !strict) continue;
+            if (key.toLowerCase().endsWith('characteraccuracy')) requireScore(entry[key], `${label}: ${entry.name}.${key}`);
+            const agrees = typeof calculated === 'number'
+                ? key.toLowerCase().endsWith('editdistance')
+                    ? Number.isInteger(entry[key]) && entry[key] === calculated
+                    : typeof entry[key] === 'number' && Number.isFinite(entry[key]) && Math.abs(entry[key] - calculated) <= JSON_TOLERANCE
+                : entry[key] === calculated;
+            if (!agrees) throw new Error(`${label}: ${entry.name}.${key} disagrees with raw text (expected ${JSON.stringify(calculated)}).`);
+        }
+        return { ...entry, ...scores };
+    });
+    if (cases.some((entry) => entry.spacingSensitiveCharacterAccuracy !== undefined)
+        && !cases.every((entry) => entry.spacingSensitiveCharacterAccuracy !== undefined)) {
+        throw new Error(`${label}: all cases need raw text for spacing-sensitive scoring; partial metrics cannot be dropped.`);
+    }
+    const calculated = summarize(cases);
+    validateAggregate(value, calculated, label, strict);
+    const cohorts = summarizeOcrCohorts(cases);
+    if (strict || Object.hasOwn(value, 'cohorts')) {
+        if (!value.cohorts || typeof value.cohorts !== 'object' || Array.isArray(value.cohorts)
+            || Object.keys(value.cohorts).sort().join(',') !== Object.keys(cohorts).sort().join(',')) {
+            throw new Error(`${label}: cohorts must contain exactly the groups present in the case data.`);
+        }
+        for (const name of Object.keys(cohorts)) validateAggregate(value.cohorts[name], cohorts[name], `${label}: ${name} cohort`, strict);
+    }
+    return { ...value, ...calculated, cases, cohorts, precision: 'json' };
+}
+
+function validateAggregate(value, calculated, label, strict) {
+    const countFields = ['totalCases', 'exactMatches', 'spacingSensitiveExactMatches'];
+    const scoreFields = ['exactMatchRate', 'averageCharacterAccuracy', 'spacingSensitiveExactMatchRate', 'averageSpacingSensitiveCharacterAccuracy'];
+    for (const key of [...countFields, ...scoreFields]) {
+        const isSpacing = key.toLowerCase().includes('spacingsensitive');
+        if (isSpacing && !strict && !Object.hasOwn(value, key)) continue;
+        if (calculated[key] === undefined) throw new Error(`${label}: ${key} cannot be validated without raw case text.`);
+        if (countFields.includes(key)) {
+            if (!Number.isInteger(value[key]) || value[key] !== calculated[key]) {
+                throw new Error(`${label}: ${key} must equal the case data (${calculated[key]}).`);
+            }
+        } else {
+            requireScore(value[key], `${label}: ${key}`);
+            if (Math.abs(value[key] - calculated[key]) > JSON_TOLERANCE) {
+                throw new Error(`${label}: ${key} disagrees with the case data (${calculated[key]}).`);
+            }
         }
     }
-    for (const key of ['exactMatchRate', 'averageCharacterAccuracy']) {
-        requireScore(value[key], `${label}: ${key}`);
-        if (Math.abs(value[key] - calculated[key]) > JSON_TOLERANCE) {
-            throw new Error(`${label}: ${key} disagrees with the case data (${calculated[key]}).`);
-        }
-    }
-    return { ...calculated, cases: value.cases, precision: 'json' };
 }
 
 function readMarkdownTable(markdown, section) {
@@ -126,10 +181,20 @@ export function parseMarkdownBaseline(markdown) {
     if (Math.abs(summarize(cases).averageCharacterAccuracy - averageCharacterAccuracy) > 0.001 + JSON_TOLERANCE) {
         throw new Error('Markdown baseline: average accuracy disagrees with the case table beyond rounding.');
     }
-    return { cases, totalCases, exactMatches, exactMatchRate, averageCharacterAccuracy, precision: 'markdown' };
+    return { cases, totalCases, exactMatches, exactMatchRate, averageCharacterAccuracy, cohorts: summarizeOcrCohorts(cases), precision: 'markdown' };
 }
 
 export function compareSummaries(baseline, actual) {
+    for (const field of ['backend', 'model', 'paddleOnnxModelVariant']) {
+        if (baseline[field] !== undefined && baseline[field] !== actual[field]) {
+            throw new Error(`${field} changed or is missing; these are not comparable benchmark runs.`);
+        }
+    }
+    for (const field of ['inputMode', 'provider']) {
+        if (baseline.run?.[field] !== undefined && baseline.run[field] !== actual.run?.[field]) {
+            throw new Error(`run.${field} changed or is missing; these are not comparable benchmark runs.`);
+        }
+    }
     const isLower = baseline.precision === 'markdown'
         ? (before, after) => roundedPercent(after) < roundedPercent(before)
         : (before, after) => after < before - JSON_TOLERANCE;
@@ -144,7 +209,7 @@ export function compareSummaries(baseline, actual) {
             regressions.push(`Missing baseline case: ${before.name}`);
             continue;
         }
-        for (const field of ['image', 'normalizedExpectedText']) {
+        for (const field of ['image', 'expectedText', 'normalizedExpectedText', 'spacingSensitiveExpectedText']) {
             if (before[field] !== undefined && after[field] !== before[field]) {
                 throw new Error(`${before.name}: ${field} changed; these are not comparable benchmark cases.`);
             }
@@ -164,20 +229,48 @@ export function compareSummaries(baseline, actual) {
         } else if (isLower(after.characterAccuracy, before.characterAccuracy) || (before.exactMatch === false && after.exactMatch)) {
             changes.push(`${detail}${before.exactMatch === false && after.exactMatch ? ' (gained exact match)' : ''}`);
         }
+        if (before.spacingSensitiveCharacterAccuracy !== undefined) {
+            if (after.spacingSensitiveCharacterAccuracy === undefined) {
+                throw new Error(`${before.name}: spacing-sensitive baseline metrics are missing from the actual run.`);
+            }
+            const lostExact = before.spacingSensitiveExactMatch && !after.spacingSensitiveExactMatch;
+            const gainedExact = !before.spacingSensitiveExactMatch && after.spacingSensitiveExactMatch;
+            const spacingDetail = `${before.name} spacing-sensitive: ${percent(before.spacingSensitiveCharacterAccuracy)} -> ${percent(after.spacingSensitiveCharacterAccuracy)}`;
+            if (isLower(before.spacingSensitiveCharacterAccuracy, after.spacingSensitiveCharacterAccuracy) || lostExact) {
+                regressions.push(`${spacingDetail}${lostExact ? ' (lost exact match)' : ''}`);
+            } else if (isLower(after.spacingSensitiveCharacterAccuracy, before.spacingSensitiveCharacterAccuracy) || gainedExact) {
+                changes.push(`${spacingDetail}${gainedExact ? ' (gained exact match)' : ''}`);
+            }
+        }
     }
     const cohort = matched.length === baseline.totalCases ? summarize(matched) : null;
     if (cohort) {
-        if (isLower(baseline.averageCharacterAccuracy, cohort.averageCharacterAccuracy)) {
-            regressions.push(`Average character accuracy: ${percent(baseline.averageCharacterAccuracy)} -> ${percent(cohort.averageCharacterAccuracy)}`);
-        }
-        if (cohort.exactMatches < baseline.exactMatches) {
-            regressions.push(`Exact matches: ${baseline.exactMatches}/${baseline.totalCases} -> ${cohort.exactMatches}/${cohort.totalCases}`);
-        }
-        if (isLower(baseline.exactMatchRate, cohort.exactMatchRate)) {
-            regressions.push(`Exact match rate: ${percent(baseline.exactMatchRate)} -> ${percent(cohort.exactMatchRate)}`);
+        compareAggregate(baseline, cohort, '', true);
+    }
+    const cohorts = cohort ? summarizeOcrCohorts(matched) : {};
+    for (const [name, before] of Object.entries(baseline.cohorts ?? {})) {
+        if (cohorts[name]) compareAggregate(before, cohorts[name], `${name} cohort: `, baseline.precision === 'json');
+    }
+    return { regressions, changes, cohort, cohorts, addedCases: actual.cases.filter((entry) => !baselineNames.has(entry.name)) };
+
+    function compareAggregate(before, after, prefix, compareExact) {
+        for (const [average, count, rate, labels] of [
+            ['averageCharacterAccuracy', 'exactMatches', 'exactMatchRate', ['Average character accuracy', 'Exact matches', 'Exact match rate']],
+            ['averageSpacingSensitiveCharacterAccuracy', 'spacingSensitiveExactMatches', 'spacingSensitiveExactMatchRate', ['Spacing-sensitive average character accuracy', 'Spacing-sensitive exact matches', 'Spacing-sensitive exact match rate']],
+        ]) {
+            if (before[average] === undefined) continue;
+            if (after[average] === undefined) throw new Error(`${prefix}${average} baseline metric is missing from the actual run.`);
+            if (isLower(before[average], after[average])) {
+                regressions.push(`${prefix}${labels[0]}: ${percent(before[average])} -> ${percent(after[average])}`);
+            }
+            if (compareExact && after[count] < before[count]) {
+                regressions.push(`${prefix}${labels[1]}: ${before[count]}/${before.totalCases} -> ${after[count]}/${after.totalCases}`);
+            }
+            if (compareExact && isLower(before[rate], after[rate])) {
+                regressions.push(`${prefix}${labels[2]}: ${percent(before[rate])} -> ${percent(after[rate])}`);
+            }
         }
     }
-    return { regressions, changes, cohort, addedCases: actual.cases.filter((entry) => !baselineNames.has(entry.name)) };
 }
 
 function percent(value) {
@@ -213,6 +306,13 @@ async function main(args) {
     if (result.cohort) {
         console.log(`Average character accuracy: ${percent(baseline.averageCharacterAccuracy)} -> ${percent(result.cohort.averageCharacterAccuracy)}`);
         console.log(`Exact matches: ${baseline.exactMatches}/${baseline.totalCases} -> ${result.cohort.exactMatches}/${result.cohort.totalCases}`);
+        if (result.cohort.averageSpacingSensitiveCharacterAccuracy !== undefined) {
+            console.log(`Spacing-sensitive average character accuracy: ${baseline.averageSpacingSensitiveCharacterAccuracy === undefined ? 'unavailable in historical report' : percent(baseline.averageSpacingSensitiveCharacterAccuracy)} -> ${percent(result.cohort.averageSpacingSensitiveCharacterAccuracy)}`);
+            console.log(`Spacing-sensitive exact matches: ${baseline.spacingSensitiveExactMatches ?? 'unavailable'}/${baseline.totalCases} -> ${result.cohort.spacingSensitiveExactMatches}/${result.cohort.totalCases}`);
+        }
+        for (const [name, after] of Object.entries(result.cohorts)) {
+            console.log(`${name} cohort (${after.totalCases} cases): ${percent(after.averageCharacterAccuracy)} character accuracy${after.averageSpacingSensitiveCharacterAccuracy === undefined ? '' : `, ${percent(after.averageSpacingSensitiveCharacterAccuracy)} spacing-sensitive`}`);
+        }
     }
     for (const detail of result.regressions) console.error(`REGRESSION: ${detail}`);
     console.log(result.regressions.length ? `FAIL: ${result.regressions.length} regression checks failed.` : 'PASS: no OCR accuracy regressions.');

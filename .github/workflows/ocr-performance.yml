@@ -3,17 +3,31 @@ name: OCR Performance
 on:
   workflow_dispatch:
   push:
-    branches:
-      - '**'
+    branches: ['**']
     paths:
-      - 'src/background/ocr/**'
+      - 'src/**'
       - 'models/**'
       - 'lang/**'
       - 'tests/**'
+      - 'scripts/**'
+      - 'package*.json'
+      - 'webpack.config.js'
+      - 'playwright.config.ts'
+      - '.github/workflows/ocr-performance.yml'
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'models/**'
+      - 'lang/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'package*.json'
+      - 'webpack.config.js'
+      - 'playwright.config.ts'
       - '.github/workflows/ocr-performance.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: ocr-performance-${{ github.ref }}
@@ -25,11 +39,22 @@ jobs:
     timeout-minutes: 120
 
     steps:
-      - name: Checkout repository
+      - name: Checkout candidate
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.ref_name }}
+          persist-credentials: false
+
+      - name: Resolve immutable accuracy baseline
+        id: baseline
+        run: node scripts/resolve-ocr-baseline.mjs
+
+      - name: Checkout baseline
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.baseline.outputs.baseline }}
+          path: .tmp/ocr-baseline
+          persist-credentials: false
 
       - name: Use Node.js 22.x
         uses: actions/setup-node@v4
@@ -43,63 +68,94 @@ jobs:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
 
-      - name: Install dependencies
+      - name: Install candidate dependencies
+        run: npm ci
+
+      - name: Verify baseline labels, input settings and fixture bytes
+        run: node scripts/check-ocr-dataset-compatibility.mjs .tmp/ocr-baseline .
+
+      - name: Install baseline dependencies
+        working-directory: .tmp/ocr-baseline
         run: npm ci
 
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Run OCR benchmarks and write report
-        id: benchmark
-        continue-on-error: true
-        shell: bash
-        run: |
-          set +e
+      - name: Build baseline Paddle extension
+        working-directory: .tmp/ocr-baseline
+        run: npx webpack --env browser=chrome --env ocr_backend=paddleonnx --env ocr_model=jpn_vert --env paddleonnx_model_variant=server --mode production
 
-          npm run test:e2e:tesseract -- --workers 5 --results-subdir ocr-backend-runs/tesseract
-          tesseract_exit=$?
+      - name: Build candidate Paddle extension
+        run: npx webpack --env browser=chrome --env ocr_backend=paddleonnx --env ocr_model=jpn_vert --env paddleonnx_model_variant=server --mode production
 
-          npm run test:e2e:paddleonnx -- --workers 5 --results-subdir ocr-backend-runs/paddleonnx
-          paddleonnx_exit=$?
+      # Both extensions run with this checkout's harness, fixtures, Chromium and
+      # five workers. The dataset runner forces fixture input and CPU WASM, and
+      # each Paddle case asserts that WASM actually handled the inference.
+      - name: Measure baseline Paddle accuracy
+        run: node scripts/run-ocr-dataset.mjs --backend paddleonnx --build-dir .tmp/ocr-baseline/dist --results-subdir ocr-backend-runs/paddleonnx-before
 
-          node ./scripts/write-ocr-performance-report.mjs --input-dir ./test-results/ocr-backend-runs --output ./reports/ocr-performance.md
-          report_exit=$?
+      - name: Measure candidate Paddle accuracy
+        run: node scripts/run-ocr-dataset.mjs --backend paddleonnx --build-dir dist --results-subdir ocr-backend-runs/paddleonnx
 
-          {
-            echo "tesseract_exit=$tesseract_exit"
-            echo "paddleonnx_exit=$paddleonnx_exit"
-            echo "report_exit=$report_exit"
-          } >> "$GITHUB_OUTPUT"
+      - name: Reject Paddle accuracy regressions
+        run: npm run test:ocr:regression -- --baseline test-results/ocr-backend-runs/paddleonnx-before/ocr-accuracy-summary.json --actual test-results/ocr-backend-runs/paddleonnx/ocr-accuracy-summary.json
 
-          if [ "$tesseract_exit" -ne 0 ] || [ "$paddleonnx_exit" -ne 0 ] || [ "$report_exit" -ne 0 ]; then
-            exit 1
-          fi
+      - name: Build candidate Tesseract extension
+        run: npx webpack --env browser=chrome --env ocr_backend=tesseract --env ocr_model=jpn_vert --mode production
+
+      - name: Measure candidate Tesseract accuracy
+        run: node scripts/run-ocr-dataset.mjs --backend tesseract --build-dir dist --results-subdir ocr-backend-runs/tesseract
+
+      - name: Write report only after accuracy checks pass
+        run: node scripts/write-ocr-performance-report.mjs --input-dir test-results/ocr-backend-runs --output reports/ocr-performance.md
 
       - name: Upload OCR benchmark artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ocr-performance-results
-          path: |
-            reports/ocr-performance.md
-            test-results/ocr-backend-runs
+          path: test-results/ocr-backend-runs
+          include-hidden-files: true
           if-no-files-found: warn
 
-      - name: Commit OCR performance report
-        if: always()
+      - name: Upload passing report
+        uses: actions/upload-artifact@v4
+        with:
+          name: ocr-performance-report
+          path: reports/ocr-performance.md
+          if-no-files-found: error
+
+  # Candidate and baseline code execute only in the read-only job above. Report
+  # publication gets credentials separately and never executes repository code.
+  publish-report:
+    if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+    needs: ocr-performance
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+      - uses: actions/download-artifact@v4
+        with:
+          name: ocr-performance-report
+          path: reports
+      - name: Commit passing report if master has not advanced
         shell: bash
         run: |
+          set -euo pipefail
+          if [[ "$(git rev-parse HEAD)" != "$GITHUB_SHA" ]]; then
+            echo "::notice::Skipping stale OCR report for $GITHUB_SHA"
+            exit 0
+          fi
           if [ -z "$(git status --porcelain -- reports/ocr-performance.md)" ]; then
             echo "No OCR performance report changes to commit."
             exit 0
           fi
-
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add reports/ocr-performance.md
           git commit -m "chore: update OCR performance report [skip ci]"
-          git push
-
-      - name: Fail workflow when benchmarks fail
-        if: always() && steps.benchmark.outcome == 'failure'
-        run: exit 1
+          git push origin HEAD:master

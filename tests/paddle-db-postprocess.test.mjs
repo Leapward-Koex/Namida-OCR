@@ -16,8 +16,53 @@ function loadModule(name) {
 }
 const geometry = loadModule('PaddleDbPostProcess');
 const reference = JSON.parse(readFileSync(new URL('./fixtures/paddle-geometry-reference.json', import.meta.url), 'utf8'));
+const hullReference = JSON.parse(readFileSync(new URL('./fixtures/paddle-hull-reference.json', import.meta.url), 'utf8'));
 const pointObjects = (points) => points.map(([x, y]) => ({ x, y }));
 const pointPairs = (points) => JSON.parse(JSON.stringify(points.map(({ x, y }) => [x, y])));
+
+test('convex hulls retain OpenCV cyclic order for permutations, duplicates and collinear edges', () => {
+    assert.deepEqual(pointPairs(geometry.convexDbHull([])), []);
+    for (const fixture of hullReference.hulls) {
+        const points = pointObjects(fixture.points);
+        assert.deepEqual(pointPairs(geometry.convexDbHull(points)), fixture.hull, fixture.name);
+        const rectangle = geometry.minimumAreaRectangle(points);
+        if (!fixture.rectangle) {
+            assert.equal(rectangle, null, fixture.name);
+            continue;
+        }
+        assert.ok(rectangle, fixture.name);
+        const expected = fixture.rectangle;
+        for (const [index, point] of rectangle.points.entries()) {
+            assert.ok(Math.abs(point.x - expected.points[index][0]) < 1e-4, `${fixture.name}: box ${index} x`);
+            assert.ok(Math.abs(point.y - expected.points[index][1]) < 1e-4, `${fixture.name}: box ${index} y`);
+        }
+        assert.ok(Math.abs(rectangle.shortSide - expected.shortSide) < 1e-4, `${fixture.name}: short side`);
+    }
+});
+
+test('equal-area hull ordering preserves a region just above the bundled DB score threshold', () => {
+    const fixture = hullReference.scoreBoundary;
+    const probabilities = new Float32Array(fixture.width * fixture.height);
+    for (const [y, start, end] of fixture.rowRuns) {
+        probabilities.fill(fixture.probability, y * fixture.width + start, y * fixture.width + end);
+    }
+    const contours = geometry.findDbContours(probabilities.map((value) => Number(value > fixture.options.threshold)), fixture.width, fixture.height);
+    assert.equal(contours.length, 1);
+    assert.deepEqual(pointPairs(contours[0]), fixture.contour);
+    assert.deepEqual(pointPairs(geometry.convexDbHull(contours[0])), fixture.hull);
+    const rectangle = geometry.minimumAreaRectangle(contours[0]);
+    // These exact float32 extents decide which integer pixels enter the mask.
+    assert.deepEqual(pointPairs(rectangle.points), fixture.rectangle.points);
+    const score = geometry.scoreDbQuad(probabilities, fixture.width, fixture.height, rectangle.points);
+    assert.ok(Math.abs(score - fixture.score) < 1e-12);
+    assert.ok(score > fixture.options.boxThreshold);
+    const detections = geometry.postProcessDb(probabilities, fixture.width, fixture.height, fixture.width, fixture.height, fixture.options);
+    assert.equal(detections.length, 1);
+    assert.deepEqual(pointPairs(detections[0].points), fixture.detections[0].points);
+    assert.ok(Math.abs(detections[0].score - fixture.detections[0].score) < 1e-12);
+    assert.equal(geometry.postProcessDb(probabilities, fixture.width, fixture.height, fixture.width, fixture.height,
+        { ...fixture.options, boxThreshold: .46 }).length, 0);
+});
 
 test('retrieves all external and hole contours in OpenCV RETR_LIST order on 50 seeded maps', () => {
     for (const fixture of reference.contours) {

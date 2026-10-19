@@ -6,6 +6,7 @@ CropByPolys.get_rotate_crop_image (Apache-2.0). Fixtures are reproducible arrays
 not the implementation's own output. See third-party/PaddleGeometry-NOTICE.txt.
 """
 import json
+import itertools
 import math
 from pathlib import Path
 
@@ -15,7 +16,11 @@ import pyclipper
 
 
 def mini_box(points):
-    rectangle = cv2.minAreaRect(np.asarray(points, dtype=np.float32))
+    points = np.asarray(points)
+    # PaddleX passes integer findContours/Clipper paths directly to minAreaRect.
+    # OpenCV has separate integer and normalized-float Sklansky hull paths.
+    points = points.astype(np.int32 if np.issubdtype(points.dtype, np.integer) else np.float32)
+    rectangle = cv2.minAreaRect(points)
     vertices = sorted(cv2.boxPoints(rectangle).tolist(), key=lambda point: point[0])
     left = sorted(vertices[:2], key=lambda point: point[1])
     right = sorted(vertices[2:], key=lambda point: point[1])
@@ -75,6 +80,61 @@ def crop(image, quad, refit=False):
     if rotated:
         output = np.rot90(output)
     return dict(width=output.shape[1], height=output.shape[0], data=output.ravel().tolist(), rotated=rotated)
+
+
+def generate_hull_reference():
+    """Pin hull order and the score-boundary regression independently of JS."""
+    rng = np.random.default_rng(4132026)
+    inputs = []
+    for name, points in [
+        ("square", [[0, 0], [8, 0], [8, 8], [0, 8]]),
+        ("diamond", [[0, 4], [4, 0], [8, 4], [4, 8]]),
+        ("equal-area-triangle", [[0, 0], [12, 0], [0, 12]]),
+    ]:
+        for index, permutation in enumerate(itertools.permutations(points)):
+            inputs.append((f"{name}-permutation-{index}", permutation))
+    for name, points in [
+        ("duplicate-vertices", [[0, 0], [8, 0], [8, 8], [0, 8], [0, 0], [8, 8]]),
+        ("collinear-edges", [[0, 0], [4, 0], [8, 0], [8, 4], [8, 8], [4, 8], [0, 8], [0, 4]]),
+        ("interior-and-self-crossing", [[5, 4], [0, 0], [8, 8], [8, 0], [0, 8], [5, 4], [3, 6]]),
+        ("collinear", [[4, 4], [0, 0], [2, 2], [4, 4], [6, 6]]),
+        ("identical", [[4, 4], [4, 4], [4, 4]]),
+    ]:
+        for direction, ordered in [("forward", points), ("reversed", points[::-1])]:
+            for index in range(len(points)):
+                inputs.append((f"{name}-{direction}-{index}", ordered[index:] + ordered[:index]))
+    for index in range(100):
+        points = rng.integers(-32, 128, (int(rng.integers(3, 50)), 2), dtype=np.int32)
+        inputs.append((f"seeded-integer-cloud-{index:03}", points))
+    hulls = []
+    for name, values in inputs:
+        points = np.asarray(values, dtype=np.int32)
+        hull = cv2.convexHull(points, clockwise=False, returnPoints=True).reshape(-1, 2)
+        box, short_side = mini_box(points)
+        hulls.append(dict(name=name, points=points.tolist(), hull=hull.tolist(),
+                          rectangle=None if len(hull) < 3 else dict(points=box.tolist(), shortSide=short_side)))
+
+    # A boundary-touching trapezoid: changing only the hull's cyclic start moves
+    # the score from 0.451598631 to 0.446249992 and rejects it at the bundled .45.
+    pred = np.zeros((64, 96), dtype=np.float32)
+    cv2.fillPoly(pred, [np.int32([[0, 0], [42, 0], [42, 63], [0, 47]])], .51)
+    contours, _ = cv2.findContours((pred > .2).astype(np.uint8), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    box, short_side = mini_box(contours[0])
+    row_runs = []
+    for y, row in enumerate(pred):
+        foreground = np.flatnonzero(row)
+        row_runs.append([y, int(foreground[0]), int(foreground[-1]) + 1])
+    regression = dict(width=96, height=64, probability=float(np.float32(.51)), rowRuns=row_runs,
+                      contour=contours[0].reshape(-1, 2).tolist(),
+                      hull=cv2.convexHull(contours[0], clockwise=False).reshape(-1, 2).tolist(),
+                      rectangle=dict(points=box.tolist(), shortSide=short_side), score=score(pred, box),
+                      options=dict(threshold=.2, boxThreshold=.45, unclipRatio=1.4, maxCandidates=3000),
+                      detections=postprocess(pred, 96, 64, threshold=.2, box_threshold=.45, max_candidates=3000))
+    fixture = dict(reference=dict(opencv=cv2.__version__, pyclipper=pyclipper.__version__, numpy=np.__version__,
+                                  coordinateType="int32", seed=4132026), hulls=hulls, scoreBoundary=regression)
+    path = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "paddle-hull-reference.json"
+    path.write_text(json.dumps(fixture, separators=(",", ":")) + "\n", encoding="utf-8")
+    print(f"Wrote {path} ({path.stat().st_size:,} bytes)")
 
 
 def main():
@@ -159,6 +219,7 @@ def main():
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(fixture, separators=(",", ":")) + "\n", encoding="utf-8")
     print(f"Wrote {path} ({path.stat().st_size:,} bytes)")
+    generate_hull_reference()
 
 
 if __name__ == "__main__":

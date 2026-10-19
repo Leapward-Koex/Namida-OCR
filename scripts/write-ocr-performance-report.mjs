@@ -148,6 +148,12 @@ function renderReport(runs, gitHubContext) {
             : `Workflow run: #${gitHubContext.runNumber}`);
     }
 
+    for (const run of runs) {
+        if (run.run?.inputMode) {
+            lines.push(`${run.label} input mode: \`${run.run.inputMode}\`${run.run.provider ? `; provider: \`${run.run.provider}\`` : ''}`);
+        }
+    }
+
     lines.push(
         '',
         '## Summary',
@@ -227,9 +233,9 @@ function renderReport(runs, gitHubContext) {
         '',
         '## Notes',
         '',
-        '- This report is generated from `npm run test:e2e:tesseract` and `npm run test:e2e:paddleonnx` results.',
+        '- This report is generated from the recorded Tesseract and PaddleOCR ONNX benchmark runs.',
         '- Accuracy metrics come from `test-results/ocr-accuracy-summary.json` for each backend run.',
-        '- Timing metrics are wall-clock build and Playwright durations recorded by `run-playwright-e2e.mjs`.',
+        '- Timing metrics are recorded wall-clock durations. Prebuilt dataset runs record Playwright time; build and combined build/test time are unavailable.',
         '',
     );
 

@@ -1,11 +1,13 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { summarizeOcrCases, summarizeOcrCohorts } from '../scripts/ocr-scoring.mjs';
+import { parseJsonSummary } from '../scripts/check-ocr-regression.mjs';
 
 const caseResultsDir = path.resolve(process.cwd(), 'test-results', 'ocr-case-results');
 const summaryPath = path.resolve(process.cwd(), 'test-results', 'ocr-accuracy-summary.json');
 const resultsPath = path.resolve(process.cwd(), 'test-results', 'ocr-case-results.json');
 
-const cases = await loadCaseResults(caseResultsDir);
+let cases = await loadCaseResults(caseResultsDir);
 
 if (cases.length === 0) {
     console.log('OCR accuracy summary');
@@ -13,17 +15,16 @@ if (cases.length === 0) {
     process.exit(0);
 }
 
-const totalCases = cases.length;
-const exactMatches = cases.filter((result) => result.exactMatch).length;
-const exactMatchRate = exactMatches / totalCases;
-const averageCharacterAccuracy = cases.reduce((sum, result) => sum + result.characterAccuracy, 0) / totalCases;
+// Legacy case JSON can still be summarized, but its raw text must substantiate
+// every recorded score. The parser derives the additional metric when needed.
+cases = parseJsonSummary({ ...summarizeOcrCases(cases), cases }).cases;
 const summary = {
-    totalCases,
-    exactMatches,
-    exactMatchRate,
-    averageCharacterAccuracy,
+    schemaVersion: 2,
+    ...summarizeOcrCases(cases),
+    cohorts: summarizeOcrCohorts(cases),
     cases,
 };
+parseJsonSummary(summary);
 
 await fs.mkdir(path.dirname(summaryPath), { recursive: true });
 await fs.writeFile(summaryPath, JSON.stringify(summary, null, 2));
@@ -35,11 +36,17 @@ console.table(cases.map((result) => ({
     image: result.image,
     exactMatch: result.exactMatch ? 'yes' : 'no',
     characterAccuracy: formatPercent(result.characterAccuracy),
+    spacingSensitiveAccuracy: formatPercent(result.spacingSensitiveCharacterAccuracy),
     expected: result.normalizedExpectedText,
     actual: result.normalizedActualText,
 })));
-console.log(`Exact matches: ${exactMatches}/${totalCases} (${formatPercent(exactMatchRate)})`);
-console.log(`Average character accuracy: ${formatPercent(averageCharacterAccuracy)}`);
+console.log(`Exact matches: ${summary.exactMatches}/${summary.totalCases} (${formatPercent(summary.exactMatchRate)})`);
+console.log(`Average character accuracy: ${formatPercent(summary.averageCharacterAccuracy)}`);
+console.log(`Spacing-sensitive exact matches: ${summary.spacingSensitiveExactMatches}/${summary.totalCases} (${formatPercent(summary.spacingSensitiveExactMatchRate)})`);
+console.log(`Spacing-sensitive average character accuracy: ${formatPercent(summary.averageSpacingSensitiveCharacterAccuracy)}`);
+for (const [name, cohort] of Object.entries(summary.cohorts)) {
+    console.log(`${name} cohort (${cohort.totalCases} cases): ${formatPercent(cohort.averageCharacterAccuracy)} character accuracy; ${formatPercent(cohort.averageSpacingSensitiveCharacterAccuracy)} spacing-sensitive`);
+}
 console.log(`Saved summary: ${summaryPath}`);
 console.log(`Saved results: ${resultsPath}`);
 
