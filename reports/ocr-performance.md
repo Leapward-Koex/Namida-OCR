@@ -2,39 +2,41 @@
 
 # OCR Performance Report
 
-Generated: 2026-09-12T09:00:29.552Z
+Generated: 2026-10-19T10:07:15.732Z
 Repository: `Leapward-Koex/Namida-OCR`
 Branch: `master`
-Commit: [`c39046e`](https://github.com/Leapward-Koex/Namida-OCR/commit/c39046e8da344006734d62333665e9502fdf30f7)
-Workflow run: [#11](https://github.com/Leapward-Koex/Namida-OCR/actions/runs/34684408684)
+Commit: [`89a9c1f`](https://github.com/Leapward-Koex/Namida-OCR/commit/89a9c1f75d776fbc4d035fa06170afa5647d19fe)
+Workflow run: [#13](https://github.com/Leapward-Koex/Namida-OCR/actions/runs/39234399812)
+Tesseract input mode: `fixture`
+PaddleOCR ONNX input mode: `fixture`; provider: `wasm`
 
 ## Summary
 
 | Backend | Status | Model | Variant | Exact Matches | Exact Match Rate | Avg Character Accuracy | Build Time | Test Time | Total Time |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Tesseract | Passed | jpn_vert | n/a | 7/30 | 23.3% | 54.2% | 28s | 2m 16s | 2m 44s |
-| PaddleOCR ONNX | Passed | jpn_vert | server | 21/30 | 70.0% | 89.9% | 27s | 3m 26s | 3m 54s |
+| Tesseract | Passed | jpn_vert | n/a | 7/30 | 23.3% | 54.4% | n/a | 43s | n/a |
+| PaddleOCR ONNX | Passed | jpn_vert | server | 20/30 | 66.7% | 89.4% | n/a | 1m 38s | n/a |
 
 ## Comparison
 
 | Metric | Tesseract | PaddleOCR ONNX | Delta |
 | --- | --- | --- | --- |
-| Exact matches | 7/30 | 21/30 | +14 |
-| Exact match rate | 23.3% | 70.0% | +46.7 pp |
-| Avg character accuracy | 54.2% | 89.9% | +35.6 pp |
-| Total time | 2m 44s | 3m 54s | +1m 10s |
+| Exact matches | 7/30 | 20/30 | +13 |
+| Exact match rate | 23.3% | 66.7% | +43.3 pp |
+| Avg character accuracy | 54.4% | 89.4% | +35.0 pp |
+| Total time | n/a | n/a | n/a |
 
 ## Case Accuracy
 
 | Case | Tesseract | PaddleOCR ONNX | Delta | Better |
 | --- | --- | --- | --- | --- |
-| manga-ocr-case-001-sunao-ni-ayamaru-shika | 32.0% | 75.0% | +43.0 pp | PaddleOCR ONNX |
-| manga-ocr-case-002-tachikawa-de-mita-ana-no-shita-no-kyodaina-me-wa | 1.4% | 50.0% | +48.6 pp | PaddleOCR ONNX |
+| manga-ocr-case-001-sunao-ni-ayamaru-shika | 40.0% | 75.0% | +35.0 pp | PaddleOCR ONNX |
+| manga-ocr-case-002-tachikawa-de-mita-ana-no-shita-no-kyodaina-me-wa | 2.2% | 46.4% | +44.2 pp | PaddleOCR ONNX |
 | manga-ocr-case-003-jissen-kenjutsu-mo-ichiryuu-desu | 66.7% | 100.0% | +33.3 pp | PaddleOCR ONNX |
 | manga-ocr-case-004-gya | 100.0% | 66.7% | -33.3 pp | Tesseract |
-| manga-ocr-case-005-pinpoon | 18.8% | 50.0% | +31.3 pp | PaddleOCR ONNX |
-| manga-ocr-case-006-faia-panchi | 42.9% | 85.7% | +42.9 pp | PaddleOCR ONNX |
-| manga-ocr-case-007-keisatsu-nimo-sensei-nimo-machijuu-no-hitotachi-ni | 32.0% | 38.7% | +6.7 pp | PaddleOCR ONNX |
+| manga-ocr-case-005-pinpoon | 21.4% | 50.0% | +28.6 pp | PaddleOCR ONNX |
+| manga-ocr-case-006-faia-panchi | 37.5% | 85.7% | +48.2 pp | PaddleOCR ONNX |
+| manga-ocr-case-007-keisatsu-nimo-sensei-nimo-machijuu-no-hitotachi-ni | 34.8% | 38.7% | +3.9 pp | PaddleOCR ONNX |
 | case-001-inuda-san | 100.0% | 100.0% | 0.0 pp | Tie |
 | case-002-hai-owari-mou-dame | 100.0% | 100.0% | 0.0 pp | Tie |
 | case-003-kako | 50.0% | 100.0% | +50.0 pp | PaddleOCR ONNX |
@@ -43,10 +45,10 @@ Workflow run: [#11](https://github.com/Leapward-Koex/Namida-OCR/actions/runs/346
 | case-006-a-sore-zenbu-iinchou-dayo | 100.0% | 91.7% | -8.3 pp | Tesseract |
 | case-007-kawaii | 75.0% | 100.0% | +25.0 pp | PaddleOCR ONNX |
 | case-008-ore-otoko-no-ko-damon | 90.0% | 100.0% | +10.0 pp | PaddleOCR ONNX |
-| case-009-saikin-kurasu-no-fuuki | 95.2% | 100.0% | +4.8 pp | PaddleOCR ONNX |
+| case-009-saikin-kurasu-no-fuuki | 90.9% | 100.0% | +9.1 pp | PaddleOCR ONNX |
 | case-010-daiji-na-no-wa-konten-tsu-daro | 85.7% | 100.0% | +14.3 pp | PaddleOCR ONNX |
-| case-011-zundamon-senpai-tsumetai-kute-kimochi-ii | 85.0% | 44.4% | -40.6 pp | Tesseract |
-| case-012-obaachan | 94.1% | 100.0% | +5.9 pp | PaddleOCR ONNX |
+| case-011-zundamon-senpai-tsumetai-kute-kimochi-ii | 85.0% | 38.9% | -46.1 pp | Tesseract |
+| case-012-obaachan | 94.1% | 94.1% | 0.0 pp | Tie |
 | case-013 | 91.7% | 100.0% | +8.3 pp | PaddleOCR ONNX |
 | general-001-horizontal-japanese | 12.5% | 100.0% | +87.5 pp | PaddleOCR ONNX |
 | general-002-mixed-japanese-latin-digits | 0.0% | 100.0% | +100.0 pp | PaddleOCR ONNX |
@@ -61,6 +63,6 @@ Workflow run: [#11](https://github.com/Leapward-Koex/Namida-OCR/actions/runs/346
 
 ## Notes
 
-- This report is generated from `npm run test:e2e:tesseract` and `npm run test:e2e:paddleonnx` results.
+- This report is generated from the recorded Tesseract and PaddleOCR ONNX benchmark runs.
 - Accuracy metrics come from `test-results/ocr-accuracy-summary.json` for each backend run.
-- Timing metrics are wall-clock build and Playwright durations recorded by `run-playwright-e2e.mjs`.
+- Timing metrics are recorded wall-clock durations. Prebuilt dataset runs record Playwright time; build and combined build/test time are unavailable.
